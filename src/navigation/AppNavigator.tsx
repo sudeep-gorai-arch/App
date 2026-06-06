@@ -1,28 +1,28 @@
-import React from "react";
+import React from 'react';
+import { StatusBar } from 'react-native';
+import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import BottomTabs from './BottomTabs';
+import { colors } from '../styles/colors';
 
-import {
-NavigationContainer
-} from "@react-navigation/native";
+// Transparent navigator theme so our mesh gradient shows through every screen.
+const AppTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    background: colors.base,
+    card: 'transparent',
+    text: colors.textPrimary,
+    border: 'transparent',
+  },
+};
 
-
-import BottomTabs from "./BottomTabs";
-
-
-
-const AppNavigator=()=>{
-
-
-return(
-
-<NavigationContainer>
-
-<BottomTabs/>
-
-</NavigationContainer>
-
-)
-
-}
-
+const AppNavigator = () => {
+  return (
+    <NavigationContainer theme={AppTheme}>
+      <StatusBar barStyle="light-content" />
+      <BottomTabs />
+    </NavigationContainer>
+  );
+};
 
 export default AppNavigator;
