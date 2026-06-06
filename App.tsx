@@ -1,22 +1,18 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+import React from "react";
 
-import {Text, View} from 'react-native';
+import AppNavigator 
+from "./src/navigation/AppNavigator";
 
-const HelloWorldApp = () => {
-  return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-      }}>
-      <Text>Hello, Luciya!</Text>
-    </View>
-  );
-};
-export default HelloWorldApp;
+
+function App(){
+
+return(
+
+<AppNavigator/>
+
+)
+
+}
+
+
+export default App;
