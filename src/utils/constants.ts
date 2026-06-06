@@ -197,9 +197,38 @@ export const ABOUT = {
  * names registered in BottomTabs.tsx.
  */
 export const TAB_ITEMS = [
-  { key: 'Home', label: 'Home', icon: 'home', routeName: 'Home' },
-  { key: 'Category', label: 'Categories', icon: 'grid', routeName: 'Category' },
-  { key: 'Premium', label: 'Premium', icon: 'crown', routeName: null },
-  { key: 'Favorites', label: 'Favorites', icon: 'heart', routeName: null },
-  { key: 'Profile', label: 'Profile', icon: 'person', routeName: 'Profile' },
+  {
+    key: 'Home',
+    label: 'Home',
+    icon: 'home',
+    routeName: 'Home',
+  },
+
+  {
+    key: 'Category',
+    label: 'Categories',
+    icon: 'grid',
+    routeName: 'Category',
+  },
+
+  {
+    key: 'Premium',
+    label: 'Premium',
+    icon: 'crown',
+    routeName: 'Premium',
+  },
+
+  {
+    key: 'Favorites',
+    label: 'Favorites',
+    icon: 'heart',
+    routeName: 'Favorites',
+  },
+
+  {
+    key: 'Profile',
+    label: 'Profile',
+    icon: 'person',
+    routeName: 'Profile',
+  },
 ] as const;
