@@ -134,7 +134,7 @@ export const CATEGORIES = [
 // ---------------------------------------------------------------------------
 
 export const PROFILE = {
-  name: 'Ethan Hunt',
+  name: 'Sudeep Gorai',
   badge: 'Premium',
   bio: 'Wallpaper lover and explorer ✨',
   avatar: img('wx-avatar', 400, 400),
@@ -173,10 +173,10 @@ export const PROFILE = {
 export const ABOUT = {
   appName: 'WallpaperX',
   tagline: 'Redefining your screen, every day.',
-  version: '2.4.1',
+  version: '1.0.1',
   versionStatus: 'Latest Version',
   developer: 'PixelVision Labs',
-  copyright: '© 2024 PixelVision Labs. All rights reserved.',
+  copyright: '© 2026 FlexiVision Labs. All rights reserved.',
   rows: [
     { id: 'a1', title: 'Terms of Service', subtitle: 'Read our terms and conditions', icon: 'document-text-outline' },
     { id: 'a2', title: 'Privacy Policy', subtitle: 'Read our privacy policy', icon: 'shield-checkmark-outline' },
