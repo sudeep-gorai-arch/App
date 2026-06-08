@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,7 +9,9 @@ import {
   Pressable,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  ActivityIndicator,
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,73 +20,116 @@ import { Ionicons } from '@expo/vector-icons';
 import MeshBackground from '../../components/MeshBackground';
 import Header from '../../components/Header';
 import Button from '../../components/Button';
+
 import { colors } from '../../styles/colors';
-import { spacing, radius, SCREEN, HERO_SLIDES, TRENDING } from '../../utils/constants';
+
+import { spacing, radius, SCREEN } from '../../utils/constants';
+
+import {
+  getFeaturedWallpapers,
+  getTrendingWallpapers,
+} from '../../services/wallpaperService';
+
+import { Wallpaper, Category } from '../../services/types';
 
 const HERO_W = SCREEN.width - spacing.xl * 2;
+
 const HERO_H = 480;
 
-type HeroItem = (typeof HERO_SLIDES)[number];
-type TrendItem = (typeof TRENDING)[number];
+const HeroCard = ({ item }: { item: Wallpaper }) => {
+  const image =
+    item.imageUrl || item.thumbnailUrl || 'https://picsum.photos/600/1000';
 
-const HeroCard = ({ item }: { item: HeroItem }) => (
-  <View style={styles.heroCard}>
-    <ImageBackground
-      source={{ uri: item.image }}
-      style={styles.heroImage}
-      imageStyle={{ borderRadius: radius.lg }}
-    >
-      {/* legibility gradient */}
-      <LinearGradient
-        colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.0)', 'rgba(10,8,25,0.85)']}
-        style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
-      />
+  return (
+    <View style={styles.heroCard}>
+      <ImageBackground
+        source={{
+          uri: image,
+        }}
+        style={styles.heroImage}
+        imageStyle={{
+          borderRadius: radius.lg,
+        }}
+      >
+        <LinearGradient
+          colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0)', 'rgba(10,8,25,0.85)']}
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              borderRadius: radius.lg,
+            },
+          ]}
+        />
 
-      {/* 8K badge */}
-      <BlurView intensity={30} tint="dark" style={styles.qualityBadge}>
-        <Text style={styles.qualityText}>{item.quality}</Text>
-        <Text style={styles.qualitySub}>ULTRA HD</Text>
-      </BlurView>
+        <BlurView intensity={30} tint="dark" style={styles.qualityBadge}>
+          <Text style={styles.qualityText}>{item.quality || '4K'}</Text>
 
-      <View style={styles.heroContent}>
-        <View style={styles.tagPill}>
-          <Text style={styles.tagText}>{item.tag}</Text>
-        </View>
-        <Text style={styles.heroTitle}>{item.title}</Text>
-        <Text style={styles.heroSubtitle}>{item.subtitle}</Text>
+          <Text style={styles.qualitySub}>ULTRA HD</Text>
+        </BlurView>
 
-        <View style={styles.heroFooter}>
-          <Button label="Explore" trailingIcon="arrow-forward" />
-          <View style={styles.likeRow}>
-            <Ionicons name="heart" size={18} color={colors.textPrimary} />
-            <Text style={styles.likeText}>{item.likes}</Text>
+        <View style={styles.heroContent}>
+          <View style={styles.tagPill}>
+            <Text style={styles.tagText}>
+              {item.category?.name || 'Featured'}
+            </Text>
+          </View>
+
+          <Text style={styles.heroTitle} numberOfLines={2}>
+            {item.title || 'Premium Wallpaper'}
+          </Text>
+
+          <Text style={styles.heroSubtitle} numberOfLines={2}>
+            {item.subtitle || '4K Ultra HD Collection'}
+          </Text>
+
+          <View style={styles.heroFooter}>
+            <Button label="Explore" trailingIcon="arrow-forward" />
+
+            <View style={styles.likeRow}>
+              <Ionicons name="heart" size={18} color={colors.textPrimary} />
+
+              <Text style={styles.likeText}>{item.likes ?? 0}</Text>
+            </View>
           </View>
         </View>
-      </View>
-    </ImageBackground>
-  </View>
-);
+      </ImageBackground>
+    </View>
+  );
+};
 
-const TrendingCard = ({ item }: { item: TrendItem }) => (
+const TrendingCard = ({ item }: { item: Wallpaper }) => (
   <Pressable style={styles.trendCard}>
     <ImageBackground
-      source={{ uri: item.image }}
+      source={{
+        uri: item.imageUrl ?? 'https://picsum.photos/400/800',
+      }}
       style={styles.trendImage}
-      imageStyle={{ borderRadius: radius.md }}
+      imageStyle={{
+        borderRadius: radius.md,
+      }}
     >
       <LinearGradient
         colors={['rgba(0,0,0,0.25)', 'transparent', 'rgba(0,0,0,0.7)']}
-        style={[StyleSheet.absoluteFill, { borderRadius: radius.md }]}
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            borderRadius: radius.md,
+          },
+        ]}
       />
+
       <View style={styles.trendTop}>
         <BlurView intensity={26} tint="dark" style={styles.fireChip}>
-          <Text style={styles.fire}>🔥</Text>
+          <Text>🔥</Text>
         </BlurView>
-        <Text style={styles.trendQuality}>{item.quality}</Text>
+
+        <Text style={styles.trendQuality}>{item.quality ?? '4K'}</Text>
       </View>
+
       <View style={styles.trendBottom}>
         <Ionicons name="heart" size={14} color={colors.textPrimary} />
-        <Text style={styles.trendLikes}>{item.likes}</Text>
+
+        <Text style={styles.trendLikes}>{item.likes ?? 0}</Text>
       </View>
     </ImageBackground>
   </Pressable>
@@ -93,64 +138,132 @@ const TrendingCard = ({ item }: { item: TrendItem }) => (
 const HomeScreen = () => {
   const [active, setActive] = useState(0);
 
-  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const idx = Math.round(e.nativeEvent.contentOffset.x / (HERO_W + spacing.md));
-    if (idx !== active) setActive(idx);
+  const [featured, setFeatured] = useState<Wallpaper[]>([]);
+
+  const [trending, setTrending] = useState<Wallpaper[]>([]);
+
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadHome();
+  }, []);
+
+  const loadHome = async () => {
+    try {
+      const [hero, trend] = await Promise.all([
+        getFeaturedWallpapers(),
+        getTrendingWallpapers(),
+      ]);
+
+      setFeatured(hero?.data ?? []);
+
+      setTrending(trend?.data ?? []);
+    } catch (error) {
+      console.log('HOME API ERROR', error);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const idx = Math.round(
+      e.nativeEvent.contentOffset.x / (HERO_W + spacing.md),
+    );
+
+    setActive(idx);
+  };
+
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.root,
+          {
+            justifyContent: 'center',
+            alignItems: 'center',
+          },
+        ]}
+      >
+        <ActivityIndicator size="large" color={colors.textPrimary} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.root}>
       <MeshBackground variant="home" />
+
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 130 }}
+          contentContainerStyle={{
+            paddingBottom: 130,
+          }}
         >
           <Header
             eyebrow="Good Morning 👋"
             title={'Find Your\nPerfect Wallpaper'}
-            rightAction={{ icon: 'search' }}
-            style={{ paddingTop: spacing.md }}
+            rightAction={{
+              icon: 'search',
+            }}
+            style={{
+              paddingTop: spacing.md,
+            }}
           />
 
-          {/* Hero carousel */}
           <FlatList
-            data={HERO_SLIDES}
-            keyExtractor={(i) => i.id}
+            data={featured}
+            keyExtractor={i => i.id}
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             snapToInterval={HERO_W + spacing.md}
-            decelerationRate="fast"
             onMomentumScrollEnd={onScroll}
-            contentContainerStyle={{ paddingHorizontal: spacing.xl, marginTop: spacing.xl }}
-            ItemSeparatorComponent={() => <View style={{ width: spacing.md }} />}
+            contentContainerStyle={{
+              paddingHorizontal: spacing.xl,
+
+              marginTop: spacing.xl,
+            }}
+            ItemSeparatorComponent={() => (
+              <View
+                style={{
+                  width: spacing.md,
+                }}
+              />
+            )}
             renderItem={({ item }) => <HeroCard item={item} />}
           />
 
-          {/* Pager dots */}
           <View style={styles.dots}>
-            {HERO_SLIDES.map((_, i) => (
-              <View key={i} style={[styles.dot, i === active && styles.dotActive]} />
+            {featured.map((_, i) => (
+              <View
+                key={i}
+                style={[styles.dot, i === active && styles.dotActive]}
+              />
             ))}
           </View>
 
-          {/* Trending */}
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Trending</Text>
-            <Pressable style={styles.viewAll} hitSlop={8}>
-              <Text style={styles.viewAllText}>View all</Text>
-              <Ionicons name="chevron-forward" size={16} color={colors.textPrimary} />
-            </Pressable>
+
+            <Text style={styles.viewAllText}>View all</Text>
           </View>
 
           <FlatList
-            data={TRENDING}
-            keyExtractor={(i) => i.id}
+            data={trending}
+            keyExtractor={i => i.id}
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: spacing.xl }}
-            ItemSeparatorComponent={() => <View style={{ width: spacing.md }} />}
+            contentContainerStyle={{
+              paddingHorizontal: spacing.xl,
+            }}
+            ItemSeparatorComponent={() => (
+              <View
+                style={{
+                  width: spacing.md,
+                }}
+              />
+            )}
             renderItem={({ item }) => <TrendingCard item={item} />}
           />
         </ScrollView>

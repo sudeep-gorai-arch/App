@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,7 +6,9 @@ import {
   FlatList,
   Pressable,
   ImageBackground,
+  ActivityIndicator,
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,112 +17,126 @@ import { Ionicons } from '@expo/vector-icons';
 import MeshBackground from '../../components/MeshBackground';
 import Header from '../../components/Header';
 import Card from '../../components/Card';
+
 import { colors, gradients } from '../../styles/colors';
+
 import { spacing, radius, SCREEN } from '../../utils/constants';
 
-// ---------------------------------------------------------------------------
-// Layout
-// ---------------------------------------------------------------------------
+import { getFavorites, removeFavorite } from '../../services/favoriteService';
+
+import { Wallpaper } from '../../services/types';
+
 const GAP = spacing.lg;
+
 const CARD_W = (SCREEN.width - spacing.xl * 2 - GAP) / 2;
+
 const CARD_H = CARD_W * 1.4;
 
-// ---------------------------------------------------------------------------
-// Dummy data (kept local so the folder is fully self-contained)
-// ---------------------------------------------------------------------------
-const img = (seed: string) => `https://picsum.photos/seed/${seed}/600/900`;
-
-type FavItem = {
-  id: string;
-  title: string;
-  category: string;
-  quality: string;
-  likes: string;
-  addedDaysAgo: number;
-  popularity: number;
-  image: string;
-};
-
-const INITIAL_FAVORITES: FavItem[] = [
-  { id: 'f1', title: 'Majestic Lion', category: 'Wildlife', quality: '8K', likes: '12.5K', addedDaysAgo: 1, popularity: 98, image: img('fav-lion') },
-  { id: 'f2', title: 'Neon Runner', category: 'Anime', quality: '4K', likes: '9.1K', addedDaysAgo: 3, popularity: 91, image: img('fav-neon') },
-  { id: 'f3', title: 'Golden Tiger', category: 'Animals', quality: '8K', likes: '8.7K', addedDaysAgo: 2, popularity: 88, image: img('fav-tiger') },
-  { id: 'f4', title: 'Super Saiyan', category: 'Anime', quality: '4K', likes: '15.2K', addedDaysAgo: 5, popularity: 99, image: img('fav-saiyan') },
-  { id: 'f5', title: 'Cosmic Wolf', category: 'Abstract', quality: '8K', likes: '7.4K', addedDaysAgo: 4, popularity: 84, image: img('fav-wolf') },
-  { id: 'f6', title: 'Crimson Ronin', category: 'Anime', quality: '4K', likes: '6.9K', addedDaysAgo: 7, popularity: 80, image: img('fav-ronin') },
-  { id: 'f7', title: 'Alpine Mirror', category: 'Nature', quality: '8K', likes: '9.8K', addedDaysAgo: 6, popularity: 86, image: img('fav-alps') },
-  { id: 'f8', title: 'Deep Field', category: 'Space', quality: '8K', likes: '5.2K', addedDaysAgo: 9, popularity: 74, image: img('fav-space') },
-];
-
 const FILTERS = ['All', 'Recent', 'Popular'] as const;
+
 type Filter = (typeof FILTERS)[number];
 
-// ---------------------------------------------------------------------------
-// Cards
-// ---------------------------------------------------------------------------
+// ================= CARD =================
+
 const FavoriteCard = ({
   item,
   onRemove,
 }: {
-  item: FavItem;
+  item: Wallpaper;
   onRemove: (id: string) => void;
-}) => (
-  <Pressable
-    style={({ pressed }) => [
-      styles.card,
-      { transform: [{ scale: pressed ? 0.98 : 1 }] },
-    ]}
-  >
-    <ImageBackground
-      source={{ uri: item.image }}
-      style={styles.cardImage}
-      imageStyle={{ borderRadius: radius.lg }}
+}) => {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.card,
+        {
+          transform: [
+            {
+              scale: pressed ? 0.98 : 1,
+            },
+          ],
+        },
+      ]}
     >
-      <LinearGradient
-        colors={['rgba(8,6,20,0.05)', 'rgba(8,6,20,0.2)', 'rgba(8,6,20,0.82)']}
-        style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
-      />
-
-      {/* quality chip */}
-      <BlurView intensity={26} tint="dark" style={styles.qualityChip}>
-        <Text style={styles.qualityText}>{item.quality}</Text>
-      </BlurView>
-
-      {/* heart (tap to remove) */}
-      <Pressable
-        hitSlop={8}
-        onPress={() => onRemove(item.id)}
-        style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }, styles.heartWrap]}
+      <ImageBackground
+        source={{
+          uri:
+            item.imageUrl ??
+            item.thumbnailUrl ??
+            'https://picsum.photos/600/900',
+        }}
+        style={styles.cardImage}
+        imageStyle={{
+          borderRadius: radius.lg,
+        }}
       >
-        <BlurView intensity={30} tint="dark" style={styles.heartChip}>
-          <Ionicons name="heart" size={18} color={colors.heart} />
-        </BlurView>
-      </Pressable>
+        <LinearGradient
+          colors={[
+            'rgba(8,6,20,0.05)',
+            'rgba(8,6,20,0.2)',
+            'rgba(8,6,20,0.82)',
+          ]}
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              borderRadius: radius.lg,
+            },
+          ]}
+        />
 
-      {/* meta */}
-      <View style={styles.cardMeta}>
-        <Text style={styles.cardTitle} numberOfLines={1}>
-          {item.title}
-        </Text>
-        <View style={styles.cardMetaRow}>
-          <Text style={styles.cardCategory}>{item.category}</Text>
-          <View style={styles.likeRow}>
-            <Ionicons name="heart" size={12} color={colors.textSecondary} />
-            <Text style={styles.likeText}>{item.likes}</Text>
+        <BlurView intensity={26} tint="dark" style={styles.qualityChip}>
+          <Text style={styles.qualityText}>{item.quality ?? '4K'}</Text>
+        </BlurView>
+
+        <Pressable
+          hitSlop={8}
+          onPress={() => onRemove(item.id)}
+          style={[styles.heartWrap]}
+        >
+          <BlurView intensity={30} tint="dark" style={styles.heartChip}>
+            <Ionicons name="heart" size={18} color={colors.heart} />
+          </BlurView>
+        </Pressable>
+
+        <View style={styles.cardMeta}>
+          <Text style={styles.cardTitle} numberOfLines={1}>
+            {item.title}
+          </Text>
+
+          <View style={styles.cardMetaRow}>
+            <Text style={styles.cardCategory}>
+              {item.category?.name ?? 'Wallpaper'}
+            </Text>
+
+            <View style={styles.likeRow}>
+              <Ionicons name="heart" size={12} color={colors.textSecondary} />
+
+              <Text style={styles.likeText}>{item.likes ?? 0}</Text>
+            </View>
           </View>
         </View>
-      </View>
-    </ImageBackground>
-  </Pressable>
-);
+      </ImageBackground>
+    </Pressable>
+  );
+};
+
+// ================= EMPTY =================
 
 const EmptyState = () => (
   <View style={styles.emptyWrap}>
-    <Card padding={spacing.xxl} style={{ alignItems: 'center' }} glowBorder>
+    <Card
+      padding={spacing.xxl}
+      style={{
+        alignItems: 'center',
+      }}
+      glowBorder
+    >
       <View style={styles.emptyIcon}>
         <Ionicons name="heart-outline" size={34} color={colors.textPrimary} />
       </View>
+
       <Text style={styles.emptyTitle}>No favorites yet</Text>
+
       <Text style={styles.emptySubtitle}>
         Tap the heart on any wallpaper to save it here.
       </Text>
@@ -128,83 +144,104 @@ const EmptyState = () => (
   </View>
 );
 
-// ---------------------------------------------------------------------------
-// Screen
-// ---------------------------------------------------------------------------
+// ================= SCREEN =================
+
 const FavoritesScreen = () => {
-  const [items, setItems] = useState<FavItem[]>(INITIAL_FAVORITES);
+  const [items, setItems] = useState<Wallpaper[]>([]);
+
   const [filter, setFilter] = useState<Filter>('All');
 
-  const remove = (id: string) =>
-    setItems((prev) => prev.filter((i) => i.id !== id));
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadFavorites();
+  }, []);
+
+  const loadFavorites = async () => {
+    try {
+      const res = await getFavorites();
+
+      setItems(res.data ?? []);
+    } catch (error) {
+      console.log('FAVORITE ERROR', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const remove = async (id: string) => {
+    try {
+      await removeFavorite(id);
+
+      setItems(prev => prev.filter(x => x.id !== id));
+    } catch (error) {
+      console.log('REMOVE ERROR', error);
+    }
+  };
 
   const data = useMemo(() => {
-    const copy = [...items];
-    if (filter === 'Recent') {
-      return copy.sort((a, b) => a.addedDaysAgo - b.addedDaysAgo);
-    }
+    let copy = [...items];
+
     if (filter === 'Popular') {
-      return copy.sort((a, b) => b.popularity - a.popularity);
+      return copy.sort((a, b) => (b.likes ?? 0) - (a.likes ?? 0));
     }
+
     return copy;
   }, [items, filter]);
+
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.root,
+          {
+            justifyContent: 'center',
+            alignItems: 'center',
+          },
+        ]}
+      >
+        <ActivityIndicator size="large" color={colors.textPrimary} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.root}>
       <MeshBackground variant="profile" />
+
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <FlatList
           data={data}
-          keyExtractor={(i) => i.id}
+          keyExtractor={i => i.id}
           numColumns={2}
           showsVerticalScrollIndicator={false}
-          columnWrapperStyle={{ paddingHorizontal: spacing.xl, gap: GAP }}
-          contentContainerStyle={{ paddingBottom: 130, gap: GAP }}
+          columnWrapperStyle={{
+            paddingHorizontal: spacing.xl,
+
+            gap: GAP,
+          }}
+          contentContainerStyle={{
+            paddingBottom: 130,
+
+            gap: GAP,
+          }}
           ListHeaderComponent={
             <View>
               <Header
                 title="Favorites"
                 subtitle={`${items.length} wallpapers you've saved`}
-                rightAction={{ icon: 'search' }}
-                style={{ paddingTop: spacing.md }}
+                rightAction={{
+                  icon: 'search',
+                }}
+                style={{
+                  paddingTop: spacing.md,
+                }}
               />
 
-              {/* summary banner */}
-              <Card
-                style={{ marginHorizontal: spacing.xl, marginTop: spacing.xl }}
-                padding={spacing.lg}
-                strong
-              >
-                <View style={styles.summaryRow}>
-                  <LinearGradient
-                    colors={gradients.violetMagenta}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.summaryIcon}
-                  >
-                    <Ionicons name="heart" size={24} color={colors.textPrimary} />
-                  </LinearGradient>
-                  <View style={{ flex: 1, marginLeft: spacing.md }}>
-                    <Text style={styles.summaryValue}>{items.length} Saved</Text>
-                    <Text style={styles.summarySub}>
-                      6 collections · 342 downloads
-                    </Text>
-                  </View>
-                  <Pressable style={styles.viewAll} hitSlop={8}>
-                    <Text style={styles.viewAllText}>Manage</Text>
-                    <Ionicons
-                      name="chevron-forward"
-                      size={15}
-                      color={colors.textPrimary}
-                    />
-                  </Pressable>
-                </View>
-              </Card>
-
-              {/* filter pills */}
               <BlurView intensity={30} tint="dark" style={styles.filterBar}>
-                {FILTERS.map((f) => {
+                {FILTERS.map(f => {
                   const active = f === filter;
+
                   return (
                     <Pressable
                       key={f}
@@ -214,8 +251,6 @@ const FavoritesScreen = () => {
                       {active ? (
                         <LinearGradient
                           colors={gradients.blueViolet}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 0 }}
                           style={styles.filterActive}
                         >
                           <Text style={styles.filterTextActive}>{f}</Text>
@@ -287,7 +322,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     paddingVertical: 10,
   },
-  filterTextActive: { color: colors.textPrimary, fontSize: 15, fontWeight: '700' },
+  filterTextActive: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
 
   // cards
   card: {
@@ -328,7 +367,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 3,
   },
-  cardCategory: { color: colors.textSecondary, fontSize: 12, fontWeight: '600' },
+  cardCategory: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
   likeRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   likeText: { color: colors.textSecondary, fontSize: 12, fontWeight: '600' },
 

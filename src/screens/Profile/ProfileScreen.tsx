@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+
 import {
   StyleSheet,
   View,
@@ -6,7 +7,9 @@ import {
   Image,
   ScrollView,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -14,10 +17,20 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import MeshBackground from '../../components/MeshBackground';
 import Card from '../../components/Card';
 import { RoundButton } from '../../components/Header';
-import { colors, gradients } from '../../styles/colors';
-import { spacing, radius, PROFILE } from '../../utils/constants';
 
-type Nav = { navigate: (name: string) => void };
+import { colors, gradients } from '../../styles/colors';
+
+import { spacing, radius } from '../../utils/constants';
+
+import { getFavorites } from '../../services/favoriteService';
+
+import { getDownloads } from '../../services/downloadService';
+
+import { Wallpaper } from '../../services/types';
+
+type Nav = {
+  navigate: (name: string) => void;
+};
 
 const StatItem = ({
   icon,
@@ -32,7 +45,9 @@ const StatItem = ({
     <View style={styles.statIcon}>
       <Ionicons name={icon} size={18} color={colors.textPrimary} />
     </View>
+
     <Text style={styles.statValue}>{value}</Text>
+
     <Text style={styles.statLabel}>{label}</Text>
   </View>
 );
@@ -50,125 +65,199 @@ const MediaCard = ({
   images: string[];
   tint: string;
 }) => (
-  <Card style={{ marginHorizontal: spacing.xl, marginTop: spacing.lg }} padding={16}>
+  <Card
+    style={{
+      marginHorizontal: spacing.xl,
+      marginTop: spacing.lg,
+    }}
+    padding={16}
+  >
     <View style={styles.mediaHeader}>
-      <View style={[styles.mediaIcon, { backgroundColor: tint }]}>
+      <View
+        style={[
+          styles.mediaIcon,
+          {
+            backgroundColor: tint,
+          },
+        ]}
+      >
         <Ionicons name={icon} size={20} color={colors.textPrimary} />
       </View>
-      <View style={{ flex: 1, marginLeft: spacing.md }}>
+
+      <View
+        style={{
+          flex: 1,
+          marginLeft: spacing.md,
+        }}
+      >
         <Text style={styles.mediaTitle}>{title}</Text>
+
         <Text style={styles.mediaSubtitle}>{subtitle}</Text>
       </View>
-      <Pressable style={styles.viewAll} hitSlop={8}>
-        <Text style={styles.viewAllText}>View all</Text>
-        <Ionicons name="chevron-forward" size={15} color={colors.textPrimary} />
-      </Pressable>
     </View>
+
     <View style={styles.thumbRow}>
       {images.map((uri, i) => (
-        <Image key={i} source={{ uri }} style={styles.thumb} />
+        <Image
+          key={i}
+          source={{
+            uri,
+          }}
+          style={styles.thumb}
+        />
       ))}
     </View>
   </Card>
 );
 
 const ProfileScreen = ({ navigation }: { navigation: Nav }) => {
+  const [favorites, setFavorites] = useState<Wallpaper[]>([]);
+
+  const [downloads, setDownloads] = useState<Wallpaper[]>([]);
+
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const loadProfile = async () => {
+    try {
+      const fav = await getFavorites();
+
+      const down = await getDownloads();
+
+      setFavorites(fav.data ?? []);
+
+      setDownloads(down.data ?? []);
+    } catch (error) {
+      console.log('PROFILE ERROR', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.root,
+          {
+            justifyContent: 'center',
+            alignItems: 'center',
+          },
+        ]}
+      >
+        <ActivityIndicator size="large" color={colors.textPrimary} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.root}>
       <MeshBackground variant="profile" />
+
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 130 }}
+          contentContainerStyle={{
+            paddingBottom: 130,
+          }}
         >
-          {/* settings button */}
           <View style={styles.topBar}>
             <RoundButton icon="settings-outline" />
           </View>
 
-          {/* avatar with glow ring */}
           <View style={styles.avatarWrap}>
             <LinearGradient
               colors={gradients.violetMagenta}
               style={styles.avatarRing}
             >
               <View style={styles.avatarInner}>
-                <Image source={{ uri: PROFILE.avatar }} style={styles.avatar} />
+                <Image
+                  source={{
+                    uri: 'https://ui-avatars.com/api/?name=User',
+                  }}
+                  style={styles.avatar}
+                />
               </View>
             </LinearGradient>
           </View>
 
-          <Text style={styles.name}>{PROFILE.name}</Text>
-          <LinearGradient
-            colors={gradients.violetMagenta}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.badge}
-          >
-            <MaterialCommunityIcons name="crown" size={14} color={colors.textPrimary} />
-            <Text style={styles.badgeText}>{PROFILE.badge}</Text>
-          </LinearGradient>
-          <Text style={styles.bio}>{PROFILE.bio}</Text>
+          <Text style={styles.name}>User</Text>
 
-          {/* stats */}
+          <LinearGradient colors={gradients.violetMagenta} style={styles.badge}>
+            <MaterialCommunityIcons
+              name="crown"
+              size={14}
+              color={colors.textPrimary}
+            />
+
+            <Text style={styles.badgeText}>Free Member</Text>
+          </LinearGradient>
+
+          <Text style={styles.bio}>Premium Wallpaper Lover</Text>
+
           <View style={styles.statsRow}>
-            {PROFILE.stats.map((s) => (
-              <StatItem
-                key={s.id}
-                icon={s.icon as keyof typeof Ionicons.glyphMap}
-                value={s.value}
-                label={s.label}
-              />
-            ))}
+            <StatItem
+              icon="heart"
+              value={`${favorites.length}`}
+              label="Favorites"
+            />
+
+            <StatItem
+              icon="download-outline"
+              value={`${downloads.length}`}
+              label="Downloads"
+            />
+
+            <StatItem icon="images-outline" value="4K" label="Quality" />
           </View>
 
           <MediaCard
             icon="heart"
             title="My Favorites"
-            subtitle="Your favorite wallpapers"
-            images={PROFILE.favorites}
+            subtitle="Saved wallpapers"
+            images={favorites
+              .slice(0, 4)
+              .map(x => x.imageUrl ?? 'https://picsum.photos/200')}
             tint={colors.chipPink}
           />
+
           <MediaCard
             icon="download-outline"
             title="Recent Downloads"
-            subtitle="Your recently downloaded wallpapers"
-            images={PROFILE.downloads}
+            subtitle="Downloaded wallpapers"
+            images={downloads
+              .slice(0, 4)
+              .map(x => x.imageUrl ?? 'https://picsum.photos/200')}
             tint={colors.chipBlue}
           />
 
-          {/* Settings */}
-          <Card style={{ marginHorizontal: spacing.xl, marginTop: spacing.lg }} padding={0}>
-            <View style={styles.settingsHeader}>
-              <LinearGradient colors={gradients.blueViolet} style={styles.mediaIcon}>
-                <Ionicons name="settings-sharp" size={20} color={colors.textPrimary} />
-              </LinearGradient>
-              <View style={{ flex: 1, marginLeft: spacing.md }}>
-                <Text style={styles.mediaTitle}>Settings</Text>
-                <Text style={styles.mediaSubtitle}>Customize your experience</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-            </View>
+          <Card
+            style={{
+              marginHorizontal: spacing.xl,
+              marginTop: spacing.lg,
+            }}
+            padding={0}
+          >
+            <Pressable
+              style={styles.settingRow}
+              onPress={() => navigation.navigate('About')}
+            >
+              <Ionicons
+                name="information-circle-outline"
+                size={20}
+                color={colors.textSecondary}
+              />
 
-            <View style={styles.divider} />
+              <Text style={styles.settingLabel}>About VividWalls</Text>
 
-            {PROFILE.settings.map((row, i) => (
-              <Pressable
-                key={row.id}
-                style={styles.settingRow}
-                onPress={() => {
-                  if (row.label === 'About WallpaperX') navigation.navigate('About');
-                }}
-              >
-                <Ionicons
-                  name={row.icon as keyof typeof Ionicons.glyphMap}
-                  size={20}
-                  color={colors.textSecondary}
-                />
-                <Text style={styles.settingLabel}>{row.label}</Text>
-                <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-              </Pressable>
-            ))}
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={colors.textTertiary}
+              />
+            </Pressable>
           </Card>
         </ScrollView>
       </SafeAreaView>
@@ -229,7 +318,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   badgeText: { color: colors.textPrimary, fontWeight: '700', fontSize: 13 },
-  bio: { color: colors.textSecondary, textAlign: 'center', fontSize: 15, marginTop: spacing.md },
+  bio: {
+    color: colors.textSecondary,
+    textAlign: 'center',
+    fontSize: 15,
+    marginTop: spacing.md,
+  },
 
   // stats
   statsRow: {
@@ -255,7 +349,11 @@ const styles = StyleSheet.create({
   statLabel: { color: colors.textSecondary, fontSize: 13, marginTop: 2 },
 
   // media cards
-  mediaHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.lg },
+  mediaHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
   mediaIcon: {
     width: 44,
     height: 44,
@@ -268,11 +366,24 @@ const styles = StyleSheet.create({
   viewAll: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   viewAllText: { color: colors.textPrimary, fontSize: 14, fontWeight: '600' },
   thumbRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  thumb: { width: 60, height: 60, borderRadius: 12, backgroundColor: colors.glassFillSoft },
+  thumb: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    backgroundColor: colors.glassFillSoft,
+  },
 
   // settings
-  settingsHeader: { flexDirection: 'row', alignItems: 'center', padding: spacing.lg },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.divider, marginHorizontal: spacing.lg },
+  settingsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.divider,
+    marginHorizontal: spacing.lg,
+  },
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -280,5 +391,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: 15,
   },
-  settingLabel: { color: colors.textPrimary, fontSize: 16, fontWeight: '600', flex: 1 },
+  settingLabel: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+  },
 });

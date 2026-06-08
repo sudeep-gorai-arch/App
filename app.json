@@ -1,5 +1,18 @@
 {
-  "name": "vividWallsApps",
-  "displayName": "vividWallsApps"
-  
+  "expo": {
+    "name": "FlexiWalls",
+    "slug": "flexiwalls",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "flexiwalls",
+    "android": {
+      "package": "com.flexiwalls.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0B0819"
+      }
+    },
+    "extra": {
+      "appName": "FlexiWalls"
+    }
+  }
 }
