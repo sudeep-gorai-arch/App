@@ -164,7 +164,10 @@ const ProfileScreen = ({ navigation }: { navigation: Nav }) => {
           }}
         >
           <View style={styles.topBar}>
-            <RoundButton icon="settings-outline" />
+            <RoundButton
+              icon="settings-outline"
+              onPress={() => navigation.navigate('AccountSettings')}
+            />
           </View>
 
           <View style={styles.avatarWrap}>

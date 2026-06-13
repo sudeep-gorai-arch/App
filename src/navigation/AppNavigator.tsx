@@ -1,7 +1,7 @@
 import React from 'react';
 import { StatusBar } from 'react-native';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
-import BottomTabs from './BottomTabs';
+import RootNavigator from './RootNavigator';
 import { colors } from '../styles/colors';
 
 // Transparent navigator theme so our mesh gradient shows through every screen.
@@ -20,7 +20,7 @@ const AppNavigator = () => {
   return (
     <NavigationContainer theme={AppTheme}>
       <StatusBar barStyle="light-content" />
-      <BottomTabs />
+      <RootNavigator />
     </NavigationContainer>
   );
 };

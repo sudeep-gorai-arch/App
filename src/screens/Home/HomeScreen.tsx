@@ -24,7 +24,7 @@ import Button from '../../components/Button';
 import { colors } from '../../styles/colors';
 
 import { spacing, radius, SCREEN } from '../../utils/constants';
-
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   getFeaturedWallpapers,
   getTrendingWallpapers,
@@ -203,8 +203,13 @@ const HomeScreen = () => {
           <Header
             eyebrow="Good Morning 👋"
             title={'Find Your\nPerfect Wallpaper'}
+            leftAction={{
+              icon: 'person-outline',
+              onPress: () => navigation.navigate('ProfileScreen'),
+            }}
             rightAction={{
               icon: 'search',
+              onPress: () => navigation.navigate('SearchScreen'),
             }}
             style={{
               paddingTop: spacing.md,

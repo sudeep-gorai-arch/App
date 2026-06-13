@@ -12,14 +12,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import MeshBackground from '../../components/MeshBackground';
 import Card from '../../components/Card';
 import { RoundButton } from '../../components/Header';
 import { colors, gradients } from '../../styles/colors';
 import { spacing, radius } from '../../utils/constants';
+import { useAuth } from '../../store/authStore';
 
-type Nav = { goBack?: () => void };
+type Nav = { goBack?: () => void; navigate?: (name: string) => void };
 
 const DANGER = '#FF5A6E';
 const AVATAR = 'https://picsum.photos/seed/acct-ethan/400/400';
@@ -123,6 +125,18 @@ const AccountSettingsScreen = ({ navigation }: { navigation?: Nav }) => {
   const [email, setEmail] = useState('ethanhunt@email.com');
   const [faceId, setFaceId] = useState(true);
 
+  const clearSession = useAuth(s => s.logout);
+
+  const onLogout = async () => {
+    try {
+      await AsyncStorage.removeItem('token');
+    } catch (e) {
+      console.log('LOGOUT ERROR', e);
+    }
+    clearSession();
+    navigation?.navigate?.('Login');
+  };
+
   return (
     <View style={styles.root}>
       <MeshBackground variant="profile" />
@@ -218,6 +232,7 @@ const AccountSettingsScreen = ({ navigation }: { navigation?: Nav }) => {
 
           {/* Log out */}
           <Pressable
+            onPress={onLogout}
             style={({ pressed }) => [styles.logout, { opacity: pressed ? 0.85 : 1 }]}
           >
             <Ionicons name="log-out-outline" size={22} color={DANGER} />
