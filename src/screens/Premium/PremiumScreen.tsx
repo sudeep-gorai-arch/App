@@ -32,6 +32,7 @@ import { Wallpaper } from '../../services/types';
 
 type Nav = {
   goBack?: () => void;
+  navigate?: (name: string) => void;
 };
 
 const GOLD = '#F5C451';
@@ -308,6 +309,33 @@ const PremiumScreen = ({ navigation }: { navigation?: Nav }) => {
               <LockedTile key={x.id} item={x} />
             ))}
           </View>
+
+          {/* Get Premium Access CTA */}
+          <Pressable
+            onPress={() => navigation?.navigate?.('PremiumAccess')}
+            style={({ pressed }) => [
+              styles.ctaWrap,
+              { transform: [{ scale: pressed ? 0.98 : 1 }] },
+            ]}
+          >
+            <LinearGradient
+              colors={CTA_GRADIENT}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.cta}
+            >
+              <View style={styles.ctaCenter}>
+                <MaterialCommunityIcons name="crown" size={22} color={colors.textPrimary} />
+                <Text style={styles.ctaText}>Get Premium Access</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textPrimary} />
+            </LinearGradient>
+          </Pressable>
+
+          <View style={styles.secureRow}>
+            <Ionicons name="shield-checkmark-outline" size={14} color={colors.textSecondary} />
+            <Text style={styles.secureText}>Secure payment • Cancel anytime</Text>
+          </View>
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -503,10 +531,17 @@ const styles = StyleSheet.create({
   cta: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
     paddingVertical: 18,
     borderRadius: radius.pill,
+  },
+  ctaCenter: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
   },
   ctaText: { color: colors.textPrimary, fontSize: 18, fontWeight: '800' },
   secureRow: {

@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-
 import {
   StyleSheet,
   View,
@@ -7,7 +6,6 @@ import {
   Image,
   ScrollView,
   Pressable,
-  ActivityIndicator,
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,35 +17,61 @@ import Card from '../../components/Card';
 import { RoundButton } from '../../components/Header';
 
 import { colors, gradients } from '../../styles/colors';
-
-import { spacing, radius } from '../../utils/constants';
+import { spacing, radius, PROFILE } from '../../utils/constants';
 
 import { getFavorites } from '../../services/favoriteService';
-
 import { getDownloads } from '../../services/downloadService';
 
 import { Wallpaper } from '../../services/types';
 
-type Nav = {
-  navigate: (name: string) => void;
+type Nav = { navigate: (name: string) => void };
+
+// Display profile (matches the mockup). Thumbnails fall back to the bundled
+// placeholders so the screen looks complete with or without a live backend.
+const USER = {
+  name: 'Ethan Hunt',
+  tier: 'Premium',
+  bio: 'Wallpaper lover and explorer \u2728',
+  avatar: 'https://picsum.photos/seed/acct-ethan/400/400',
 };
 
+const STATS = [
+  { id: 'fav', icon: 'image-outline', value: '1,248', label: 'Favorites', tint: colors.chipPink },
+  { id: 'dl', icon: 'download-outline', value: '342', label: 'Downloads', tint: colors.glassFillSoft },
+  { id: 'col', icon: 'heart-outline', value: '28', label: 'Collections', tint: colors.chipPink },
+] as const;
+
+const SETTINGS_ROWS: {
+  id: string;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  route: string;
+}[] = [
+  { id: 'account', label: 'Account Settings', icon: 'person-outline', route: 'AccountSettings' },
+  { id: 'privacy', label: 'Privacy Policy', icon: 'shield-checkmark-outline', route: 'PrivacyPolicy' },
+  { id: 'help', label: 'Help & Support', icon: 'help-circle-outline', route: 'HelpSupport' },
+  { id: 'about', label: 'About WallpaperX', icon: 'information-circle-outline', route: 'About' },
+];
+
+// ---------------------------------------------------------------------------
+// Pieces
+// ---------------------------------------------------------------------------
 const StatItem = ({
   icon,
   value,
   label,
+  tint,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   value: string;
   label: string;
+  tint: string;
 }) => (
   <View style={styles.stat}>
-    <View style={styles.statIcon}>
+    <View style={[styles.statIcon, { backgroundColor: tint }]}>
       <Ionicons name={icon} size={18} color={colors.textPrimary} />
     </View>
-
     <Text style={styles.statValue}>{value}</Text>
-
     <Text style={styles.statLabel}>{label}</Text>
   </View>
 );
@@ -56,66 +80,44 @@ const MediaCard = ({
   icon,
   title,
   subtitle,
-  images,
   tint,
+  images,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle: string;
-  images: string[];
   tint: string;
+  images: string[];
 }) => (
-  <Card
-    style={{
-      marginHorizontal: spacing.xl,
-      marginTop: spacing.lg,
-    }}
-    padding={16}
-  >
+  <Card style={styles.mediaCard} padding={spacing.lg} strong>
     <View style={styles.mediaHeader}>
-      <View
-        style={[
-          styles.mediaIcon,
-          {
-            backgroundColor: tint,
-          },
-        ]}
-      >
+      <View style={[styles.mediaIcon, { backgroundColor: tint }]}>
         <Ionicons name={icon} size={20} color={colors.textPrimary} />
       </View>
-
-      <View
-        style={{
-          flex: 1,
-          marginLeft: spacing.md,
-        }}
-      >
+      <View style={{ flex: 1, marginLeft: spacing.md }}>
         <Text style={styles.mediaTitle}>{title}</Text>
-
-        <Text style={styles.mediaSubtitle}>{subtitle}</Text>
+        <Text style={styles.mediaSub}>{subtitle}</Text>
       </View>
+      <Pressable style={styles.viewAll} hitSlop={6}>
+        <Text style={styles.viewAllText}>View all</Text>
+        <Ionicons name="chevron-forward" size={16} color={colors.textPrimary} />
+      </Pressable>
     </View>
 
     <View style={styles.thumbRow}>
-      {images.map((uri, i) => (
-        <Image
-          key={i}
-          source={{
-            uri,
-          }}
-          style={styles.thumb}
-        />
+      {images.slice(0, 5).map((uri, i) => (
+        <Image key={i} source={{ uri }} style={styles.thumb} />
       ))}
     </View>
   </Card>
 );
 
+// ---------------------------------------------------------------------------
+// Screen
+// ---------------------------------------------------------------------------
 const ProfileScreen = ({ navigation }: { navigation: Nav }) => {
-  const [favorites, setFavorites] = useState<Wallpaper[]>([]);
-
-  const [downloads, setDownloads] = useState<Wallpaper[]>([]);
-
-  const [loading, setLoading] = useState(true);
+  const [favorites, setFavorites] = useState<string[]>(PROFILE.favorites);
+  const [downloads, setDownloads] = useState<string[]>(PROFILE.downloads);
 
   useEffect(() => {
     loadProfile();
@@ -123,35 +125,22 @@ const ProfileScreen = ({ navigation }: { navigation: Nav }) => {
 
   const loadProfile = async () => {
     try {
-      const fav = await getFavorites();
+      const [fav, down] = await Promise.all([getFavorites(), getDownloads()]);
 
-      const down = await getDownloads();
+      const favImgs = (fav?.data ?? [])
+        .map((x: Wallpaper) => x.imageUrl ?? x.thumbnailUrl)
+        .filter(Boolean) as string[];
+      const downImgs = (down?.data ?? [])
+        .map((x: Wallpaper) => x.imageUrl ?? x.thumbnailUrl)
+        .filter(Boolean) as string[];
 
-      setFavorites(fav.data ?? []);
-
-      setDownloads(down.data ?? []);
+      if (favImgs.length) setFavorites(favImgs);
+      if (downImgs.length) setDownloads(downImgs);
     } catch (error) {
+      // Keep the bundled placeholders if the backend isn't reachable.
       console.log('PROFILE ERROR', error);
-    } finally {
-      setLoading(false);
     }
   };
-
-  if (loading) {
-    return (
-      <View
-        style={[
-          styles.root,
-          {
-            justifyContent: 'center',
-            alignItems: 'center',
-          },
-        ]}
-      >
-        <ActivityIndicator size="large" color={colors.textPrimary} />
-      </View>
-    );
-  }
 
   return (
     <View style={styles.root}>
@@ -159,10 +148,10 @@ const ProfileScreen = ({ navigation }: { navigation: Nav }) => {
 
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ScrollView
-          contentContainerStyle={{
-            paddingBottom: 130,
-          }}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 130 }}
         >
+          {/* settings gear */}
           <View style={styles.topBar}>
             <RoundButton
               icon="settings-outline"
@@ -170,97 +159,84 @@ const ProfileScreen = ({ navigation }: { navigation: Nav }) => {
             />
           </View>
 
+          {/* avatar */}
           <View style={styles.avatarWrap}>
-            <LinearGradient
-              colors={gradients.violetMagenta}
-              style={styles.avatarRing}
-            >
+            <LinearGradient colors={gradients.violetMagenta} style={styles.avatarRing}>
               <View style={styles.avatarInner}>
-                <Image
-                  source={{
-                    uri: 'https://ui-avatars.com/api/?name=User',
-                  }}
-                  style={styles.avatar}
-                />
+                <Image source={{ uri: USER.avatar }} style={styles.avatar} />
               </View>
             </LinearGradient>
           </View>
 
-          <Text style={styles.name}>User</Text>
+          <Text style={styles.name}>{USER.name}</Text>
 
           <LinearGradient colors={gradients.violetMagenta} style={styles.badge}>
-            <MaterialCommunityIcons
-              name="crown"
-              size={14}
-              color={colors.textPrimary}
-            />
-
-            <Text style={styles.badgeText}>Free Member</Text>
+            <MaterialCommunityIcons name="crown" size={14} color={colors.textPrimary} />
+            <Text style={styles.badgeText}>{USER.tier}</Text>
           </LinearGradient>
 
-          <Text style={styles.bio}>Premium Wallpaper Lover</Text>
+          <Text style={styles.bio}>{USER.bio}</Text>
 
+          {/* stats */}
           <View style={styles.statsRow}>
-            <StatItem
-              icon="heart"
-              value={`${favorites.length}`}
-              label="Favorites"
-            />
-
-            <StatItem
-              icon="download-outline"
-              value={`${downloads.length}`}
-              label="Downloads"
-            />
-
-            <StatItem icon="images-outline" value="4K" label="Quality" />
+            {STATS.map(s => (
+              <StatItem
+                key={s.id}
+                icon={s.icon}
+                value={s.value}
+                label={s.label}
+                tint={s.tint}
+              />
+            ))}
           </View>
 
+          {/* media cards */}
           <MediaCard
             icon="heart"
             title="My Favorites"
-            subtitle="Saved wallpapers"
-            images={favorites
-              .slice(0, 4)
-              .map(x => x.imageUrl ?? 'https://picsum.photos/200')}
+            subtitle="Your favorite wallpapers"
             tint={colors.chipPink}
+            images={favorites}
           />
-
           <MediaCard
             icon="download-outline"
             title="Recent Downloads"
-            subtitle="Downloaded wallpapers"
-            images={downloads
-              .slice(0, 4)
-              .map(x => x.imageUrl ?? 'https://picsum.photos/200')}
+            subtitle="Your recently downloaded wallpapers"
             tint={colors.chipBlue}
+            images={downloads}
           />
 
-          <Card
-            style={{
-              marginHorizontal: spacing.xl,
-              marginTop: spacing.lg,
-            }}
-            padding={0}
-          >
+          {/* settings */}
+          <Card style={styles.mediaCard} padding={0} strong>
             <Pressable
-              style={styles.settingRow}
-              onPress={() => navigation.navigate('About')}
+              style={styles.settingsHeader}
+              onPress={() => navigation.navigate('AccountSettings')}
             >
-              <Ionicons
-                name="information-circle-outline"
-                size={20}
-                color={colors.textSecondary}
-              />
-
-              <Text style={styles.settingLabel}>About VividWalls</Text>
-
-              <Ionicons
-                name="chevron-forward"
-                size={18}
-                color={colors.textTertiary}
-              />
+              <LinearGradient colors={gradients.blueViolet} style={styles.settingsIcon}>
+                <Ionicons name="settings-outline" size={20} color={colors.textPrimary} />
+              </LinearGradient>
+              <View style={{ flex: 1, marginLeft: spacing.md }}>
+                <Text style={styles.settingsTitle}>Settings</Text>
+                <Text style={styles.settingsSub}>Customize your experience</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
             </Pressable>
+
+            <View style={styles.divider} />
+
+            {SETTINGS_ROWS.map((row, i) => (
+              <View key={row.id}>
+                <Pressable
+                  style={styles.settingRow}
+                  onPress={() => navigation.navigate(row.route)}
+                >
+                  <Ionicons name={row.icon} size={20} color={colors.textSecondary} />
+                  <Text style={styles.settingLabel}>{row.label}</Text>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+                </Pressable>
+                {i < SETTINGS_ROWS.length - 1 && <View style={styles.rowDivider} />}
+              </View>
+            ))}
           </Card>
         </ScrollView>
       </SafeAreaView>
@@ -270,6 +246,9 @@ const ProfileScreen = ({ navigation }: { navigation: Nav }) => {
 
 export default ProfileScreen;
 
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.base },
   topBar: {
@@ -345,18 +324,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
-    backgroundColor: colors.glassFillSoft,
     marginBottom: spacing.sm,
   },
   statValue: { color: colors.textPrimary, fontSize: 20, fontWeight: '800' },
   statLabel: { color: colors.textSecondary, fontSize: 13, marginTop: 2 },
 
   // media cards
-  mediaHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
+  mediaCard: { marginHorizontal: spacing.xl, marginTop: spacing.lg },
+  mediaHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.lg },
   mediaIcon: {
     width: 44,
     height: 44,
@@ -364,25 +339,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  mediaTitle: { color: colors.textPrimary, fontSize: 19, fontWeight: '800' },
-  mediaSubtitle: { color: colors.textSecondary, fontSize: 13, marginTop: 2 },
+  mediaTitle: { color: colors.textPrimary, fontSize: 18, fontWeight: '800' },
+  mediaSub: { color: colors.textSecondary, fontSize: 13, marginTop: 2 },
   viewAll: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   viewAllText: { color: colors.textPrimary, fontSize: 14, fontWeight: '600' },
-  thumbRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  thumbRow: { flexDirection: 'row', gap: spacing.sm },
   thumb: {
-    width: 60,
-    height: 60,
+    flex: 1,
+    aspectRatio: 0.82,
     borderRadius: 12,
     backgroundColor: colors.glassFillSoft,
   },
 
   // settings
-  settingsHeader: {
-    flexDirection: 'row',
+  settingsHeader: { flexDirection: 'row', alignItems: 'center', padding: spacing.lg },
+  settingsIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: 'center',
-    padding: spacing.lg,
+    justifyContent: 'center',
   },
-  divider: {
+  settingsTitle: { color: colors.textPrimary, fontSize: 19, fontWeight: '800' },
+  settingsSub: { color: colors.textSecondary, fontSize: 13, marginTop: 2 },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.divider },
+  rowDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.divider,
     marginHorizontal: spacing.lg,
@@ -392,12 +373,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     paddingHorizontal: spacing.lg,
-    paddingVertical: 15,
+    paddingVertical: 16,
   },
-  settingLabel: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '600',
-    flex: 1,
-  },
+  settingLabel: { color: colors.textPrimary, fontSize: 16, fontWeight: '600', flex: 1 },
 });

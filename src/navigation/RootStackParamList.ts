@@ -9,10 +9,10 @@ export type RootStackParamList = {
   MainTabs: undefined;
   Login: undefined;
   Signup: undefined;
+  PremiumAccess: undefined;
+  Payment: { planLabel?: string; price?: number } | undefined;
   WallpaperDetails: { wallpaper: any };
   AccountSettings: undefined;
   HelpSupport: undefined;
   PrivacyPolicy: undefined;
-  SearchScreen: undefined;
-  ProfileScreen: undefined;
 };

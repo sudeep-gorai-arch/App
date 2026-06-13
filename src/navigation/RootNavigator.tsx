@@ -7,12 +7,12 @@ import { colors } from '../styles/colors';
 
 import LoginScreen from '../screens/Login/LoginScreen';
 import SignupScreen from '../screens/SignUp/SignUpScreen';
+import PremiumAccessScreen from '../screens/PremiumAccess/PremiumAccessScreen';
+import PaymentScreen from '../screens/Payment/PaymentScreen';
 import WallpaperDetailsScreen from '../screens/WallpaperDetails/WallpaperDetailsScreen';
 import AccountSettingsScreen from '../screens/AccountSettings/AccountSettingsScreen';
 import HelpSupportScreen from '../screens/HelpSupport/HelpSupportScreen';
 import PrivacyPolicyScreen from '../screens/PrivacyPolicy/PrivacyPolicyScreen';
-import SearchScreen from '../screens/Search/SearchScreen';
-import ProfileScreen from '../screens/Profile/ProfileScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -46,22 +46,15 @@ const RootNavigator = () => {
       />
       <Stack.Screen name="Signup" component={SignupScreen} />
 
+      {/* Premium purchase flow. */}
+      <Stack.Screen name="PremiumAccess" component={PremiumAccessScreen} />
+      <Stack.Screen name="Payment" component={PaymentScreen} />
+
       {/* Detail / settings screens. */}
       <Stack.Screen name="WallpaperDetails" component={WallpaperDetailsScreen} />
       <Stack.Screen name="AccountSettings" component={AccountSettingsScreen} />
       <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
       <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
-      <Stack.Screen
-        name="SearchScreen"
-        component={SearchScreen}
-        options={{ headerShown: false }}
-      />
-
-      <Stack.Screen
-        name="ProfileScreen"
-        component={ProfileScreen}
-        options={{ headerShown: false }}
-      />
     </Stack.Navigator>
   );
 };
