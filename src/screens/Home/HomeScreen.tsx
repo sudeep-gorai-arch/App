@@ -24,13 +24,15 @@ import Button from '../../components/Button';
 import { colors } from '../../styles/colors';
 
 import { spacing, radius, SCREEN } from '../../utils/constants';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+
 import {
   getFeaturedWallpapers,
   getTrendingWallpapers,
 } from '../../services/wallpaperService';
 
 import { Wallpaper, Category } from '../../services/types';
+
+import { useNavigation } from '@react-navigation/native';
 
 const HERO_W = SCREEN.width - spacing.xl * 2;
 
@@ -136,6 +138,8 @@ const TrendingCard = ({ item }: { item: Wallpaper }) => (
 );
 
 const HomeScreen = () => {
+  const navigation = useNavigation<any>();
+
   const [active, setActive] = useState(0);
 
   const [featured, setFeatured] = useState<Wallpaper[]>([]);
@@ -304,8 +308,18 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
   },
-  qualityText: { color: colors.textPrimary, fontWeight: '800', fontSize: 14, lineHeight: 16 },
-  qualitySub: { color: colors.textSecondary, fontSize: 8, fontWeight: '700', letterSpacing: 1 },
+  qualityText: {
+    color: colors.textPrimary,
+    fontWeight: '800',
+    fontSize: 14,
+    lineHeight: 16,
+  },
+  qualitySub: {
+    color: colors.textSecondary,
+    fontSize: 8,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
   heroContent: { padding: spacing.xl },
   tagPill: {
     alignSelf: 'flex-start',
@@ -315,9 +329,24 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     marginBottom: spacing.md,
   },
-  tagText: { color: colors.textPrimary, fontSize: 11, fontWeight: '700', letterSpacing: 1.5 },
-  heroTitle: { color: colors.textPrimary, fontSize: 30, fontWeight: '800', letterSpacing: -0.5 },
-  heroSubtitle: { color: colors.textSecondary, fontSize: 15, marginTop: 4, maxWidth: '78%' },
+  tagText: {
+    color: colors.textPrimary,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+  },
+  heroTitle: {
+    color: colors.textPrimary,
+    fontSize: 30,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  heroSubtitle: {
+    color: colors.textSecondary,
+    fontSize: 15,
+    marginTop: 4,
+    maxWidth: '78%',
+  },
   heroFooter: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -335,7 +364,12 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: spacing.lg,
   },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textTertiary },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.textTertiary,
+  },
   dotActive: { width: 18, backgroundColor: colors.textPrimary },
 
   // Section header
@@ -347,7 +381,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.xxl,
     marginBottom: spacing.lg,
   },
-  sectionTitle: { color: colors.textPrimary, fontSize: 24, fontWeight: '800', letterSpacing: -0.3 },
+  sectionTitle: {
+    color: colors.textPrimary,
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
   viewAll: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   viewAllText: { color: colors.textPrimary, fontSize: 15, fontWeight: '600' },
 
@@ -375,6 +414,11 @@ const styles = StyleSheet.create({
   },
   fire: { fontSize: 14 },
   trendQuality: { color: colors.textPrimary, fontSize: 12, fontWeight: '800' },
-  trendBottom: { flexDirection: 'row', alignItems: 'center', gap: 5, padding: 10 },
+  trendBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    padding: 10,
+  },
   trendLikes: { color: colors.textPrimary, fontSize: 13, fontWeight: '700' },
 });
