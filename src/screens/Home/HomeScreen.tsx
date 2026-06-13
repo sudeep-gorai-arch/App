@@ -209,11 +209,11 @@ const HomeScreen = () => {
             title={'Find Your\nPerfect Wallpaper'}
             leftAction={{
               icon: 'person-outline',
-              onPress: () => navigation.navigate('ProfileScreen'),
+              onPress: () => navigation.navigate('Profile'),
             }}
             rightAction={{
               icon: 'search',
-              onPress: () => navigation.navigate('SearchScreen'),
+              onPress: () => navigation.navigate('Search'),
             }}
             style={{
               paddingTop: spacing.md,
