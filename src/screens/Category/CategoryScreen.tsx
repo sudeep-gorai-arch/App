@@ -28,6 +28,7 @@ import {
 
 import { getCategories } from '../../services/categoryService';
 import { Category } from '../../services/types';
+import { useNavigation } from '@react-navigation/native';
 
 const GAP = spacing.lg;
 
@@ -86,6 +87,8 @@ const CategoryCard = ({ item }: { item: Category }) => {
 };
 
 const CategoryScreen = () => {
+  const navigation = useNavigation<any>();
+
   const [filter, setFilter] = useState(CATEGORY_FILTERS[0]);
 
   const [categories, setCategories] = useState<Category[]>([]);
@@ -148,9 +151,13 @@ const CategoryScreen = () => {
             <View>
               <Header
                 title="Categories"
-                subtitle="Explore wallpapers by your favorite themes"
+                leftAction={{
+                  icon: 'person-outline',
+                  onPress: () => navigation.navigate('ProfileScreen'),
+                }}
                 rightAction={{
                   icon: 'search',
+                  onPress: () => navigation.navigate('SearchScreen'),
                 }}
                 style={{
                   paddingTop: spacing.md,

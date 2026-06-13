@@ -25,6 +25,7 @@ import { spacing, radius, SCREEN } from '../../utils/constants';
 import { getFavorites, removeFavorite } from '../../services/favoriteService';
 
 import { Wallpaper } from '../../services/types';
+import { useNavigation } from '@react-navigation/native';
 
 const GAP = spacing.lg;
 
@@ -147,6 +148,8 @@ const EmptyState = () => (
 // ================= SCREEN =================
 
 const FavoritesScreen = () => {
+  const navigation = useNavigation<any>();
+
   const [items, setItems] = useState<Wallpaper[]>([]);
 
   const [filter, setFilter] = useState<Filter>('All');
@@ -229,9 +232,13 @@ const FavoritesScreen = () => {
             <View>
               <Header
                 title="Favorites"
-                subtitle={`${items.length} wallpapers you've saved`}
+                leftAction={{
+                  icon: 'person-outline',
+                  onPress: () => navigation.navigate('ProfileScreen'),
+                }}
                 rightAction={{
                   icon: 'search',
+                  onPress: () => navigation.navigate('SearchScreen'),
                 }}
                 style={{
                   paddingTop: spacing.md,
