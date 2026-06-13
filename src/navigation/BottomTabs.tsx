@@ -19,6 +19,7 @@ import PremiumScreen from '../screens/Premium/PremiumScreen';
 
 import { colors, gradients } from '../styles/colors';
 import { TAB_ITEMS } from '../utils/constants';
+import SearchScreen from '../screens/Search/SearchScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -110,6 +111,7 @@ export default function BottomTabs() {
       <Tab.Screen name="About" component={AboutScreen} />
       <Tab.Screen name="Premium" component={PremiumScreen} />
       <Tab.Screen name="Favorites" component={FavoritesScreen} />
+      <Tab.Screen name="Search" component={SearchScreen} />
     </Tab.Navigator>
   );
 }
