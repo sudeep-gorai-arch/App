@@ -285,25 +285,6 @@ const PremiumScreen = ({ navigation }: { navigation?: Nav }) => {
             ))}
           </Card>
 
-          <View style={styles.plansRow}>
-            <PlanCard
-              title="Monthly"
-              price="49"
-              note="Monthly billing"
-              selected={plan === 'monthly'}
-              onPress={() => setPlan('monthly')}
-            />
-
-            <PlanCard
-              title="Annual"
-              price="329"
-              note="Save 44%"
-              best
-              selected={plan === 'annual'}
-              onPress={() => setPlan('annual')}
-            />
-          </View>
-
           <View style={styles.lockGrid}>
             {wallpapers.slice(0, 6).map(x => (
               <LockedTile key={x.id} item={x} />
@@ -325,16 +306,30 @@ const PremiumScreen = ({ navigation }: { navigation?: Nav }) => {
               style={styles.cta}
             >
               <View style={styles.ctaCenter}>
-                <MaterialCommunityIcons name="crown" size={22} color={colors.textPrimary} />
+                <MaterialCommunityIcons
+                  name="crown"
+                  size={22}
+                  color={colors.textPrimary}
+                />
                 <Text style={styles.ctaText}>Get Premium Access</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textPrimary} />
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={colors.textPrimary}
+              />
             </LinearGradient>
           </Pressable>
 
           <View style={styles.secureRow}>
-            <Ionicons name="shield-checkmark-outline" size={14} color={colors.textSecondary} />
-            <Text style={styles.secureText}>Secure payment • Cancel anytime</Text>
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={14}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.secureText}>
+              Secure payment • Cancel anytime
+            </Text>
           </View>
         </ScrollView>
       </SafeAreaView>
