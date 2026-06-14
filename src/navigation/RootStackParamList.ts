@@ -6,13 +6,49 @@
  * only describes the parent stack.
  */
 export type RootStackParamList = {
+
   MainTabs: undefined;
+
+
+  // Auth
   Login: undefined;
   Signup: undefined;
+
+
+  // Premium Flow
   PremiumAccess: undefined;
-  Payment: { planLabel?: string; price?: number } | undefined;
-  WallpaperDetails: { wallpaper: any };
+
+  Payment:
+  | {
+    planLabel?: string;
+    price?: number;
+  }
+  | undefined;
+
+
+  // Wallpaper
+  WallpaperDetails: {
+    wallpaper: any;
+  };
+
+
+  // Account/Profile
   AccountSettings: undefined;
+
+  EditProfile: undefined;
+
+  Subscription: undefined;
+
+  Downloads: undefined;
+
+
+  // Other Pages
   HelpSupport: undefined;
+
+  PrivacySecurity: undefined;
+
   PrivacyPolicy: undefined;
+
+  About: undefined;
+
 };
