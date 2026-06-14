@@ -1,11 +1,5 @@
 import React, { useState } from 'react';
-import {
-  StyleSheet,
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-} from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -155,7 +149,10 @@ const PlanCard = ({
   const body = (
     <View style={[styles.planInner, plan.best && { paddingTop: spacing.xl }]}>
       {plan.best ? (
-        <LinearGradient colors={gradients.violetMagenta} style={styles.bestBadge}>
+        <LinearGradient
+          colors={gradients.violetMagenta}
+          style={styles.bestBadge}
+        >
           <Text style={styles.bestBadgeText}>BEST VALUE</Text>
         </LinearGradient>
       ) : null}
@@ -173,7 +170,11 @@ const PlanCard = ({
       <View style={styles.perks}>
         {plan.perks.map(p => (
           <View key={p} style={styles.perkRow}>
-            <Ionicons name="checkmark-circle" size={14} color={colors.accentPink} />
+            <Ionicons
+              name="checkmark-circle"
+              size={14}
+              color={colors.accentPink}
+            />
             <Text style={styles.perkText}>{p}</Text>
           </View>
         ))}
@@ -233,7 +234,10 @@ const PremiumAccessScreen = ({ navigation }: Props) => {
           contentContainerStyle={{ paddingBottom: spacing.xxl }}
         >
           <View style={styles.topBar}>
-            <RoundButton icon="chevron-back" onPress={() => navigation.goBack()} />
+            <RoundButton
+              icon="chevron-back"
+              onPress={() => navigation.goBack()}
+            />
           </View>
 
           <View style={styles.crownWrap}>
@@ -300,10 +304,16 @@ const PremiumAccessScreen = ({ navigation }: Props) => {
           >
             <View style={styles.guaranteeRow}>
               <View style={styles.guaranteeIcon}>
-                <Ionicons name="shield-checkmark" size={22} color={colors.accentBlue} />
+                <Ionicons
+                  name="shield-checkmark"
+                  size={22}
+                  color={colors.accentBlue}
+                />
               </View>
               <View style={{ flex: 1, marginLeft: spacing.md }}>
-                <Text style={styles.guaranteeTitle}>7-Day Money Back Guarantee</Text>
+                <Text style={styles.guaranteeTitle}>
+                  7-Day Money Back Guarantee
+                </Text>
                 <Text style={styles.guaranteeSub}>
                   Not satisfied? Get a full refund within 7 days of purchase.
                 </Text>
@@ -326,16 +336,30 @@ const PremiumAccessScreen = ({ navigation }: Props) => {
               style={styles.cta}
             >
               <View style={styles.ctaCenter}>
-                <MaterialCommunityIcons name="crown" size={22} color={colors.textPrimary} />
+                <MaterialCommunityIcons
+                  name="crown"
+                  size={22}
+                  color={colors.textPrimary}
+                />
                 <Text style={styles.ctaText}>Continue to Payment</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textPrimary} />
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={colors.textPrimary}
+              />
             </LinearGradient>
           </Pressable>
 
           <View style={styles.secureRow}>
-            <Ionicons name="lock-closed-outline" size={14} color={colors.textSecondary} />
-            <Text style={styles.secureText}>Secure payment. Cancel anytime.</Text>
+            <Ionicons
+              name="lock-closed-outline"
+              size={14}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.secureText}>
+              Secure payment. Cancel anytime.
+            </Text>
           </View>
 
           {/* Footer links */}
@@ -387,7 +411,12 @@ const styles = StyleSheet.create({
 
   // hero
   heroRow: { flexDirection: 'row', alignItems: 'center' },
-  heroTitle: { color: colors.textPrimary, fontSize: 22, fontWeight: '800', letterSpacing: -0.3 },
+  heroTitle: {
+    color: colors.textPrimary,
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
   heroSub: {
     color: colors.textSecondary,
     fontSize: 14,
@@ -478,9 +507,19 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radius.pill,
   },
-  bestBadgeText: { color: colors.textPrimary, fontSize: 9, fontWeight: '800', letterSpacing: 0.4 },
+  bestBadgeText: {
+    color: colors.textPrimary,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
   planName: { color: colors.textPrimary, fontSize: 15, fontWeight: '800' },
-  planPrice: { color: colors.textPrimary, fontSize: 22, fontWeight: '800', marginTop: 4 },
+  planPrice: {
+    color: colors.textPrimary,
+    fontSize: 22,
+    fontWeight: '800',
+    marginTop: 4,
+  },
   planPeriod: { color: colors.textSecondary, fontSize: 11, marginTop: 2 },
   savePill: {
     backgroundColor: 'rgba(236,72,153,0.2)',
@@ -502,7 +541,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  radioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.textPrimary },
+  radioDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.textPrimary,
+  },
   radioOff: {
     width: 22,
     height: 22,
@@ -521,8 +565,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.chipBlue,
   },
-  guaranteeTitle: { color: colors.textPrimary, fontSize: 16, fontWeight: '700' },
-  guaranteeSub: { color: colors.textSecondary, fontSize: 13, lineHeight: 18, marginTop: 2 },
+  guaranteeTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  guaranteeSub: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2,
+  },
 
   // CTA
   ctaWrap: {
