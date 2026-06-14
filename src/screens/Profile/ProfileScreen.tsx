@@ -14,131 +14,62 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import MeshBackground from '../../components/MeshBackground';
 import Card from '../../components/Card';
-import { RoundButton } from '../../components/Header';
 
 import { colors, gradients } from '../../styles/colors';
 import { spacing, radius, PROFILE } from '../../utils/constants';
 
-import { getFavorites } from '../../services/favoriteService';
 import { getDownloads } from '../../services/downloadService';
-
 import { Wallpaper } from '../../services/types';
 
-type Nav = { navigate: (name: string) => void };
+type Nav = {
+  navigate: (name: string) => void;
+};
 
-// Display profile (matches the mockup). Thumbnails fall back to the bundled
-// placeholders so the screen looks complete with or without a live backend.
 const USER = {
   name: 'Ethan Hunt',
+  email: 'ethanhunt@email.com',
   tier: 'Premium',
-  bio: 'Wallpaper lover and explorer \u2728',
   avatar: 'https://picsum.photos/seed/acct-ethan/400/400',
 };
 
-const STATS = [
-  { id: 'fav', icon: 'image-outline', value: '1,248', label: 'Favorites', tint: colors.chipPink },
-  { id: 'dl', icon: 'download-outline', value: '342', label: 'Downloads', tint: colors.glassFillSoft },
-  { id: 'col', icon: 'heart-outline', value: '28', label: 'Collections', tint: colors.chipPink },
-] as const;
-
-const SETTINGS_ROWS: {
-  id: string;
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  route: string;
-}[] = [
-  { id: 'account', label: 'Account Settings', icon: 'person-outline', route: 'AccountSettings' },
-  { id: 'privacy', label: 'Privacy Policy', icon: 'shield-checkmark-outline', route: 'PrivacyPolicy' },
-  { id: 'help', label: 'Help & Support', icon: 'help-circle-outline', route: 'HelpSupport' },
-  { id: 'about', label: 'About WallpaperX', icon: 'information-circle-outline', route: 'About' },
-];
-
-// ---------------------------------------------------------------------------
-// Pieces
-// ---------------------------------------------------------------------------
-const StatItem = ({
-  icon,
-  value,
-  label,
-  tint,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  value: string;
-  label: string;
-  tint: string;
-}) => (
-  <View style={styles.stat}>
-    <View style={[styles.statIcon, { backgroundColor: tint }]}>
-      <Ionicons name={icon} size={18} color={colors.textPrimary} />
-    </View>
-    <Text style={styles.statValue}>{value}</Text>
-    <Text style={styles.statLabel}>{label}</Text>
-  </View>
-);
-
-const MediaCard = ({
+const OptionRow = ({
   icon,
   title,
-  subtitle,
-  tint,
-  images,
+  onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
-  subtitle: string;
-  tint: string;
-  images: string[];
+  onPress?: () => void;
 }) => (
-  <Card style={styles.mediaCard} padding={spacing.lg} strong>
-    <View style={styles.mediaHeader}>
-      <View style={[styles.mediaIcon, { backgroundColor: tint }]}>
-        <Ionicons name={icon} size={20} color={colors.textPrimary} />
-      </View>
-      <View style={{ flex: 1, marginLeft: spacing.md }}>
-        <Text style={styles.mediaTitle}>{title}</Text>
-        <Text style={styles.mediaSub}>{subtitle}</Text>
-      </View>
-      <Pressable style={styles.viewAll} hitSlop={6}>
-        <Text style={styles.viewAllText}>View all</Text>
-        <Ionicons name="chevron-forward" size={16} color={colors.textPrimary} />
-      </Pressable>
-    </View>
+  <Pressable style={styles.option} onPress={onPress}>
+    <Ionicons name={icon} size={22} color={colors.textSecondary} />
 
-    <View style={styles.thumbRow}>
-      {images.slice(0, 5).map((uri, i) => (
-        <Image key={i} source={{ uri }} style={styles.thumb} />
-      ))}
-    </View>
-  </Card>
+    <Text style={styles.optionText}>{title}</Text>
+
+    <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+  </Pressable>
 );
 
-// ---------------------------------------------------------------------------
-// Screen
-// ---------------------------------------------------------------------------
 const ProfileScreen = ({ navigation }: { navigation: Nav }) => {
-  const [favorites, setFavorites] = useState<string[]>(PROFILE.favorites);
   const [downloads, setDownloads] = useState<string[]>(PROFILE.downloads);
 
   useEffect(() => {
-    loadProfile();
+    loadDownloads();
   }, []);
 
-  const loadProfile = async () => {
+  const loadDownloads = async () => {
     try {
-      const [fav, down] = await Promise.all([getFavorites(), getDownloads()]);
+      const res = await getDownloads();
 
-      const favImgs = (fav?.data ?? [])
-        .map((x: Wallpaper) => x.imageUrl ?? x.thumbnailUrl)
-        .filter(Boolean) as string[];
-      const downImgs = (down?.data ?? [])
+      const imgs = (res?.data ?? [])
         .map((x: Wallpaper) => x.imageUrl ?? x.thumbnailUrl)
         .filter(Boolean) as string[];
 
-      if (favImgs.length) setFavorites(favImgs);
-      if (downImgs.length) setDownloads(downImgs);
-    } catch (error) {
-      // Keep the bundled placeholders if the backend isn't reachable.
-      console.log('PROFILE ERROR', error);
+      if (imgs.length) {
+        setDownloads(imgs);
+      }
+    } catch (e) {
+      console.log(e);
     }
   };
 
@@ -146,98 +77,106 @@ const ProfileScreen = ({ navigation }: { navigation: Nav }) => {
     <View style={styles.root}>
       <MeshBackground variant="profile" />
 
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <SafeAreaView style={{ flex: 1 }}>
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 130 }}
+          contentContainerStyle={{
+            paddingBottom: 120,
+          }}
         >
-          {/* settings gear */}
-          <View style={styles.topBar}>
-            <RoundButton
-              icon="settings-outline"
-              onPress={() => navigation.navigate('AccountSettings')}
-            />
-          </View>
+          {/* PROFILE */}
 
-          {/* avatar */}
           <View style={styles.avatarWrap}>
-            <LinearGradient colors={gradients.violetMagenta} style={styles.avatarRing}>
-              <View style={styles.avatarInner}>
-                <Image source={{ uri: USER.avatar }} style={styles.avatar} />
-              </View>
+            <LinearGradient
+              colors={gradients.violetMagenta}
+              style={styles.avatarRing}
+            >
+              <Image source={{ uri: USER.avatar }} style={styles.avatar} />
             </LinearGradient>
+
+            <Pressable style={styles.editPhoto}>
+              <Ionicons name="camera" size={18} color="white" />
+            </Pressable>
           </View>
 
           <Text style={styles.name}>{USER.name}</Text>
 
-          <LinearGradient colors={gradients.violetMagenta} style={styles.badge}>
-            <MaterialCommunityIcons name="crown" size={14} color={colors.textPrimary} />
-            <Text style={styles.badgeText}>{USER.tier}</Text>
-          </LinearGradient>
+          <Text style={styles.email}>{USER.email}</Text>
 
-          <Text style={styles.bio}>{USER.bio}</Text>
+          <View style={styles.badge}>
+            <MaterialCommunityIcons
+              name="crown"
+              size={15}
+              color={colors.accent}
+            />
 
-          {/* stats */}
-          <View style={styles.statsRow}>
-            {STATS.map(s => (
-              <StatItem
-                key={s.id}
-                icon={s.icon}
-                value={s.value}
-                label={s.label}
-                tint={s.tint}
-              />
-            ))}
+            <Text style={styles.badgeText}>{USER.tier} Member</Text>
           </View>
 
-          {/* media cards */}
-          <MediaCard
-            icon="heart"
-            title="My Favorites"
-            subtitle="Your favorite wallpapers"
-            tint={colors.chipPink}
-            images={favorites}
-          />
-          <MediaCard
-            icon="download-outline"
-            title="Recent Downloads"
-            subtitle="Your recently downloaded wallpapers"
-            tint={colors.chipBlue}
-            images={downloads}
-          />
+          {/* ACCOUNT OPTIONS */}
 
-          {/* settings */}
-          <Card style={styles.mediaCard} padding={0} strong>
-            <Pressable
-              style={styles.settingsHeader}
-              onPress={() => navigation.navigate('AccountSettings')}
-            >
-              <LinearGradient colors={gradients.blueViolet} style={styles.settingsIcon}>
-                <Ionicons name="settings-outline" size={20} color={colors.textPrimary} />
-              </LinearGradient>
-              <View style={{ flex: 1, marginLeft: spacing.md }}>
-                <Text style={styles.settingsTitle}>Settings</Text>
-                <Text style={styles.settingsSub}>Customize your experience</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-            </Pressable>
+          <Card style={styles.card} padding={0} strong>
+            <OptionRow
+              icon="person-outline"
+              title="Edit Profile"
+              onPress={() => navigation.navigate('EditProfile')}
+            />
 
-            <View style={styles.divider} />
+            <OptionRow
+              icon="mail-outline"
+              title="Edit Email"
+              onPress={() => navigation.navigate('EditEmail')}
+            />
 
-            {SETTINGS_ROWS.map((row, i) => (
-              <View key={row.id}>
-                <Pressable
-                  style={styles.settingRow}
-                  onPress={() => navigation.navigate(row.route)}
-                >
-                  <Ionicons name={row.icon} size={20} color={colors.textSecondary} />
-                  <Text style={styles.settingLabel}>{row.label}</Text>
-                  <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-                </Pressable>
-                {i < SETTINGS_ROWS.length - 1 && <View style={styles.rowDivider} />}
-              </View>
-            ))}
+            <OptionRow
+              icon="lock-closed-outline"
+              title="Change Password"
+              onPress={() => navigation.navigate('ChangePassword')}
+            />
           </Card>
+
+          {/* DOWNLOADS */}
+
+          <Card style={styles.card} padding={spacing.lg} strong>
+            <View style={styles.sectionHead}>
+              <Text style={styles.title}>Recent Downloads</Text>
+
+              <Text style={styles.view}>View All</Text>
+            </View>
+
+            <View style={styles.downloadRow}>
+              {downloads.slice(0, 5).map((img, index) => (
+                <Image key={index} source={{ uri: img }} style={styles.thumb} />
+              ))}
+            </View>
+          </Card>
+
+          {/* SETTINGS */}
+
+          <Card style={styles.card} padding={0} strong>
+            <OptionRow
+              icon="card-outline"
+              title="Manage Subscription"
+              onPress={() => navigation.navigate('Subscription')}
+            />
+
+            <OptionRow
+              icon="shield-checkmark-outline"
+              title="Privacy & Security"
+            />
+
+            <OptionRow icon="help-circle-outline" title="Help & Support" />
+
+            <OptionRow icon="information-circle-outline" title="About" />
+          </Card>
+
+          {/* LOGOUT */}
+
+          <Pressable style={styles.logout}>
+            <Ionicons name="log-out-outline" size={22} color="#FF5A6E" />
+
+            <Text style={styles.logoutText}>Logout</Text>
+          </Pressable>
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -246,134 +185,128 @@ const ProfileScreen = ({ navigation }: { navigation: Nav }) => {
 
 export default ProfileScreen;
 
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.base },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.sm,
-  },
-
-  // avatar
-  avatarWrap: { alignItems: 'center', marginTop: spacing.xs },
-  avatarRing: {
-    width: 132,
-    height: 132,
-    borderRadius: 66,
-    padding: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.accentStrong,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 22,
-    elevation: 12,
-  },
-  avatarInner: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 62,
-    padding: 4,
+  root: {
+    flex: 1,
     backgroundColor: colors.base,
   },
-  avatar: { width: '100%', height: '100%', borderRadius: 58 },
+
+  avatarWrap: {
+    alignSelf: 'center',
+    marginTop: 30,
+  },
+
+  avatarRing: {
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    padding: 5,
+  },
+
+  avatar: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 60,
+  },
+
+  editPhoto: {
+    position: 'absolute',
+    right: 5,
+    bottom: 5,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   name: {
     color: colors.textPrimary,
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: '800',
     textAlign: 'center',
-    marginTop: spacing.lg,
+    marginTop: 20,
   },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
-    gap: 5,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: radius.pill,
-    marginTop: spacing.sm,
-  },
-  badgeText: { color: colors.textPrimary, fontWeight: '700', fontSize: 13 },
-  bio: {
+
+  email: {
     color: colors.textSecondary,
     textAlign: 'center',
-    fontSize: 15,
-    marginTop: spacing.md,
+    marginTop: 5,
   },
 
-  // stats
-  statsRow: {
+  badge: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: spacing.xl,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.xl,
+    alignSelf: 'center',
+    gap: 6,
+    marginTop: 10,
   },
-  stat: { alignItems: 'center', flex: 1 },
-  statIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.glassBorder,
-    marginBottom: spacing.sm,
-  },
-  statValue: { color: colors.textPrimary, fontSize: 20, fontWeight: '800' },
-  statLabel: { color: colors.textSecondary, fontSize: 13, marginTop: 2 },
 
-  // media cards
-  mediaCard: { marginHorizontal: spacing.xl, marginTop: spacing.lg },
-  mediaHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.lg },
-  mediaIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+  badgeText: {
+    color: colors.accent,
+    fontWeight: '700',
   },
-  mediaTitle: { color: colors.textPrimary, fontSize: 18, fontWeight: '800' },
-  mediaSub: { color: colors.textSecondary, fontSize: 13, marginTop: 2 },
-  viewAll: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  viewAllText: { color: colors.textPrimary, fontSize: 14, fontWeight: '600' },
-  thumbRow: { flexDirection: 'row', gap: spacing.sm },
+
+  card: {
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.xl,
+  },
+
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 18,
+    gap: 15,
+  },
+
+  optionText: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  sectionHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+
+  title: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+
+  view: {
+    color: colors.accent,
+  },
+
+  downloadRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+
   thumb: {
     flex: 1,
-    aspectRatio: 0.82,
+    aspectRatio: 0.75,
     borderRadius: 12,
-    backgroundColor: colors.glassFillSoft,
   },
 
-  // settings
-  settingsHeader: { flexDirection: 'row', alignItems: 'center', padding: spacing.lg },
-  settingsIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  settingsTitle: { color: colors.textPrimary, fontSize: 19, fontWeight: '800' },
-  settingsSub: { color: colors.textSecondary, fontSize: 13, marginTop: 2 },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.divider },
-  rowDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.divider,
-    marginHorizontal: spacing.lg,
-  },
-  settingRow: {
+  logout: {
+    margin: spacing.xl,
+    padding: 18,
+    borderRadius: radius.lg,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 16,
+    justifyContent: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#FF5A6E',
   },
-  settingLabel: { color: colors.textPrimary, fontSize: 16, fontWeight: '600', flex: 1 },
+
+  logoutText: {
+    color: '#FF5A6E',
+    fontSize: 17,
+    fontWeight: '800',
+  },
 });
