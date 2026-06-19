@@ -70,7 +70,7 @@ const RootNavigator = () => {
 
       <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
 
-      <Stack.Screen name="PrivacySecurity" component={PrivacyPolicyScreen} />
+      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
 
       <Stack.Screen name="Downloads" component={DownloadsScreen} />
     </Stack.Navigator>

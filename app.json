@@ -1,5 +1,18 @@
 {
   "expo": {
+    "plugins": [
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow FlexiWalls to access your photos.",
+          "savePhotosPermission": "Allow FlexiWalls to save wallpapers to your gallery.",
+          "isAccessMediaLocationEnabled": true,
+          "granularPermissions": [
+            "photo"
+          ]
+        }
+      ]
+    ],
     "name": "FlexiWalls",
     "slug": "flexiwalls",
     "version": "1.0.0",

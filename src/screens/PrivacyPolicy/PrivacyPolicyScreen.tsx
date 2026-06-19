@@ -23,9 +23,9 @@ const CTA_GRADIENT = ['#EC4899', '#8B5CF6', '#3B82F6'] as const;
 // ---------------------------------------------------------------------------
 // Content (dummy policy text)
 // ---------------------------------------------------------------------------
-const LAST_UPDATED = 'May 24, 2024';
+const LAST_UPDATED = 'June 20, 2026';
 const INTRO =
-  'Welcome to WallpaperX. Your privacy is important to us. This Privacy Policy explains how we collect, use, and protect your information when you use our app and services.';
+  'Welcome to FlexiWalls. Your privacy is important to us. This Privacy Policy explains how we collect, use, and protect your information when you use our app and services.';
 
 type Bullet = { bold?: string; text: string };
 type Section = {
@@ -47,7 +47,7 @@ const SECTIONS: Section[] = [
     intro: 'We collect only the information necessary to provide and improve our services.',
     bullets: [
       { bold: 'Personal Information:', text: 'When you create an account or contact us, we may collect your name, email address, and profile information.' },
-      { bold: 'Usage Data:', text: 'We may collect information about how you use WallpaperX, including your interactions, preferences, and device information.' },
+      { bold: 'Usage Data:', text: 'We may collect information about how you use FlexiWalls, including your interactions, preferences, and device information.' },
       { bold: 'Device Information:', text: 'We collect basic device information such as device type, OS version, and unique identifiers to ensure app functionality and security.' },
     ],
   },
