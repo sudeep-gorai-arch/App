@@ -26,7 +26,11 @@ export type RootStackParamList = {
   | undefined;
 
 
-  // Wallpaper
+  // Browse
+  CategoryDetail: {
+    category: any;
+  };
+
   WallpaperDetails: {
     wallpaper: any;
   };

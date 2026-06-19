@@ -11,6 +11,8 @@ import SignupScreen from '../screens/SignUp/SignUpScreen';
 import PremiumAccessScreen from '../screens/PremiumAccess/PremiumAccessScreen';
 import PaymentScreen from '../screens/Payment/PaymentScreen';
 
+import CategoryDetailScreen from '../screens/CategoryDetail/CategoryDetailScreen';
+
 import WallpaperDetailsScreen from '../screens/WallpaperDetails/WallpaperDetailsScreen';
 
 import EditPersonalInfoScreen from '../screens/EditPersonalInfo/EditPersonalInfoScreen';
@@ -46,6 +48,10 @@ const RootNavigator = () => {
       <Stack.Screen name="PremiumAccess" component={PremiumAccessScreen} />
 
       <Stack.Screen name="Payment" component={PaymentScreen} />
+
+      {/* BROWSE */}
+
+      <Stack.Screen name="CategoryDetail" component={CategoryDetailScreen} />
 
       <Stack.Screen
         name="WallpaperDetails"
