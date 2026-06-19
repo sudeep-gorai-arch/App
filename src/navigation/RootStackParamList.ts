@@ -27,6 +27,8 @@ export type RootStackParamList = {
 
 
   // Browse
+  AllWallpapers: undefined;
+
   CategoryDetail: {
     category: any;
   };

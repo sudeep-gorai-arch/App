@@ -13,6 +13,8 @@ import PaymentScreen from '../screens/Payment/PaymentScreen';
 
 import CategoryDetailScreen from '../screens/CategoryDetail/CategoryDetailScreen';
 
+import AllWallpapersScreen from '../screens/AllWallpapers/AllWallpapersScreen';
+
 import WallpaperDetailsScreen from '../screens/WallpaperDetails/WallpaperDetailsScreen';
 
 import EditPersonalInfoScreen from '../screens/EditPersonalInfo/EditPersonalInfoScreen';
@@ -52,6 +54,8 @@ const RootNavigator = () => {
       {/* BROWSE */}
 
       <Stack.Screen name="CategoryDetail" component={CategoryDetailScreen} />
+
+      <Stack.Screen name="AllWallpapers" component={AllWallpapersScreen} />
 
       <Stack.Screen
         name="WallpaperDetails"

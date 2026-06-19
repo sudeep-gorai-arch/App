@@ -255,7 +255,18 @@ const HomeScreen = () => {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Trending</Text>
 
-            <Text style={styles.viewAllText}>View all</Text>
+            <Pressable
+              style={styles.viewAll}
+              hitSlop={8}
+              onPress={() => navigation.navigate('AllWallpapers')}
+            >
+              <Text style={styles.viewAllText}>View all</Text>
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={colors.textPrimary}
+              />
+            </Pressable>
           </View>
 
           <FlatList
