@@ -5,7 +5,6 @@ import {
   Text,
   ScrollView,
   ImageBackground,
-  FlatList,
   Pressable,
   NativeSyntheticEvent,
   NativeScrollEvent,
@@ -30,25 +29,28 @@ import API from '../../services/api';
 import {
   getFeaturedWallpapers,
   getTrendingWallpapers,
+  getWallpapers,
 } from '../../services/wallpaperService';
 
 import { Wallpaper } from '../../services/types';
 
 const HERO_W = SCREEN.width - spacing.xl * 2;
 const HERO_H = 480;
+const HERO_GAP = spacing.md;
+const HERO_SNAP = HERO_W + HERO_GAP;
 
 const TREND_CARD_W = 190;
 const TREND_CARD_H = 300;
 const TREND_SNAP = 110;
 const TREND_SIDE_PADDING = (SCREEN.width - TREND_SNAP) / 2;
 
-/**
- * Left-stack slider positions.
- *
- * farRight/right = cards coming from the right.
- * center         = active card.
- * left/farLeft   = cards already passed; these collect on the left side.
- */
+const ALL_GRID_GAP = spacing.md;
+const ALL_GRID_CARD_W = (SCREEN.width - spacing.xl * 2 - ALL_GRID_GAP) / 2;
+const ALL_GRID_CARD_H = ALL_GRID_CARD_W * 1.52;
+
+const ALL_PAGE_SIZE = 80;
+const MAX_ALL_PAGES = 10;
+
 const LEFT_STACK_VISUAL_POSITIONS = {
   farRight: 270,
   right: 190,
@@ -144,7 +146,119 @@ const formatLikes = (likes?: number) => {
   return String(likes);
 };
 
-const HeroCard = ({ item, index }: { item: Wallpaper; index: number }) => {
+const slugifyCategory = (value?: string) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+
+const prettifyCategoryName = (value?: string) =>
+  String(value || 'Category')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, char => char.toUpperCase());
+
+const getWallpaperCategoryForNavigation = (wallpaper: Wallpaper) => {
+  const w = wallpaper as Wallpaper & Record<string, any>;
+
+  if (w.category && typeof w.category === 'object') {
+    const categoryName = w.category.name || w.category.slug || 'Category';
+    const categorySlug = w.category.slug || slugifyCategory(categoryName);
+
+    return {
+      ...w.category,
+      id: w.category.id || categorySlug,
+      name: categoryName,
+      slug: categorySlug,
+    };
+  }
+
+  const rawCategory =
+    w.categorySlug ||
+    w.category_slug ||
+    w.categoryName ||
+    w.category_name ||
+    w.category ||
+    '';
+
+  if (!rawCategory || typeof rawCategory !== 'string') {
+    return null;
+  }
+
+  const slug = slugifyCategory(rawCategory);
+
+  return {
+    id: slug,
+    name: prettifyCategoryName(rawCategory),
+    slug,
+  };
+};
+
+const byNewest = (a: Wallpaper, b: Wallpaper) => {
+  const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+  const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+  return tb - ta;
+};
+
+const uniqueWallpapers = (items: Wallpaper[]) => {
+  const seen = new Set<string>();
+
+  return items
+    .filter(item => {
+      if (!item?.id || seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    })
+    .sort(byNewest);
+};
+
+const placeholderWallpapers = (prefix: string, count: number): Wallpaper[] =>
+  Array.from({ length: count }).map((_, index) => ({
+    id: `${prefix}-placeholder-${index}`,
+    title: `Wallpaper ${index + 1}`,
+    subtitle: 'Premium 4K Collection',
+    imageUrl: `https://picsum.photos/seed/${prefix}-${index}/800/1400`,
+    thumbnailUrl: `https://picsum.photos/seed/${prefix}-${index}/600/900`,
+    quality: index % 2 === 0 ? '4K' : '8K',
+    likes: 1200 + index * 97,
+    createdAt: new Date(Date.now() - index * 1000 * 60 * 60).toISOString(),
+  }));
+
+const fetchAllWallpapers = async () => {
+  try {
+    let offset = 0;
+    let allItems: Wallpaper[] = [];
+
+    for (let page = 0; page < MAX_ALL_PAGES; page += 1) {
+      const res = await getWallpapers(ALL_PAGE_SIZE, offset);
+      const batch = res?.data ?? [];
+
+      allItems = [...allItems, ...batch];
+
+      if (batch.length < ALL_PAGE_SIZE) break;
+
+      offset += batch.length;
+    }
+
+    return uniqueWallpapers(allItems);
+  } catch (error) {
+    console.log('HOME ALL WALLPAPERS ERROR', error);
+    return [];
+  }
+};
+
+const HeroCard = ({
+  item,
+  index,
+  onPress,
+  onExploreCategory,
+}: {
+  item: Wallpaper;
+  index: number;
+  onPress?: () => void;
+  onExploreCategory?: () => void;
+}) => {
   const [imageFailed, setImageFailed] = useState(false);
 
   const image = imageFailed
@@ -152,7 +266,14 @@ const HeroCard = ({ item, index }: { item: Wallpaper; index: number }) => {
     : getWallpaperImage(item, `flexiwalls-hero-${index}`);
 
   return (
-    <View style={styles.heroCard}>
+    <Pressable
+      disabled={!onPress}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.heroCard,
+        pressed && onPress && styles.heroPressed,
+      ]}
+    >
       <ImageBackground
         source={{ uri: image }}
         style={styles.heroImage}
@@ -172,7 +293,9 @@ const HeroCard = ({ item, index }: { item: Wallpaper; index: number }) => {
 
         <View style={styles.heroContent}>
           <View style={styles.tagPill}>
-            <Text style={styles.tagText}>{item.category?.name || 'Featured'}</Text>
+            <Text style={styles.tagText}>
+              {item.category?.name || 'Featured'}
+            </Text>
           </View>
 
           <Text style={styles.heroTitle} numberOfLines={2}>
@@ -180,11 +303,17 @@ const HeroCard = ({ item, index }: { item: Wallpaper; index: number }) => {
           </Text>
 
           <Text style={styles.heroSubtitle} numberOfLines={2}>
-            {item.subtitle || (item as any).description || '4K Ultra HD Collection'}
+            {item.subtitle ||
+              (item as any).description ||
+              '4K Ultra HD Collection'}
           </Text>
 
           <View style={styles.heroFooter}>
-            <Button label="Explore" trailingIcon="arrow-forward" />
+            <Button
+              label="Explore"
+              trailingIcon="arrow-forward"
+              onPress={onExploreCategory}
+            />
 
             <View style={styles.likeRow}>
               <Ionicons name="heart" size={18} color={colors.textPrimary} />
@@ -193,6 +322,105 @@ const HeroCard = ({ item, index }: { item: Wallpaper; index: number }) => {
           </View>
         </View>
       </ImageBackground>
+    </Pressable>
+  );
+};
+
+const HeroSmoothCarousel = ({
+  data,
+  scrollX,
+  activeIndex,
+  onMomentumEnd,
+  onPressItem,
+  onExploreCategory,
+}: {
+  data: Wallpaper[];
+  scrollX: Animated.Value;
+  activeIndex: number;
+  onMomentumEnd: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  onPressItem: (item: Wallpaper) => void;
+  onExploreCategory: (item: Wallpaper) => void;
+}) => {
+  if (!data.length) return null;
+
+  return (
+    <View style={styles.heroCarouselWrap}>
+      <Animated.FlatList
+        data={data}
+        keyExtractor={(item: Wallpaper) => item.id}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        snapToInterval={HERO_SNAP}
+        decelerationRate="fast"
+        bounces={false}
+        scrollEventThrottle={16}
+        removeClippedSubviews={false}
+        contentContainerStyle={styles.heroCarouselContent}
+        ItemSeparatorComponent={() => <View style={{ width: HERO_GAP }} />}
+        onMomentumScrollEnd={onMomentumEnd}
+        getItemLayout={(_, index) => ({
+          length: HERO_SNAP,
+          offset: HERO_SNAP * index,
+          index,
+        })}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+          { useNativeDriver: true },
+        )}
+        renderItem={({ item, index }: { item: Wallpaper; index: number }) => {
+          const inputRange = [
+            (index - 1) * HERO_SNAP,
+            index * HERO_SNAP,
+            (index + 1) * HERO_SNAP,
+          ];
+
+          const scale = scrollX.interpolate({
+            inputRange,
+            outputRange: [0.92, 1, 0.92],
+            extrapolate: 'clamp',
+          });
+
+          const opacity = scrollX.interpolate({
+            inputRange,
+            outputRange: [0.62, 1, 0.62],
+            extrapolate: 'clamp',
+          });
+
+          const translateY = scrollX.interpolate({
+            inputRange,
+            outputRange: [16, 0, 16],
+            extrapolate: 'clamp',
+          });
+
+          return (
+            <Animated.View
+              style={[
+                styles.heroCarouselCard,
+                {
+                  opacity,
+                  transform: [{ translateY }, { scale }],
+                },
+              ]}
+            >
+              <HeroCard
+                item={item}
+                index={index}
+                onPress={() => onPressItem(item)}
+                onExploreCategory={() => onExploreCategory(item)}
+              />
+            </Animated.View>
+          );
+        }}
+      />
+
+      <View style={styles.heroCarouselDots}>
+        {data.map((_, index) => (
+          <View
+            key={index}
+            style={[styles.dot, index === activeIndex && styles.dotActive]}
+          />
+        ))}
+      </View>
     </View>
   );
 };
@@ -233,7 +461,10 @@ const TrendStackCard = ({
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.trendPressable, pressed && styles.trendPressed]}
+      style={({ pressed }) => [
+        styles.trendPressable,
+        pressed && styles.trendPressed,
+      ]}
     >
       <ImageBackground
         source={{ uri: image }}
@@ -259,7 +490,11 @@ const TrendStackCard = ({
 
         <View style={styles.trendStackBottom}>
           <View style={styles.trendLikePill}>
-            <Ionicons name="heart-outline" size={16} color={colors.textPrimary} />
+            <Ionicons
+              name="heart-outline"
+              size={16}
+              color={colors.textPrimary}
+            />
             <Text style={styles.trendLikes}>{formatLikes(item.likes)}</Text>
           </View>
         </View>
@@ -309,15 +544,6 @@ const TrendingStackSlider = ({
           { useNativeDriver: true },
         )}
         renderItem={({ item, index }: { item: Wallpaper; index: number }) => {
-          /**
-           * Card scroll states:
-           *
-           * (index - 2) * snap -> card is far right
-           * (index - 1) * snap -> card is right
-           * index * snap       -> card is center
-           * (index + 1) * snap -> card has moved left
-           * (index + 2) * snap -> card joins left stack
-           */
           const inputRange = [
             (index - 2) * TREND_SNAP,
             (index - 1) * TREND_SNAP,
@@ -338,10 +564,6 @@ const TrendingStackSlider = ({
             extrapolate: 'clamp',
           });
 
-          /**
-           * These translateX values are corrected for FlatList slot movement.
-           * The last two states collect passed cards into the left stack.
-           */
           const translateX = scrollX.interpolate({
             inputRange,
             outputRange: [
@@ -394,13 +616,6 @@ const TrendingStackSlider = ({
           const isCenter = index === activeIndex;
           const isRightSide = index > activeIndex;
 
-          /**
-           * UPDATED STACK ORDER:
-           *
-           * Right/incoming cards should always appear above the center card.
-           * Center card stays above the left/passed stack.
-           * Left/passed cards stay behind.
-           */
           const stackDepth = isRightSide
             ? 2000 + index
             : isCenter
@@ -436,7 +651,11 @@ const TrendingStackSlider = ({
                   pointerEvents="none"
                   style={[styles.trendSoftBlurLayer, { opacity: blurOpacity }]}
                 >
-                  <BlurView intensity={22} tint="dark" style={styles.trendSoftBlur} />
+                  <BlurView
+                    intensity={22}
+                    tint="dark"
+                    style={styles.trendSoftBlur}
+                  />
                 </Animated.View>
 
                 <Animated.View
@@ -452,15 +671,126 @@ const TrendingStackSlider = ({
   );
 };
 
+const AllWallpaperCard = ({
+  item,
+  index,
+  onPress,
+}: {
+  item: Wallpaper;
+  index: number;
+  onPress: () => void;
+}) => {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  const image = imageFailed
+    ? `https://picsum.photos/seed/flexiwalls-all-fallback-${index}/600/900`
+    : getWallpaperImage(item, `flexiwalls-all-${index}`);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.allWallpaperCard,
+        pressed && styles.allWallpaperPressed,
+      ]}
+    >
+      <ImageBackground
+        source={{ uri: image }}
+        style={styles.allWallpaperImage}
+        imageStyle={{ borderRadius: radius.lg }}
+        resizeMode="cover"
+        onError={() => setImageFailed(true)}
+      >
+        <LinearGradient
+          colors={[
+            'rgba(0,0,0,0.05)',
+            'rgba(0,0,0,0)',
+            'rgba(5,4,14,0.82)',
+          ]}
+          style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
+        />
+
+        <View style={styles.allWallpaperTop}>
+          <BlurView intensity={28} tint="dark" style={styles.allQualityChip}>
+            <Text style={styles.allQualityText}>{item.quality || '4K'}</Text>
+          </BlurView>
+        </View>
+
+        <View style={styles.allWallpaperBottom}>
+          <Text style={styles.allWallpaperTitle} numberOfLines={1}>
+            {item.title || 'Wallpaper'}
+          </Text>
+
+          <View style={styles.allWallpaperMeta}>
+            <Ionicons
+              name="heart-outline"
+              size={13}
+              color={colors.textPrimary}
+            />
+            <Text style={styles.allWallpaperMetaText}>
+              {formatLikes(item.likes)}
+            </Text>
+          </View>
+        </View>
+      </ImageBackground>
+    </Pressable>
+  );
+};
+
+const AllWallpapersSection = ({
+  data,
+  onPressItem,
+}: {
+  data: Wallpaper[];
+  onPressItem: (item: Wallpaper) => void;
+}) => {
+  return (
+    <View style={styles.allSection}>
+      <View style={styles.sectionHeader}>
+        <View>
+          <Text style={styles.sectionTitle}>All Wallpapers</Text>
+          <Text style={styles.sectionSubtitle}>
+            {data.length ? `${data.length} wallpapers available` : 'Latest uploads'}
+          </Text>
+        </View>
+      </View>
+
+      {data.length ? (
+        <View style={styles.allGrid}>
+          {data.map((item, index) => (
+            <AllWallpaperCard
+              key={item.id}
+              item={item}
+              index={index}
+              onPress={() => onPressItem(item)}
+            />
+          ))}
+        </View>
+      ) : (
+        <View style={styles.emptyAllBox}>
+          <Ionicons
+            name="images-outline"
+            size={28}
+            color={colors.textSecondary}
+          />
+          <Text style={styles.emptyAllText}>No wallpapers found.</Text>
+        </View>
+      )}
+    </View>
+  );
+};
+
 const HomeScreen = () => {
   const navigation = useNavigation<any>();
 
+  const heroScrollX = useRef(new Animated.Value(0)).current;
   const trendScrollX = useRef(new Animated.Value(0)).current;
 
-  const [active, setActive] = useState(0);
+  const [activeHero, setActiveHero] = useState(0);
   const [activeTrend, setActiveTrend] = useState(0);
   const [featured, setFeatured] = useState<Wallpaper[]>([]);
   const [trending, setTrending] = useState<Wallpaper[]>([]);
+  const [allWallpapers, setAllWallpapers] = useState<Wallpaper[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -469,30 +799,88 @@ const HomeScreen = () => {
 
   const loadHome = async () => {
     try {
-      const [hero, trend] = await Promise.all([
-        getFeaturedWallpapers(),
-        getTrendingWallpapers(),
+      setLoading(true);
+
+      let heroData: Wallpaper[] = [];
+      let trendData: Wallpaper[] = [];
+      let allData: Wallpaper[] = [];
+
+      try {
+        const hero = await getFeaturedWallpapers();
+        heroData = hero?.data ?? [];
+      } catch (error) {
+        console.log('HOME FEATURED ERROR', error);
+      }
+
+      try {
+        const trend = await getTrendingWallpapers();
+        trendData = trend?.data ?? [];
+      } catch (error) {
+        console.log('HOME TRENDING ERROR', error);
+      }
+
+      try {
+        allData = await fetchAllWallpapers();
+      } catch (error) {
+        console.log('HOME ALL ERROR', error);
+      }
+
+      const fallbackHero = placeholderWallpapers('hero', 5);
+      const fallbackTrending = placeholderWallpapers('trending', 10);
+      const fallbackAll = placeholderWallpapers('all', 20);
+
+      const safeHeroData =
+        heroData.length > 0
+          ? heroData
+          : trendData.length > 0
+            ? trendData.slice(0, 5)
+            : fallbackHero;
+
+      const safeTrendingData =
+        trendData.length > 0
+          ? trendData
+          : heroData.length > 0
+            ? heroData
+            : fallbackTrending;
+
+      const mergedAllData = uniqueWallpapers([
+        ...allData,
+        ...trendData,
+        ...heroData,
       ]);
 
-      const heroData = hero?.data ?? [];
-      const trendData = trend?.data ?? [];
-      const safeHeroData = heroData.length ? heroData : trendData.slice(0, 5);
-      const startTrendIndex = Math.min(2, Math.max(0, trendData.length - 1));
+      const safeAllData =
+        mergedAllData.length > 0
+          ? mergedAllData
+          : fallbackAll;
+
+      const startTrendIndex = Math.min(
+        2,
+        Math.max(0, safeTrendingData.length - 1),
+      );
 
       setFeatured(safeHeroData);
-      setTrending(trendData);
+      setTrending(safeTrendingData);
+      setAllWallpapers(safeAllData);
+      setActiveHero(0);
       setActiveTrend(startTrendIndex);
+
+      heroScrollX.setValue(0);
       trendScrollX.setValue(startTrendIndex * TREND_SNAP);
     } catch (error) {
-      console.log('HOME API ERROR', error);
+      console.log('HOME LOAD ERROR', error);
+
+      setFeatured(placeholderWallpapers('hero', 5));
+      setTrending(placeholderWallpapers('trending', 10));
+      setAllWallpapers(placeholderWallpapers('all', 20));
     } finally {
       setLoading(false);
     }
   };
 
   const onHeroScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const idx = Math.round(e.nativeEvent.contentOffset.x / (HERO_W + spacing.md));
-    setActive(Math.max(0, Math.min(idx, featured.length - 1)));
+    const idx = Math.round(e.nativeEvent.contentOffset.x / HERO_SNAP);
+    setActiveHero(Math.max(0, Math.min(idx, featured.length - 1)));
   };
 
   const onTrendScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -504,9 +892,28 @@ const HomeScreen = () => {
     navigation.navigate('WallpaperDetails', { wallpaper });
   };
 
+  const openWallpaperCategory = (wallpaper: Wallpaper) => {
+    const category = getWallpaperCategoryForNavigation(wallpaper);
+
+    if (!category?.slug) {
+      console.log('No category linked to this wallpaper');
+      return;
+    }
+
+    navigation.navigate('CategoryDetail', { category });
+  };
+
   if (loading) {
     return (
-      <View style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}>
+      <View
+        style={[
+          styles.root,
+          {
+            justifyContent: 'center',
+            alignItems: 'center',
+          },
+        ]}
+      >
         <ActivityIndicator size="large" color={colors.textPrimary} />
       </View>
     );
@@ -519,7 +926,7 @@ const HomeScreen = () => {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 130 }}
+          contentContainerStyle={{ paddingBottom: 150 }}
         >
           <Header
             eyebrow="Good Morning 👋"
@@ -532,27 +939,20 @@ const HomeScreen = () => {
               icon: 'search',
               onPress: () => navigation.navigate('Search'),
             }}
-            style={{ paddingTop: spacing.md }}
+            style={{
+              paddingTop: spacing.xs,
+              paddingBottom: 0,
+            }}
           />
 
-          <FlatList
+          <HeroSmoothCarousel
             data={featured}
-            keyExtractor={i => i.id}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            snapToInterval={HERO_W + spacing.md}
-            onMomentumScrollEnd={onHeroScrollEnd}
-            contentContainerStyle={styles.heroListContent}
-            ItemSeparatorComponent={() => <View style={{ width: spacing.md }} />}
-            renderItem={({ item, index }) => <HeroCard item={item} index={index} />}
+            scrollX={heroScrollX}
+            activeIndex={activeHero}
+            onMomentumEnd={onHeroScrollEnd}
+            onPressItem={openWallpaper}
+            onExploreCategory={openWallpaperCategory}
           />
-
-          <View style={styles.dots}>
-            {featured.map((_, i) => (
-              <View key={i} style={[styles.dot, i === active && styles.dotActive]} />
-            ))}
-          </View>
 
           <View style={styles.sectionHeader}>
             <View>
@@ -566,7 +966,11 @@ const HomeScreen = () => {
               onPress={() => navigation.navigate('AllWallpapers')}
             >
               <Text style={styles.viewAllText}>View all</Text>
-              <Ionicons name="chevron-forward" size={16} color={colors.textPrimary} />
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={colors.textPrimary}
+              />
             </Pressable>
           </View>
 
@@ -584,6 +988,11 @@ const HomeScreen = () => {
             onMomentumEnd={onTrendScrollEnd}
             onPressItem={openWallpaper}
           />
+
+          <AllWallpapersSection
+            data={allWallpapers}
+            onPressItem={openWallpaper}
+          />
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -598,9 +1007,24 @@ const styles = StyleSheet.create({
     backgroundColor: colors.base,
   },
 
-  heroListContent: {
+  heroCarouselWrap: {
+    marginTop: spacing.xs,
+  },
+  heroCarouselContent: {
     paddingHorizontal: spacing.xl,
-    marginTop: spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+  },
+  heroCarouselCard: {
+    width: HERO_W,
+    height: HERO_H,
+  },
+  heroCarouselDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: spacing.sm,
   },
   heroCard: {
     width: HERO_W,
@@ -609,6 +1033,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
+  },
+  heroPressed: {
+    opacity: 0.92,
   },
   heroImage: {
     flex: 1,
@@ -709,7 +1136,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.xl,
-    marginTop: spacing.xxl,
+    marginTop: spacing.xl,
     marginBottom: spacing.md,
   },
   sectionTitle: {
@@ -795,10 +1222,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.45,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 14 },
-
-    // Important:
-    // Parent slot controls zIndex/elevation.
-    // Keeping this 0 prevents Android child elevation from fighting the stack order.
     elevation: 0,
   },
   trendSoftBlurLayer: {
@@ -871,5 +1294,90 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 13,
     fontWeight: '800',
+  },
+
+  allSection: {
+    marginTop: spacing.sm,
+  },
+  allGrid: {
+    paddingHorizontal: spacing.xl,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: ALL_GRID_GAP,
+  },
+  allWallpaperCard: {
+    width: ALL_GRID_CARD_W,
+    height: ALL_GRID_CARD_H,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    backgroundColor: colors.baseElevated,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorder,
+  },
+  allWallpaperPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.98 }],
+  },
+  allWallpaperImage: {
+    flex: 1,
+    justifyContent: 'space-between',
+    backgroundColor: colors.baseElevated,
+  },
+  allWallpaperTop: {
+    alignItems: 'flex-start',
+    padding: spacing.sm,
+  },
+  allQualityChip: {
+    borderRadius: radius.pill,
+    overflow: 'hidden',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorderSoft,
+  },
+  allQualityText: {
+    color: colors.textPrimary,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  allWallpaperBottom: {
+    padding: spacing.sm,
+  },
+  allWallpaperTitle: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  allWallpaperMeta: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  allWallpaperMetaText: {
+    color: colors.textPrimary,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  emptyAllBox: {
+    marginHorizontal: spacing.xl,
+    height: 150,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.glassFill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorderSoft,
+  },
+  emptyAllText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
