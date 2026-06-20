@@ -42,6 +42,54 @@ const TREND_CARD_H = 300;
 const TREND_SNAP = 110;
 const TREND_SIDE_PADDING = (SCREEN.width - TREND_SNAP) / 2;
 
+/**
+ * Left-stack slider positions.
+ *
+ * farRight/right = cards coming from the right.
+ * center         = active card.
+ * left/farLeft   = cards already passed; these collect on the left side.
+ */
+const LEFT_STACK_VISUAL_POSITIONS = {
+  farRight: 270,
+  right: 190,
+  center: 0,
+  left: -80,
+  farLeft: -80,
+};
+
+const LEFT_STACK_STYLES = {
+  farRight: {
+    scale: 0.76,
+    opacity: 0.3,
+    blur: 0.72,
+    fade: 0.52,
+  },
+  right: {
+    scale: 0.88,
+    opacity: 0.72,
+    blur: 0.32,
+    fade: 0.2,
+  },
+  center: {
+    scale: 1,
+    opacity: 1,
+    blur: 0,
+    fade: 0,
+  },
+  left: {
+    scale: 0.88,
+    opacity: 0.7,
+    blur: 0.36,
+    fade: 0.24,
+  },
+  farLeft: {
+    scale: 0.78,
+    opacity: 0.5,
+    blur: 0.55,
+    fade: 0.36,
+  },
+};
+
 const API_ORIGIN = String(API.defaults.baseURL || '').replace(/\/api\/?$/, '');
 
 const heroFallbackImage =
@@ -124,9 +172,7 @@ const HeroCard = ({ item, index }: { item: Wallpaper; index: number }) => {
 
         <View style={styles.heroContent}>
           <View style={styles.tagPill}>
-            <Text style={styles.tagText}>
-              {item.category?.name || 'Featured'}
-            </Text>
+            <Text style={styles.tagText}>{item.category?.name || 'Featured'}</Text>
           </View>
 
           <Text style={styles.heroTitle} numberOfLines={2}>
@@ -134,9 +180,7 @@ const HeroCard = ({ item, index }: { item: Wallpaper; index: number }) => {
           </Text>
 
           <Text style={styles.heroSubtitle} numberOfLines={2}>
-            {(item as any).subtitle ||
-              (item as any).description ||
-              '4K Ultra HD Collection'}
+            {item.subtitle || (item as any).description || '4K Ultra HD Collection'}
           </Text>
 
           <View style={styles.heroFooter}>
@@ -189,10 +233,7 @@ const TrendStackCard = ({
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.trendPressable,
-        pressed && styles.trendPressed,
-      ]}
+      style={({ pressed }) => [styles.trendPressable, pressed && styles.trendPressed]}
     >
       <ImageBackground
         source={{ uri: image }}
@@ -218,11 +259,7 @@ const TrendStackCard = ({
 
         <View style={styles.trendStackBottom}>
           <View style={styles.trendLikePill}>
-            <Ionicons
-              name="heart-outline"
-              size={16}
-              color={colors.textPrimary}
-            />
+            <Ionicons name="heart-outline" size={16} color={colors.textPrimary} />
             <Text style={styles.trendLikes}>{formatLikes(item.likes)}</Text>
           </View>
         </View>
@@ -244,34 +281,26 @@ const TrendingStackSlider = ({
   onMomentumEnd: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   onPressItem: (item: Wallpaper) => void;
 }) => {
-  const scrollRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (!data.length) return;
-
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({
-        x: activeIndex * TREND_SNAP,
-        y: 0,
-        animated: false,
-      });
-    });
-  }, [activeIndex, data.length]);
-
   if (!data.length) return null;
 
   return (
     <View style={styles.trendStackWrap}>
-      <Animated.ScrollView
-        ref={scrollRef}
+      <Animated.FlatList
+        data={data}
+        keyExtractor={(item: Wallpaper) => item.id}
         horizontal
         showsHorizontalScrollIndicator={false}
         snapToInterval={TREND_SNAP}
-        snapToAlignment="start"
         decelerationRate="fast"
         bounces={false}
         scrollEventThrottle={16}
-        overScrollMode="never"
+        removeClippedSubviews={false}
+        initialScrollIndex={activeIndex}
+        getItemLayout={(_, index) => ({
+          length: TREND_SNAP,
+          offset: TREND_SNAP * index,
+          index,
+        })}
         style={styles.trendStackList}
         contentContainerStyle={styles.trendStackContent}
         onMomentumScrollEnd={onMomentumEnd}
@@ -279,8 +308,16 @@ const TrendingStackSlider = ({
           [{ nativeEvent: { contentOffset: { x: scrollX } } }],
           { useNativeDriver: true },
         )}
-      >
-        {data.map((item, index) => {
+        renderItem={({ item, index }: { item: Wallpaper; index: number }) => {
+          /**
+           * Card scroll states:
+           *
+           * (index - 2) * snap -> card is far right
+           * (index - 1) * snap -> card is right
+           * index * snap       -> card is center
+           * (index + 1) * snap -> card has moved left
+           * (index + 2) * snap -> card joins left stack
+           */
           const inputRange = [
             (index - 2) * TREND_SNAP,
             (index - 1) * TREND_SNAP,
@@ -291,39 +328,87 @@ const TrendingStackSlider = ({
 
           const scale = scrollX.interpolate({
             inputRange,
-            outputRange: [0.8, 0.92, 1, 0.92, 0.8],
+            outputRange: [
+              LEFT_STACK_STYLES.farRight.scale,
+              LEFT_STACK_STYLES.right.scale,
+              LEFT_STACK_STYLES.center.scale,
+              LEFT_STACK_STYLES.left.scale,
+              LEFT_STACK_STYLES.farLeft.scale,
+            ],
             extrapolate: 'clamp',
           });
 
+          /**
+           * These translateX values are corrected for FlatList slot movement.
+           * The last two states collect passed cards into the left stack.
+           */
           const translateX = scrollX.interpolate({
             inputRange,
-            outputRange: [-44, -22, 0, 22, 44],
-            extrapolate: 'clamp',
+            outputRange: [
+              LEFT_STACK_VISUAL_POSITIONS.farRight - TREND_SNAP * 2,
+              LEFT_STACK_VISUAL_POSITIONS.right - TREND_SNAP,
+              LEFT_STACK_VISUAL_POSITIONS.center,
+              LEFT_STACK_VISUAL_POSITIONS.left + TREND_SNAP,
+              LEFT_STACK_VISUAL_POSITIONS.farLeft + TREND_SNAP * 2,
+            ],
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'extend',
           });
 
           const opacity = scrollX.interpolate({
             inputRange,
-            outputRange: [0.34, 0.68, 1, 0.68, 0.34],
+            outputRange: [
+              LEFT_STACK_STYLES.farRight.opacity,
+              LEFT_STACK_STYLES.right.opacity,
+              LEFT_STACK_STYLES.center.opacity,
+              LEFT_STACK_STYLES.left.opacity,
+              LEFT_STACK_STYLES.farLeft.opacity,
+            ],
             extrapolate: 'clamp',
           });
 
           const blurOpacity = scrollX.interpolate({
             inputRange,
-            outputRange: [0.78, 0.42, 0, 0.42, 0.78],
+            outputRange: [
+              LEFT_STACK_STYLES.farRight.blur,
+              LEFT_STACK_STYLES.right.blur,
+              LEFT_STACK_STYLES.center.blur,
+              LEFT_STACK_STYLES.left.blur,
+              LEFT_STACK_STYLES.farLeft.blur,
+            ],
             extrapolate: 'clamp',
           });
 
           const fadeOpacity = scrollX.interpolate({
             inputRange,
-            outputRange: [0.55, 0.24, 0, 0.24, 0.55],
+            outputRange: [
+              LEFT_STACK_STYLES.farRight.fade,
+              LEFT_STACK_STYLES.right.fade,
+              LEFT_STACK_STYLES.center.fade,
+              LEFT_STACK_STYLES.left.fade,
+              LEFT_STACK_STYLES.farLeft.fade,
+            ],
             extrapolate: 'clamp',
           });
 
-          const stackDepth = data.length - Math.abs(activeIndex - index);
+          const isCenter = index === activeIndex;
+          const isRightSide = index > activeIndex;
+
+          /**
+           * UPDATED STACK ORDER:
+           *
+           * Right/incoming cards should always appear above the center card.
+           * Center card stays above the left/passed stack.
+           * Left/passed cards stay behind.
+           */
+          const stackDepth = isRightSide
+            ? 2000 + index
+            : isCenter
+              ? 1000
+              : 300 + index;
 
           return (
             <View
-              key={item.id}
               style={[
                 styles.trendStackSlot,
                 {
@@ -351,11 +436,7 @@ const TrendingStackSlider = ({
                   pointerEvents="none"
                   style={[styles.trendSoftBlurLayer, { opacity: blurOpacity }]}
                 >
-                  <BlurView
-                    intensity={24}
-                    tint="dark"
-                    style={styles.trendSoftBlur}
-                  />
+                  <BlurView intensity={22} tint="dark" style={styles.trendSoftBlur} />
                 </Animated.View>
 
                 <Animated.View
@@ -365,8 +446,8 @@ const TrendingStackSlider = ({
               </Animated.View>
             </View>
           );
-        })}
-      </Animated.ScrollView>
+        }}
+      />
     </View>
   );
 };
@@ -395,7 +476,6 @@ const HomeScreen = () => {
 
       const heroData = hero?.data ?? [];
       const trendData = trend?.data ?? [];
-
       const safeHeroData = heroData.length ? heroData : trendData.slice(0, 5);
       const startTrendIndex = Math.min(2, Math.max(0, trendData.length - 1));
 
@@ -426,15 +506,7 @@ const HomeScreen = () => {
 
   if (loading) {
     return (
-      <View
-        style={[
-          styles.root,
-          {
-            justifyContent: 'center',
-            alignItems: 'center',
-          },
-        ]}
-      >
+      <View style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color={colors.textPrimary} />
       </View>
     );
@@ -473,17 +545,12 @@ const HomeScreen = () => {
             onMomentumScrollEnd={onHeroScrollEnd}
             contentContainerStyle={styles.heroListContent}
             ItemSeparatorComponent={() => <View style={{ width: spacing.md }} />}
-            renderItem={({ item, index }) => (
-              <HeroCard item={item} index={index} />
-            )}
+            renderItem={({ item, index }) => <HeroCard item={item} index={index} />}
           />
 
           <View style={styles.dots}>
             {featured.map((_, i) => (
-              <View
-                key={i}
-                style={[styles.dot, i === active && styles.dotActive]}
-              />
+              <View key={i} style={[styles.dot, i === active && styles.dotActive]} />
             ))}
           </View>
 
@@ -499,11 +566,7 @@ const HomeScreen = () => {
               onPress={() => navigation.navigate('AllWallpapers')}
             >
               <Text style={styles.viewAllText}>View all</Text>
-              <Ionicons
-                name="chevron-forward"
-                size={16}
-                color={colors.textPrimary}
-              />
+              <Ionicons name="chevron-forward" size={16} color={colors.textPrimary} />
             </Pressable>
           </View>
 
@@ -731,13 +794,13 @@ const styles = StyleSheet.create({
     shadowColor: colors.shadow,
     shadowOpacity: 0.45,
     shadowRadius: 18,
-    shadowOffset: {
-      width: 0,
-      height: 14,
-    },
-    elevation: 12,
-  },
+    shadowOffset: { width: 0, height: 14 },
 
+    // Important:
+    // Parent slot controls zIndex/elevation.
+    // Keeping this 0 prevents Android child elevation from fighting the stack order.
+    elevation: 0,
+  },
   trendSoftBlurLayer: {
     position: 'absolute',
     top: 0,
@@ -763,7 +826,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     backgroundColor: 'rgba(8,8,18,0.48)',
   },
-
   trendPressable: {
     flex: 1,
   },
