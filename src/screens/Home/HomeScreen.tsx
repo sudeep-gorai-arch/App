@@ -4,6 +4,7 @@ import {
   View,
   Text,
   ScrollView,
+  Image,
   ImageBackground,
   Pressable,
   NativeSyntheticEvent,
@@ -19,10 +20,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 
 import MeshBackground from '../../components/MeshBackground';
-import Header from '../../components/Header';
 import Button from '../../components/Button';
 
 import { colors } from '../../styles/colors';
+import { typography, fontFamily } from '../../styles/typography';
 import { spacing, radius, SCREEN } from '../../utils/constants';
 
 import API from '../../services/api';
@@ -33,6 +34,9 @@ import {
 } from '../../services/wallpaperService';
 
 import { Wallpaper } from '../../services/types';
+
+const flexiWallsLogo = require('../../assets/images/flexiwalls-logo.png');
+const proButtonIcon = require('../../assets/images/pro-button.png');
 
 const HERO_W = SCREEN.width - spacing.xl * 2;
 const HERO_H = 480;
@@ -246,6 +250,107 @@ const fetchAllWallpapers = async () => {
     console.log('HOME ALL WALLPAPERS ERROR', error);
     return [];
   }
+};
+
+const ShinyProIcon = () => {
+  const shineTranslate = useRef(new Animated.Value(-46)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.delay(1400),
+        Animated.timing(shineTranslate, {
+          toValue: 46,
+          duration: 950,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shineTranslate, {
+          toValue: -46,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    animation.start();
+
+    return () => {
+      animation.stop();
+    };
+  }, [shineTranslate]);
+
+  return (
+    <View style={styles.homeProIconWrap}>
+      <Image
+        source={proButtonIcon}
+        style={styles.homeProIcon}
+        resizeMode="contain"
+      />
+
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.homeProShine,
+          {
+            transform: [{ translateX: shineTranslate }, { rotate: '18deg' }],
+          },
+        ]}
+      >
+        <LinearGradient
+          colors={[
+            'rgba(255,255,255,0)',
+            'rgba(255,255,255,0.22)',
+            'rgba(255,255,255,0.9)',
+            'rgba(255,255,255,0.22)',
+            'rgba(255,255,255,0)',
+          ]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={styles.homeProShineGradient}
+        />
+      </Animated.View>
+    </View>
+  );
+};
+
+const HomeTopHeader = ({ navigation }: { navigation: any }) => {
+  return (
+    <View style={styles.homeHeader}>
+      <View style={styles.homeActionRow}>
+        <Image
+          source={flexiWallsLogo}
+          style={styles.homeLogoLeft}
+          resizeMode="contain"
+        />
+
+        <View style={styles.homeRightActions}>
+          <Pressable
+            onPress={() => navigation.navigate('Premium')}
+            hitSlop={8}
+            style={({ pressed }) => [
+              styles.homePremiumButton,
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <ShinyProIcon />
+          </Pressable>
+
+          <Pressable
+            onPress={() => navigation.navigate('Search')}
+            hitSlop={8}
+            style={({ pressed }) => [
+              styles.homeRightButton,
+              { opacity: pressed ? 0.6 : 1 },
+            ]}
+          >
+            <BlurView intensity={30} tint="dark" style={styles.homeRoundButton}>
+              <Ionicons name="search" size={20} color={colors.textPrimary} />
+            </BlurView>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
 };
 
 const HeroCard = ({
@@ -850,9 +955,7 @@ const HomeScreen = () => {
       ]);
 
       const safeAllData =
-        mergedAllData.length > 0
-          ? mergedAllData
-          : fallbackAll;
+        mergedAllData.length > 0 ? mergedAllData : fallbackAll;
 
       const startTrendIndex = Math.min(
         2,
@@ -905,15 +1008,7 @@ const HomeScreen = () => {
 
   if (loading) {
     return (
-      <View
-        style={[
-          styles.root,
-          {
-            justifyContent: 'center',
-            alignItems: 'center',
-          },
-        ]}
-      >
+      <View style={styles.loadingRoot}>
         <ActivityIndicator size="large" color={colors.textPrimary} />
       </View>
     );
@@ -926,24 +1021,9 @@ const HomeScreen = () => {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 150 }}
+          contentContainerStyle={styles.scrollContent}
         >
-          <Header
-            eyebrow="Good Morning 👋"
-            title={'Find Your\nPerfect Wallpaper'}
-            leftAction={{
-              icon: 'person-outline',
-              onPress: () => navigation.navigate('Profile'),
-            }}
-            rightAction={{
-              icon: 'search',
-              onPress: () => navigation.navigate('Search'),
-            }}
-            style={{
-              paddingTop: spacing.xs,
-              paddingBottom: 0,
-            }}
-          />
+          <HomeTopHeader navigation={navigation} />
 
           <HeroSmoothCarousel
             data={featured}
@@ -957,21 +1037,10 @@ const HomeScreen = () => {
           <View style={styles.sectionHeader}>
             <View>
               <Text style={styles.sectionTitle}>Trending Hub</Text>
-              <Text style={styles.sectionSubtitle}>Swipe the stack to explore</Text>
+              <Text style={styles.sectionSubtitle}>
+                Swipe the stack to explore
+              </Text>
             </View>
-
-            <Pressable
-              style={styles.viewAll}
-              hitSlop={8}
-              onPress={() => navigation.navigate('AllWallpapers')}
-            >
-              <Text style={styles.viewAllText}>View all</Text>
-              <Ionicons
-                name="chevron-forward"
-                size={16}
-                color={colors.textPrimary}
-              />
-            </Pressable>
           </View>
 
           <View style={styles.filterRow}>
@@ -1006,14 +1075,98 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.base,
   },
+  loadingRoot: {
+    flex: 1,
+    backgroundColor: colors.base,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scrollContent: {
+    paddingBottom: 90,
+  },
+
+  homeHeader: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
+  homeActionRow: {
+    height: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    overflow: 'visible',
+    marginBottom: -8,
+  },
+  homeLogoLeft: {
+    width: 175,
+    height: 120,
+    marginLeft: -18,
+    marginTop: 8,
+  },
+  homeRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    zIndex: 5,
+  },
+  homePremiumButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+    backgroundColor: 'transparent',
+  },
+  homeProIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  homeProIcon: {
+    width: 36,
+    height: 36,
+  },
+  homeProShine: {
+    position: 'absolute',
+    top: -12,
+    bottom: -12,
+    width: 22,
+    opacity: 0.95,
+  },
+  homeProShineGradient: {
+    flex: 1,
+  },
+  homeRightButton: {
+    width: 46,
+    height: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 5,
+  },
+  homeRoundButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorder,
+    backgroundColor: colors.glassFill,
+  },
 
   heroCarouselWrap: {
     marginTop: spacing.xs,
   },
   heroCarouselContent: {
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
+    paddingTop: spacing.xs,
+    paddingBottom: 0,
   },
   heroCarouselCard: {
     width: HERO_W,
@@ -1024,7 +1177,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 6,
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
   },
   heroCard: {
     width: HERO_W,
@@ -1045,7 +1198,7 @@ const styles = StyleSheet.create({
   qualityBadge: {
     position: 'absolute',
     top: 14,
-    left: 14,
+    right: 14,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 12,
@@ -1053,17 +1206,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
+    zIndex: 10,
+    elevation: 10,
   },
   qualityText: {
     color: colors.textPrimary,
-    fontWeight: '800',
+    fontFamily: fontFamily.semiBold,
     fontSize: 14,
     lineHeight: 16,
   },
   qualitySub: {
     color: colors.textSecondary,
+    fontFamily: fontFamily.semiBold,
     fontSize: 8,
-    fontWeight: '700',
     letterSpacing: 1,
   },
   heroContent: {
@@ -1079,19 +1234,18 @@ const styles = StyleSheet.create({
   },
   tagText: {
     color: colors.textPrimary,
+    fontFamily: fontFamily.semiBold,
     fontSize: 11,
-    fontWeight: '700',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
   heroTitle: {
     color: colors.textPrimary,
-    fontSize: 30,
-    fontWeight: '800',
-    letterSpacing: -0.5,
+    ...typography.heroTitle,
   },
   heroSubtitle: {
     color: colors.textSecondary,
+    fontFamily: fontFamily.semiBold,
     fontSize: 15,
     marginTop: 4,
     maxWidth: '78%',
@@ -1109,17 +1263,10 @@ const styles = StyleSheet.create({
   },
   likeText: {
     color: colors.textPrimary,
-    fontWeight: '700',
+    fontFamily: fontFamily.semiBold,
     fontSize: 14,
   },
 
-  dots: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: spacing.lg,
-  },
   dot: {
     width: 6,
     height: 6,
@@ -1136,37 +1283,25 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.xl,
-    marginTop: spacing.xl,
-    marginBottom: spacing.md,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
   },
   sectionTitle: {
     color: colors.textPrimary,
-    fontSize: 24,
-    fontWeight: '800',
-    letterSpacing: -0.3,
+    ...typography.sectionTitle,
   },
   sectionSubtitle: {
     color: colors.textSecondary,
+    fontFamily: fontFamily.semiBold,
     fontSize: 13,
     marginTop: 3,
-  },
-  viewAll: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingBottom: 3,
-  },
-  viewAllText: {
-    color: colors.textPrimary,
-    fontSize: 15,
-    fontWeight: '600',
   },
 
   filterRow: {
     flexDirection: 'row',
     gap: spacing.md,
     paddingHorizontal: spacing.xl,
-    marginBottom: spacing.sm,
+    marginBottom: 0,
   },
   filterChip: {
     paddingHorizontal: 17,
@@ -1183,24 +1318,24 @@ const styles = StyleSheet.create({
   },
   filterChipText: {
     color: colors.textSecondary,
+    fontFamily: fontFamily.semiBold,
     fontSize: 13,
-    fontWeight: '700',
   },
   filterChipTextActive: {
     color: colors.textPrimary,
   },
 
   trendStackWrap: {
-    height: TREND_CARD_H + 70,
-    marginTop: spacing.sm,
+    height: TREND_CARD_H + 42,
+    marginTop: 0,
   },
   trendStackList: {
     overflow: 'visible',
   },
   trendStackContent: {
     paddingHorizontal: TREND_SIDE_PADDING,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
   },
   trendStackSlot: {
     width: TREND_SNAP,
@@ -1274,8 +1409,8 @@ const styles = StyleSheet.create({
   },
   trendingBadgeText: {
     color: colors.textPrimary,
+    fontFamily: fontFamily.semiBold,
     fontSize: 12,
-    fontWeight: '700',
   },
   trendStackBottom: {
     alignItems: 'center',
@@ -1292,12 +1427,12 @@ const styles = StyleSheet.create({
   },
   trendLikes: {
     color: colors.textPrimary,
+    fontFamily: fontFamily.semiBold,
     fontSize: 13,
-    fontWeight: '800',
   },
 
   allSection: {
-    marginTop: spacing.sm,
+    marginTop: 0,
   },
   allGrid: {
     paddingHorizontal: spacing.xl,
@@ -1337,16 +1472,16 @@ const styles = StyleSheet.create({
   },
   allQualityText: {
     color: colors.textPrimary,
+    fontFamily: fontFamily.semiBold,
     fontSize: 11,
-    fontWeight: '800',
   },
   allWallpaperBottom: {
     padding: spacing.sm,
   },
   allWallpaperTitle: {
     color: colors.textPrimary,
+    fontFamily: fontFamily.semiBold,
     fontSize: 13,
-    fontWeight: '800',
     marginBottom: 6,
   },
   allWallpaperMeta: {
@@ -1361,8 +1496,8 @@ const styles = StyleSheet.create({
   },
   allWallpaperMetaText: {
     color: colors.textPrimary,
+    fontFamily: fontFamily.semiBold,
     fontSize: 11,
-    fontWeight: '700',
   },
   emptyAllBox: {
     marginHorizontal: spacing.xl,
@@ -1377,7 +1512,7 @@ const styles = StyleSheet.create({
   },
   emptyAllText: {
     color: colors.textSecondary,
+    fontFamily: fontFamily.semiBold,
     fontSize: 14,
-    fontWeight: '600',
   },
 });

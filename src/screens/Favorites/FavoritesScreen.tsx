@@ -1,43 +1,149 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   FlatList,
   Pressable,
+  Image,
   ImageBackground,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 
 import MeshBackground from '../../components/MeshBackground';
-import Header from '../../components/Header';
 import Card from '../../components/Card';
 
 import { colors, gradients } from '../../styles/colors';
+import { fontFamily } from '../../styles/typography';
 
 import { spacing, radius, SCREEN } from '../../utils/constants';
 
 import { getFavorites, removeFavorite } from '../../services/favoriteService';
 
 import { Wallpaper } from '../../services/types';
-import { useNavigation } from '@react-navigation/native';
+
+const flexiWallsLogo = require('../../assets/images/flexiwalls-logo.png');
+const proButtonIcon = require('../../assets/images/pro-button.png');
 
 const GAP = spacing.lg;
-
 const CARD_W = (SCREEN.width - spacing.xl * 2 - GAP) / 2;
-
 const CARD_H = CARD_W * 1.4;
 
 const FILTERS = ['All', 'Recent', 'Popular'] as const;
 
 type Filter = (typeof FILTERS)[number];
 
-// ================= CARD =================
+const ShinyProIcon = () => {
+  const shineTranslate = useRef(new Animated.Value(-46)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.delay(1400),
+        Animated.timing(shineTranslate, {
+          toValue: 46,
+          duration: 950,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shineTranslate, {
+          toValue: -46,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    animation.start();
+
+    return () => {
+      animation.stop();
+    };
+  }, [shineTranslate]);
+
+  return (
+    <View style={styles.favoritesProIconWrap}>
+      <Image
+        source={proButtonIcon}
+        style={styles.favoritesProIcon}
+        resizeMode="contain"
+      />
+
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.favoritesProShine,
+          {
+            transform: [{ translateX: shineTranslate }, { rotate: '18deg' }],
+          },
+        ]}
+      >
+        <LinearGradient
+          colors={[
+            'rgba(255,255,255,0)',
+            'rgba(255,255,255,0.22)',
+            'rgba(255,255,255,0.9)',
+            'rgba(255,255,255,0.22)',
+            'rgba(255,255,255,0)',
+          ]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={styles.favoritesProShineGradient}
+        />
+      </Animated.View>
+    </View>
+  );
+};
+
+const FavoritesTopHeader = ({ navigation }: { navigation: any }) => {
+  return (
+    <View style={styles.favoritesHeader}>
+      <View style={styles.favoritesActionRow}>
+        <Image
+          source={flexiWallsLogo}
+          style={styles.favoritesLogoLeft}
+          resizeMode="contain"
+        />
+
+        <View style={styles.favoritesRightActions}>
+          <Pressable
+            onPress={() => navigation.navigate('Premium')}
+            hitSlop={8}
+            style={({ pressed }) => [
+              styles.favoritesPremiumButton,
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <ShinyProIcon />
+          </Pressable>
+
+          <Pressable
+            onPress={() => navigation.navigate('Search')}
+            hitSlop={8}
+            style={({ pressed }) => [
+              styles.favoritesRightButton,
+              { opacity: pressed ? 0.6 : 1 },
+            ]}
+          >
+            <BlurView
+              intensity={30}
+              tint="dark"
+              style={styles.favoritesRoundButton}
+            >
+              <Ionicons name="search" size={20} color={colors.textPrimary} />
+            </BlurView>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+};
 
 const FavoriteCard = ({
   item,
@@ -92,7 +198,7 @@ const FavoriteCard = ({
         <Pressable
           hitSlop={8}
           onPress={() => onRemove(item.id)}
-          style={[styles.heartWrap]}
+          style={styles.heartWrap}
         >
           <BlurView intensity={30} tint="dark" style={styles.heartChip}>
             <Ionicons name="heart" size={18} color={colors.heart} />
@@ -121,8 +227,6 @@ const FavoriteCard = ({
   );
 };
 
-// ================= EMPTY =================
-
 const EmptyState = () => (
   <View style={styles.emptyWrap}>
     <Card
@@ -145,15 +249,11 @@ const EmptyState = () => (
   </View>
 );
 
-// ================= SCREEN =================
-
 const FavoritesScreen = () => {
   const navigation = useNavigation<any>();
 
   const [items, setItems] = useState<Wallpaper[]>([]);
-
   const [filter, setFilter] = useState<Filter>('All');
-
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -183,7 +283,7 @@ const FavoritesScreen = () => {
   };
 
   const data = useMemo(() => {
-    let copy = [...items];
+    const copy = [...items];
 
     if (filter === 'Popular') {
       return copy.sort((a, b) => (b.likes ?? 0) - (a.likes ?? 0));
@@ -194,15 +294,7 @@ const FavoritesScreen = () => {
 
   if (loading) {
     return (
-      <View
-        style={[
-          styles.root,
-          {
-            justifyContent: 'center',
-            alignItems: 'center',
-          },
-        ]}
-      >
+      <View style={[styles.root, styles.loadingRoot]}>
         <ActivityIndicator size="large" color={colors.textPrimary} />
       </View>
     );
@@ -218,32 +310,18 @@ const FavoritesScreen = () => {
           keyExtractor={i => i.id}
           numColumns={2}
           showsVerticalScrollIndicator={false}
-          columnWrapperStyle={{
-            paddingHorizontal: spacing.xl,
-
-            gap: GAP,
-          }}
-          contentContainerStyle={{
-            paddingBottom: 130,
-
-            gap: GAP,
-          }}
+          columnWrapperStyle={styles.columnWrapper}
+          contentContainerStyle={styles.listContent}
           ListHeaderComponent={
             <View>
-              <Header
-                title="Favorites"
-                leftAction={{
-                  icon: 'person-outline',
-                  onPress: () => navigation.navigate('Profile'),
-                }}
-                rightAction={{
-                  icon: 'search',
-                  onPress: () => navigation.navigate('Search'),
-                }}
-                style={{
-                  paddingTop: spacing.md,
-                }}
-              />
+              <FavoritesTopHeader navigation={navigation} />
+
+              <View style={styles.titleBlock}>
+                <Text style={styles.title}>Favorites</Text>
+                <Text style={styles.subtitle}>
+                  Your saved wallpapers collection
+                </Text>
+              </View>
 
               <BlurView intensity={30} tint="dark" style={styles.filterBar}>
                 {FILTERS.map(f => {
@@ -283,31 +361,122 @@ const FavoritesScreen = () => {
 
 export default FavoritesScreen;
 
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.base },
+  root: {
+    flex: 1,
+    backgroundColor: colors.base,
+  },
+  loadingRoot: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
-  // summary banner
-  summaryRow: { flexDirection: 'row', alignItems: 'center' },
-  summaryIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
+  favoritesHeader: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
+  favoritesActionRow: {
+    height: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    overflow: 'visible',
+    marginBottom: -8,
+  },
+  favoritesLogoLeft: {
+    width: 175,
+    height: 120,
+    marginLeft: -18,
+    marginTop: 8,
+  },
+  favoritesRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    zIndex: 5,
+  },
+  favoritesPremiumButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
+    backgroundColor: 'transparent',
   },
-  summaryValue: { color: colors.textPrimary, fontSize: 22, fontWeight: '800' },
-  summarySub: { color: colors.textSecondary, fontSize: 13, marginTop: 2 },
-  viewAll: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  viewAllText: { color: colors.textPrimary, fontSize: 14, fontWeight: '600' },
+  favoritesProIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  favoritesProIcon: {
+    width: 36,
+    height: 36,
+  },
+  favoritesProShine: {
+    position: 'absolute',
+    top: -12,
+    bottom: -12,
+    width: 22,
+    opacity: 0.95,
+  },
+  favoritesProShineGradient: {
+    flex: 1,
+  },
+  favoritesRightButton: {
+    width: 46,
+    height: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 5,
+  },
+  favoritesRoundButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorder,
+    backgroundColor: colors.glassFill,
+  },
 
-  // filter pills
+  titleBlock: {
+    paddingHorizontal: spacing.xl,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  title: {
+    color: colors.textPrimary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 28,
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    color: colors.textSecondary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 14,
+    marginTop: 4,
+  },
+
+  listContent: {
+    paddingBottom: 130,
+    gap: GAP,
+  },
+  columnWrapper: {
+    paddingHorizontal: spacing.xl,
+    gap: GAP,
+  },
+
   filterBar: {
     flexDirection: 'row',
     marginHorizontal: spacing.xl,
-    marginTop: spacing.lg,
+    marginTop: spacing.sm,
     marginBottom: spacing.sm,
     padding: 5,
     borderRadius: radius.pill,
@@ -316,7 +485,11 @@ const styles = StyleSheet.create({
     borderColor: colors.glassBorder,
     backgroundColor: colors.glassFillSoft,
   },
-  filterItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  filterItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   filterActive: {
     width: '100%',
     paddingVertical: 10,
@@ -325,17 +498,16 @@ const styles = StyleSheet.create({
   },
   filterText: {
     color: colors.textSecondary,
+    fontFamily: fontFamily.semiBold,
     fontSize: 15,
-    fontWeight: '600',
     paddingVertical: 10,
   },
   filterTextActive: {
     color: colors.textPrimary,
+    fontFamily: fontFamily.semiBold,
     fontSize: 15,
-    fontWeight: '700',
   },
 
-  // cards
   card: {
     width: CARD_W,
     height: CARD_H,
@@ -344,7 +516,9 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
   },
-  cardImage: { flex: 1 },
+  cardImage: {
+    flex: 1,
+  },
   qualityChip: {
     position: 'absolute',
     top: 10,
@@ -354,8 +528,16 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     overflow: 'hidden',
   },
-  qualityText: { color: colors.textPrimary, fontSize: 11, fontWeight: '800' },
-  heartWrap: { position: 'absolute', top: 10, right: 10 },
+  qualityText: {
+    color: colors.textPrimary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 11,
+  },
+  heartWrap: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+  },
   heartChip: {
     width: 34,
     height: 34,
@@ -366,8 +548,17 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorderSoft,
   },
-  cardMeta: { position: 'absolute', left: 12, right: 12, bottom: 12 },
-  cardTitle: { color: colors.textPrimary, fontSize: 16, fontWeight: '800' },
+  cardMeta: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 12,
+  },
+  cardTitle: {
+    color: colors.textPrimary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 16,
+  },
   cardMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -376,14 +567,24 @@ const styles = StyleSheet.create({
   },
   cardCategory: {
     color: colors.textSecondary,
+    fontFamily: fontFamily.semiBold,
     fontSize: 12,
-    fontWeight: '600',
   },
-  likeRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  likeText: { color: colors.textSecondary, fontSize: 12, fontWeight: '600' },
+  likeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  likeText: {
+    color: colors.textSecondary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 12,
+  },
 
-  // empty state
-  emptyWrap: { paddingHorizontal: spacing.xl, marginTop: spacing.xxl },
+  emptyWrap: {
+    paddingHorizontal: spacing.xl,
+    marginTop: spacing.xxl,
+  },
   emptyIcon: {
     width: 64,
     height: 64,
@@ -395,9 +596,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.glassFillSoft,
     marginBottom: spacing.lg,
   },
-  emptyTitle: { color: colors.textPrimary, fontSize: 20, fontWeight: '800' },
+  emptyTitle: {
+    color: colors.textPrimary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 20,
+  },
   emptySubtitle: {
     color: colors.textSecondary,
+    fontFamily: fontFamily.semiBold,
     fontSize: 14,
     textAlign: 'center',
     marginTop: 6,

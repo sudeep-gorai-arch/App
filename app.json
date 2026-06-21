@@ -11,7 +11,9 @@
             "photo"
           ]
         }
-      ]
+      ],
+      "expo-font",
+      "expo-splash-screen"
     ],
     "name": "FlexiWalls",
     "slug": "flexiwalls",

@@ -10,6 +10,7 @@
     "ios": "expo run:ios"
   },
   "dependencies": {
+    "@expo-google-fonts/syne": "^0.4.2",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native/new-app-screen": "0.85.3",
@@ -22,9 +23,10 @@
     "expo-blur": "~56.0.3",
     "expo-dev-client": "~56.0.19",
     "expo-file-system": "~56.0.8",
-    "expo-font": "~56.0.5",
+    "expo-font": "~56.0.7",
     "expo-linear-gradient": "~56.0.4",
     "expo-media-library": "~56.0.7",
+    "expo-splash-screen": "~56.0.10",
     "react": "19.2.3",
     "react-native": "0.85.3",
     "react-native-safe-area-context": "~5.7.0",

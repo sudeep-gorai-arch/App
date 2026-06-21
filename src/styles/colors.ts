@@ -1,31 +1,19 @@
-/**
- * Central design tokens for the WallpaperX glassmorphism theme.
- *
- * The look is built from three layers:
- *   1. A deep, near-black violet base.
- *   2. Vibrant mesh "glow" blobs (magenta -> violet -> blue).
- *   3. Frosted translucent glass surfaces stacked on top.
- *
- * Keeping every colour in one place means screens stay perfectly cohesive
- * and the whole palette can be re-tinted from a single file.
- */
-
 export const colors = {
   // --- Base / backdrop -------------------------------------------------
-  base: '#0B0A1F',
-  baseDeep: '#070612',
-  baseElevated: '#15132E',
+  base: '#000000',
+  baseDeep: '#000000',
+  baseElevated: '#000000',
 
   // --- Mesh gradient glow blobs ---------------------------------------
-  glowViolet: '#7C3AED',
-  glowIndigo: '#4338CA',
-  glowBlue: '#2563EB',
-  glowMagenta: '#DB2777',
-  glowPink: '#EC4899',
-  glowOrange: '#F97316',
+  glowViolet: '#000000',
+  glowIndigo: '#000000',
+  glowBlue: '#000000',
+  glowMagenta: '#000000',
+  glowPink: '#000000',
+  glowOrange: '#000000',
 
   // --- Accents ---------------------------------------------------------
-  accent: '#A78BFA', // soft violet
+  accent: '#A78BFA',
   accentStrong: '#8B5CF6',
   accentPink: '#F472B6',
   accentBlue: '#60A5FA',
@@ -35,14 +23,14 @@ export const colors = {
   textSecondary: 'rgba(255, 255, 255, 0.66)',
   textTertiary: 'rgba(255, 255, 255, 0.42)',
 
-  // --- Glass surfaces (semi-transparent rgba) -------------------------
+  // --- Glass surfaces --------------------------------------------------
   glassFill: 'rgba(255, 255, 255, 0.07)',
   glassFillStrong: 'rgba(255, 255, 255, 0.12)',
   glassFillSoft: 'rgba(255, 255, 255, 0.045)',
   glassBorder: 'rgba(255, 255, 255, 0.16)',
   glassBorderSoft: 'rgba(255, 255, 255, 0.09)',
 
-  // --- Tints used for icon chips / pills ------------------------------
+  // --- Tints -----------------------------------------------------------
   chipViolet: 'rgba(139, 92, 246, 0.28)',
   chipPink: 'rgba(236, 72, 153, 0.26)',
   chipBlue: 'rgba(37, 99, 235, 0.26)',
@@ -53,16 +41,16 @@ export const colors = {
   heart: '#FB6FA6',
 } as const;
 
-/**
- * Reusable, premium-feeling linear-gradient pairs (top-left -> bottom-right).
- * Each is an array of two stops so it drops straight into <LinearGradient>.
- */
 export const gradients = {
   violetMagenta: ['#8B5CF6', '#EC4899'],
   blueViolet: ['#3B82F6', '#7C3AED'],
   pinkOrange: ['#F472B6', '#F97316'],
   glassSheen: ['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.02)'],
-  borderGlow: ['rgba(167,139,250,0.9)', 'rgba(236,72,153,0.7)', 'rgba(96,165,250,0.6)'],
+  borderGlow: [
+    'rgba(167,139,250,0.9)',
+    'rgba(236,72,153,0.7)',
+    'rgba(96,165,250,0.6)',
+  ],
 } as const;
 
 export type ColorKey = keyof typeof colors;

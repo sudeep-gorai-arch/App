@@ -14,22 +14,22 @@ import AboutScreen from '../screens/About/AboutScreen';
 import CategoryScreen from '../screens/Category/CategoryScreen';
 import ProfileScreen from '../screens/Profile/ProfileScreen';
 import FavoritesScreen from '../screens/Favorites/FavoritesScreen';
-
 import PremiumScreen from '../screens/Premium/PremiumScreen';
+import SearchScreen from '../screens/Search/SearchScreen';
+import TrendingScreen from '../screens/Trending/TrendingScreen';
 
 import { colors, gradients } from '../styles/colors';
 import { TAB_ITEMS } from '../utils/constants';
-import SearchScreen from '../screens/Search/SearchScreen';
 
 const Tab = createBottomTabNavigator();
 
-/** Renders the correct icon family for a tab key. */
 const TabIcon = ({ icon, color }: { icon: string; color: string }) => {
   if (icon === 'crown') {
     return (
       <MaterialCommunityIcons name="crown-outline" size={22} color={color} />
     );
   }
+
   return (
     <Ionicons
       name={icon as keyof typeof Ionicons.glyphMap}
@@ -39,12 +39,6 @@ const TabIcon = ({ icon, color }: { icon: string; color: string }) => {
   );
 };
 
-/**
- * Floating frosted glass tab bar.
- *
- * Shows the five chips from the mockups. "Premium" and "Favorites" have no
- * dedicated screen yet, so they highlight on tap but don't navigate.
- */
 const GlassTabBar = ({ state, navigation }: BottomTabBarProps) => {
   const insets = useSafeAreaInsets();
   const activeRoute = state.routes[state.index]?.name;
@@ -61,6 +55,7 @@ const GlassTabBar = ({ state, navigation }: BottomTabBarProps) => {
           style={StyleSheet.absoluteFill}
           pointerEvents="none"
         />
+
         {TAB_ITEMS.map(item => {
           const isActive = item.routeName === activeRoute;
           const tint = isActive ? colors.textPrimary : colors.textTertiary;
@@ -70,8 +65,9 @@ const GlassTabBar = ({ state, navigation }: BottomTabBarProps) => {
               key={item.key}
               style={styles.tab}
               onPress={() => {
-                if (item.routeName)
+                if (item.routeName) {
                   navigation.navigate(item.routeName as never);
+                }
               }}
             >
               {isActive ? (
@@ -88,6 +84,7 @@ const GlassTabBar = ({ state, navigation }: BottomTabBarProps) => {
                   <TabIcon icon={item.icon} color={tint} />
                 </View>
               )}
+
               <Text style={[styles.tabLabel, { color: tint }]}>
                 {item.label}
               </Text>
@@ -107,10 +104,12 @@ export default function BottomTabs() {
     >
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Category" component={CategoryScreen} />
+      <Tab.Screen name="Trending" component={TrendingScreen} />
+      <Tab.Screen name="Favorites" component={FavoritesScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
+
       <Tab.Screen name="About" component={AboutScreen} />
       <Tab.Screen name="Premium" component={PremiumScreen} />
-      <Tab.Screen name="Favorites" component={FavoritesScreen} />
       <Tab.Screen name="Search" component={SearchScreen} />
     </Tab.Navigator>
   );
