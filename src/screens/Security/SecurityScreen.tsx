@@ -21,7 +21,7 @@ import { spacing, radius } from '../../utils/constants';
 
 type Nav = { goBack?: () => void };
 
-const CTA = ['#F472B6', '#A855F7', '#3B82F6'];
+const CTA = ['#3B82F6', '#8B5CF6', '#EC4899'] as const;
 
 const PasswordField = ({
   placeholder,

@@ -11,18 +11,19 @@
             "photo"
           ]
         }
-      ],
-      "expo-font",
-      "expo-splash-screen"
+      ]
     ],
     "name": "FlexiWalls",
     "slug": "flexiwalls",
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "flexiwalls",
+    
     "android": {
       "package": "com.flexiwalls.app",
-      "usesCleartextTraffic": true,
+      "permissions": [
+        "SET_WALLPAPER"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#0B0819"
       }

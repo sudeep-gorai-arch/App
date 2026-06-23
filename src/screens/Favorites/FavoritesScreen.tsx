@@ -36,7 +36,7 @@ const GAP = spacing.lg;
 const CARD_W = (SCREEN.width - spacing.xl * 2 - GAP) / 2;
 const CARD_H = CARD_W * 1.4;
 
-const FILTERS = ['All', 'Recent', 'Popular'] as const;
+const FILTERS = ['All', 'Recent', 'Category'] as const;
 
 type Filter = (typeof FILTERS)[number];
 
@@ -285,7 +285,7 @@ const FavoritesScreen = () => {
   const data = useMemo(() => {
     const copy = [...items];
 
-    if (filter === 'Popular') {
+    if (filter === 'Category') {
       return copy.sort((a, b) => (b.likes ?? 0) - (a.likes ?? 0));
     }
 

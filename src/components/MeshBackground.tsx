@@ -1,23 +1,38 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, Image } from 'react-native';
+import { colors } from '../styles/colors';
 
 type Props = {
   variant?: 'home' | 'category' | 'profile' | 'about';
+  textureOpacity?: number;
 };
 
-const MeshBackground: React.FC<Props> = () => {
-  return <View pointerEvents="none" style={styles.blackBackground} />;
+const MeshBackground: React.FC<Props> = ({ textureOpacity = 0.18 }) => {
+  return (
+    <View style={styles.container} pointerEvents="none">
+      <View style={styles.base} />
+      <Image
+        source={require('../assets/images/backgrounds/dark-texture.png')}
+        style={[styles.texture, { opacity: textureOpacity }]}
+        resizeMode="cover"
+      />
+    </View>
+  );
 };
 
 export default MeshBackground;
 
 const styles = StyleSheet.create({
-  blackBackground: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: '#000000',
+  container: {
+    ...StyleSheet.absoluteFill,
+  },
+  base: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: colors.base,
+  },
+  texture: {
+    ...StyleSheet.absoluteFill,
+    width: undefined,
+    height: undefined,
   },
 });

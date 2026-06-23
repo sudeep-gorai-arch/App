@@ -45,6 +45,7 @@ const cityCategoryThumbnail = require('../../assets/images/categories/city-categ
 const spaceCategoryThumbnail = require('../../assets/images/categories/space-category-thumbnail.png');
 const gamingCategoryThumbnail = require('../../assets/images/categories/gaming-category-thumbnail.png');
 const animalsCategoryThumbnail = require('../../assets/images/categories/animals-category-thumbnail.png');
+const minimalCategoryThumbnail = require('../../assets/images/categories/minimal-category-thumbnail.png');
 
 type Nav = { navigate: (name: string, params?: any) => void };
 
@@ -53,6 +54,13 @@ const CARD_W = (SCREEN.width - spacing.xl * 2 - GAP) / 2;
 const CARD_H = CARD_W * (9 / 16);
 
 const API_ORIGIN = String(API.defaults.baseURL || '').replace(/\/api\/?$/, '');
+
+const MINIMAL_CATEGORY = {
+  id: 'minimal',
+  name: 'Minimal',
+  slug: 'minimal',
+  count: 0,
+} as Category;
 
 const CATEGORY_THUMBNAILS: Record<string, ImageSourcePropType> = {
   anime: animeCategoryThumbnail,
@@ -68,6 +76,7 @@ const CATEGORY_THUMBNAILS: Record<string, ImageSourcePropType> = {
   games: gamingCategoryThumbnail,
   animals: animalsCategoryThumbnail,
   animal: animalsCategoryThumbnail,
+  minimal: minimalCategoryThumbnail,
 };
 
 const slugify = (value?: string) =>
@@ -77,6 +86,17 @@ const slugify = (value?: string) =>
     .replace(/&/g, 'and')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '');
+
+const ensureMinimalCategory = (items: Category[]) => {
+  const exists = items.some(item => {
+    const slug = slugify(item.slug || item.name || item.id);
+    return slug === 'minimal';
+  });
+
+  if (exists) return items;
+
+  return [...items, MINIMAL_CATEGORY];
+};
 
 const toAbsoluteMediaUrl = (value?: string | null) => {
   if (!value) return undefined;
@@ -291,9 +311,7 @@ const CategoryCard = ({
           <Text style={styles.cardName} numberOfLines={1}>
             {item.name}
           </Text>
-          <Text style={styles.cardCount}>
-            {item.count ?? 0} Wallpapers
-          </Text>
+          <Text style={styles.cardCount}>{item.count ?? 0} Wallpapers</Text>
         </View>
       </ImageBackground>
     </Pressable>
@@ -312,9 +330,12 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
   const loadData = async () => {
     try {
       const response = await getCategories();
-      setCategories(response.data ?? []);
+      const apiCategories = Array.isArray(response.data) ? response.data : [];
+
+      setCategories(ensureMinimalCategory(apiCategories));
     } catch (error) {
       console.log('CATEGORY ERROR', error);
+      setCategories(ensureMinimalCategory([]));
     } finally {
       setLoading(false);
     }

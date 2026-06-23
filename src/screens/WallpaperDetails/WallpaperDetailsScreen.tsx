@@ -26,12 +26,17 @@ import API from '../../services/api';
 import { downloadWallpaper } from '../../utils/downloadHelper';
 import { addDownload, addPublicDownload } from '../../services/downloadService';
 import { addFavorite } from '../../services/favoriteService';
+import {
+  applyWallpaperToAndroid,
+  WallpaperApplyTarget,
+} from '../../services/applyWallpaperService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'WallpaperDetails'>;
 
 type Status = 'idle' | 'downloading' | 'done';
 
 const DOWNLOAD_GRADIENT = ['#3B82F6', '#8B5CF6', '#EC4899'] as const;
+const APPLY_GRADIENT = ['#0EA5E9', '#14B8A6', '#22D3EE'] as const;
 const POPUP_GRADIENT = ['#3B82F6', '#8B5CF6', '#EC4899'] as const;
 
 const API_ORIGIN = String(API.defaults.baseURL || '').replace(/\/api\/?$/, '');
@@ -179,6 +184,14 @@ const InfoPill = ({
   );
 };
 
+const ApplyButtonIcon = () => {
+  return (
+    <View style={styles.applyIconFrame}>
+      <Ionicons name="checkmark" size={16} color={colors.textPrimary} />
+    </View>
+  );
+};
+
 const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
   const wallpaper: any = route.params?.wallpaper ?? {};
   const wallpaperId = getWallpaperId(wallpaper);
@@ -192,6 +205,13 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
   const [fullscreenVisible, setFullscreenVisible] = useState(false);
   const [fullscreenMenuVisible, setFullscreenMenuVisible] = useState(false);
   const [savedPopupVisible, setSavedPopupVisible] = useState(false);
+  const [appliedPopupVisible, setAppliedPopupVisible] = useState(false);
+
+  const [applySheetVisible, setApplySheetVisible] = useState(false);
+  const [applyLoading, setApplyLoading] = useState(false);
+  const [applyTarget, setApplyTarget] = useState<WallpaperApplyTarget | null>(
+    null,
+  );
 
   const finalImage = imageFailed
     ? 'https://picsum.photos/seed/flexiwalls-details-error/900/1600'
@@ -200,6 +220,10 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
   const closeSavedPopup = () => {
     setSavedPopupVisible(false);
     setStatus('idle');
+  };
+
+  const closeAppliedPopup = () => {
+    setAppliedPopupVisible(false);
   };
 
   const closeFullscreen = () => {
@@ -290,9 +314,38 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
     }
   };
 
+  const onApplyWallpaper = async (target: WallpaperApplyTarget) => {
+    if (applyLoading) return;
+
+    try {
+      setApplyLoading(true);
+      setApplyTarget(target);
+
+      await applyWallpaperToAndroid(finalImage, target);
+
+      setApplySheetVisible(false);
+      setAppliedPopupVisible(true);
+    } catch (error: any) {
+      console.log('Apply wallpaper failed:', error);
+
+      Alert.alert(
+        'Apply failed',
+        error?.message || 'Could not apply this wallpaper.',
+      );
+    } finally {
+      setApplyLoading(false);
+      setApplyTarget(null);
+    }
+  };
+
   const onFullscreenDownload = () => {
     setFullscreenMenuVisible(false);
     onDownload();
+  };
+
+  const onFullscreenApply = () => {
+    setFullscreenMenuVisible(false);
+    setApplySheetVisible(true);
   };
 
   const onFullscreenFavorite = () => {
@@ -432,7 +485,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
                     <>
                       <Ionicons
                         name="checkmark-circle-outline"
-                        size={26}
+                        size={21}
                         color={colors.textPrimary}
                       />
                       <Text style={styles.downloadText}>Saved</Text>
@@ -441,12 +494,39 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
                     <>
                       <Ionicons
                         name="download-outline"
-                        size={27}
+                        size={21}
                         color={colors.textPrimary}
                       />
                       <Text style={styles.downloadText}>Download</Text>
                     </>
                   )}
+                </LinearGradient>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setApplySheetVisible(true)}
+                disabled={applyLoading}
+                style={({ pressed }) => [
+                  styles.applyButtonWrap,
+                  {
+                    opacity: applyLoading ? 0.75 : 1,
+                    transform: [{ scale: pressed ? 0.96 : 1 }],
+                  },
+                ]}
+              >
+                <LinearGradient
+                  colors={APPLY_GRADIENT}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.applyButton}
+                >
+                  {applyLoading ? (
+                    <ActivityIndicator color={colors.textPrimary} />
+                  ) : (
+                    <ApplyButtonIcon />
+                  )}
+
+                  <Text style={styles.applyButtonText}>Apply</Text>
                 </LinearGradient>
               </Pressable>
 
@@ -471,7 +551,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
                   ) : (
                     <Ionicons
                       name={isFavorite ? 'heart' : 'heart-outline'}
-                      size={30}
+                      size={25}
                       color={isFavorite ? colors.heart : colors.textPrimary}
                     />
                   )}
@@ -599,6 +679,28 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
                       <View style={styles.dropdownDivider} />
 
                       <Pressable
+                        onPress={onFullscreenApply}
+                        disabled={applyLoading}
+                        style={({ pressed }) => [
+                          styles.dropdownItem,
+                          { opacity: pressed || applyLoading ? 0.65 : 1 },
+                        ]}
+                      >
+                        {applyLoading ? (
+                          <ActivityIndicator
+                            size="small"
+                            color={colors.textPrimary}
+                          />
+                        ) : (
+                          <ApplyButtonIcon />
+                        )}
+
+                        <Text style={styles.dropdownText}>Apply</Text>
+                      </Pressable>
+
+                      <View style={styles.dropdownDivider} />
+
+                      <Pressable
                         onPress={onFullscreenFavorite}
                         disabled={favoriteLoading}
                         style={({ pressed }) => [
@@ -635,21 +737,148 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
       </Modal>
 
       <Modal
-        visible={savedPopupVisible}
+        visible={applySheetVisible}
         transparent
         animationType="fade"
-        onRequestClose={closeSavedPopup}
+        onRequestClose={() => {
+          if (!applyLoading) setApplySheetVisible(false);
+        }}
+      >
+        <View style={styles.applyOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => {
+              if (!applyLoading) setApplySheetVisible(false);
+            }}
+          />
+
+          <BlurView intensity={52} tint="dark" style={styles.applySheet}>
+            <LinearGradient
+              colors={[
+                'rgba(255,255,255,0.16)',
+                'rgba(255,255,255,0.06)',
+                'rgba(0,0,0,0.36)',
+              ]}
+              style={StyleSheet.absoluteFill}
+            />
+
+            <Text style={styles.applyTitle}>Apply Wallpaper</Text>
+
+            <Text style={styles.applySubtitle}>
+              Choose where you want to apply this wallpaper.
+            </Text>
+
+            <Pressable
+              disabled={applyLoading}
+              onPress={() => onApplyWallpaper('home')}
+              style={({ pressed }) => [
+                styles.applyOption,
+                { opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
+              <Ionicons
+                name="home-outline"
+                size={22}
+                color={colors.textPrimary}
+              />
+
+              <Text style={styles.applyOptionText}>Home Screen</Text>
+
+              {applyLoading && applyTarget === 'home' ? (
+                <ActivityIndicator size="small" color={colors.textPrimary} />
+              ) : (
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={colors.textSecondary}
+                />
+              )}
+            </Pressable>
+
+            <Pressable
+              disabled={applyLoading}
+              onPress={() => onApplyWallpaper('lock')}
+              style={({ pressed }) => [
+                styles.applyOption,
+                { opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
+              <Ionicons
+                name="lock-closed-outline"
+                size={22}
+                color={colors.textPrimary}
+              />
+
+              <Text style={styles.applyOptionText}>Lock Screen</Text>
+
+              {applyLoading && applyTarget === 'lock' ? (
+                <ActivityIndicator size="small" color={colors.textPrimary} />
+              ) : (
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={colors.textSecondary}
+                />
+              )}
+            </Pressable>
+
+            <Pressable
+              disabled={applyLoading}
+              onPress={() => onApplyWallpaper('both')}
+              style={({ pressed }) => [
+                styles.applyOption,
+                styles.applyOptionLast,
+                { opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
+              <Ionicons
+                name="phone-portrait"
+                size={22}
+                color={colors.textPrimary}
+              />
+
+              <Text style={styles.applyOptionText}>Both</Text>
+
+              {applyLoading && applyTarget === 'both' ? (
+                <ActivityIndicator size="small" color={colors.textPrimary} />
+              ) : (
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={colors.textSecondary}
+                />
+              )}
+            </Pressable>
+          </BlurView>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={appliedPopupVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeAppliedPopup}
       >
         <View style={styles.savedOverlay}>
-          <BlurView intensity={44} tint="dark" style={StyleSheet.absoluteFill} />
+          <BlurView
+            intensity={34}
+            tint="dark"
+            style={styles.savedBackdrop}
+            pointerEvents="none"
+          />
+
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={closeAppliedPopup}
+          />
 
           <View style={styles.savedCardBorder}>
-            <BlurView intensity={58} tint="dark" style={styles.savedCard}>
+            <BlurView intensity={48} tint="dark" style={styles.savedCard}>
               <LinearGradient
                 colors={[
-                  'rgba(255,255,255,0.18)',
-                  'rgba(255,255,255,0.08)',
-                  'rgba(0,0,0,0.38)',
+                  'rgba(255,255,255,0.14)',
+                  'rgba(255,255,255,0.055)',
+                  'rgba(15,15,16,0.92)',
                 ]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
@@ -658,9 +887,9 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
 
               <LinearGradient
                 colors={[
-                  'rgba(96,165,250,0.18)',
-                  'rgba(168,85,247,0.14)',
-                  'rgba(236,72,153,0.10)',
+                  'rgba(59,130,246,0.18)',
+                  'rgba(139,92,246,0.12)',
+                  'rgba(20,184,166,0.10)',
                   'rgba(0,0,0,0)',
                 ]}
                 start={{ x: 0, y: 0 }}
@@ -668,18 +897,97 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
                 style={StyleSheet.absoluteFill}
               />
 
-              <View style={styles.savedIconGlow}>
+              <View style={styles.savedIconRing}>
                 <LinearGradient
-                  colors={[
-                    'rgba(59,130,246,0.28)',
-                    'rgba(139,92,246,0.22)',
-                    'rgba(236,72,153,0.18)',
-                  ]}
+                  colors={APPLY_GRADIENT}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
                   style={styles.savedIconCircle}
                 >
                   <Ionicons
                     name="checkmark"
-                    size={54}
+                    size={34}
+                    color={colors.textPrimary}
+                  />
+                </LinearGradient>
+              </View>
+
+              <Text style={styles.appliedTitle}>
+                Wallpaper Applied Successfully
+              </Text>
+
+              <Pressable
+                onPress={closeAppliedPopup}
+                style={({ pressed }) => [
+                  styles.doneButtonWrap,
+                  { transform: [{ scale: pressed ? 0.97 : 1 }] },
+                ]}
+              >
+                <LinearGradient
+                  colors={APPLY_GRADIENT}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.doneButton}
+                >
+                  <Text style={styles.doneButtonText}>Done</Text>
+                </LinearGradient>
+              </Pressable>
+            </BlurView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={savedPopupVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeSavedPopup}
+      >
+        <View style={styles.savedOverlay}>
+          <BlurView
+            intensity={34}
+            tint="dark"
+            style={styles.savedBackdrop}
+            pointerEvents="none"
+          />
+
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeSavedPopup} />
+
+          <View style={styles.savedCardBorder}>
+            <BlurView intensity={48} tint="dark" style={styles.savedCard}>
+              <LinearGradient
+                colors={[
+                  'rgba(255,255,255,0.14)',
+                  'rgba(255,255,255,0.055)',
+                  'rgba(15,15,16,0.92)',
+                ]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+
+              <LinearGradient
+                colors={[
+                  'rgba(59,130,246,0.18)',
+                  'rgba(139,92,246,0.12)',
+                  'rgba(236,72,153,0.08)',
+                  'rgba(0,0,0,0)',
+                ]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+
+              <View style={styles.savedIconRing}>
+                <LinearGradient
+                  colors={POPUP_GRADIENT}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.savedIconCircle}
+                >
+                  <Ionicons
+                    name="checkmark"
+                    size={34}
                     color={colors.textPrimary}
                   />
                 </LinearGradient>
@@ -695,7 +1003,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
                 onPress={closeSavedPopup}
                 style={({ pressed }) => [
                   styles.doneButtonWrap,
-                  { transform: [{ scale: pressed ? 0.98 : 1 }] },
+                  { transform: [{ scale: pressed ? 0.97 : 1 }] },
                 ]}
               >
                 <LinearGradient
@@ -820,49 +1128,97 @@ const styles = StyleSheet.create({
 
   actionRow: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: spacing.sm,
     alignItems: 'center',
   },
+
   downloadButtonWrap: {
     flex: 1,
-    borderRadius: 22,
+    height: 52,
+    borderRadius: 18,
+    overflow: 'hidden',
     shadowColor: '#8B5CF6',
     shadowOffset: {
       width: 0,
-      height: 10,
+      height: 8,
     },
-    shadowOpacity: 0.34,
-    shadowRadius: 18,
-    elevation: 12,
+    shadowOpacity: 0.28,
+    shadowRadius: 14,
+    elevation: 9,
   },
   downloadButton: {
-    height: 62,
-    borderRadius: 22,
+    width: '100%',
+    height: 52,
+    borderRadius: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
+    gap: 5,
   },
   downloadText: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
-    fontSize: 18,
+    fontSize: 14,
+    lineHeight: 18,
+  },
+
+  applyButtonWrap: {
+    flex: 1,
+    height: 52,
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: '#14B8A6',
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.28,
+    shadowRadius: 14,
+    elevation: 9,
+  },
+  applyButton: {
+    width: '100%',
+    height: 52,
+    borderRadius: 18,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  applyButtonText: {
+    color: colors.textPrimary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 14,
+    lineHeight: 18,
+    marginTop: 0,
+  },
+  applyIconFrame: {
+    width: 22,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.textPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginBottom: 0,
   },
 
   favoriteIconButtonWrap: {
-    width: 62,
-    height: 62,
-    borderRadius: 22,
+    width: 52,
+    height: 52,
+    borderRadius: 18,
     overflow: 'hidden',
   },
   favoriteIconButton: {
-    width: 62,
-    height: 62,
-    borderRadius: 22,
+    width: 52,
+    height: 52,
+    borderRadius: 18,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.3,
+    borderWidth: 1.2,
     borderColor: 'rgba(255,255,255,0.34)',
     backgroundColor: 'rgba(5, 8, 18, 0.18)',
   },
@@ -915,80 +1271,151 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.md,
   },
 
+  applyOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  applySheet: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.xl,
+    borderRadius: 30,
+    overflow: 'hidden',
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorder,
+    backgroundColor: 'rgba(6, 8, 20, 0.86)',
+  },
+  applyTitle: {
+    color: colors.textPrimary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 24,
+    lineHeight: 30,
+  },
+  applySubtitle: {
+    color: colors.textSecondary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 4,
+    marginBottom: spacing.lg,
+  },
+  applyOption: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.14)',
+  },
+  applyOptionLast: {
+    borderBottomWidth: 0,
+  },
+  applyOptionText: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 16,
+  },
+
   savedOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.48)',
+    backgroundColor: 'rgba(0,0,0,0.42)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
+  },
+  savedBackdrop: {
+    ...StyleSheet.absoluteFill,
   },
   savedCardBorder: {
     width: '100%',
-    maxWidth: 360,
-    borderRadius: 34,
-    padding: 1.2,
-    backgroundColor: 'rgba(168,85,247,0.55)',
+    maxWidth: 292,
+    borderRadius: 28,
+    padding: 1,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.20)',
+    shadowColor: '#8B5CF6',
+    shadowOffset: {
+      width: 0,
+      height: 16,
+    },
+    shadowOpacity: 0.24,
+    shadowRadius: 26,
+    elevation: 16,
   },
   savedCard: {
-    borderRadius: 33,
+    borderRadius: 27,
     overflow: 'hidden',
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingTop: 42,
-    paddingBottom: spacing.xl,
-    backgroundColor: 'rgba(6, 8, 20, 0.78)',
+    paddingHorizontal: spacing.lg,
+    paddingTop: 26,
+    paddingBottom: spacing.lg,
+    backgroundColor: 'rgba(15, 15, 16, 0.88)',
   },
-  savedIconGlow: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
+  savedIconRing: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.md,
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.24)',
+    borderColor: 'rgba(255,255,255,0.22)',
   },
   savedIconCircle: {
-    width: 92,
-    height: 92,
-    borderRadius: 46,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     alignItems: 'center',
     justifyContent: 'center',
   },
   savedTitle: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
-    fontSize: 42,
-    lineHeight: 50,
-    letterSpacing: -1,
+    fontSize: 30,
+    lineHeight: 36,
+    letterSpacing: -0.6,
     textAlign: 'center',
   },
   savedSubtitle: {
-    color: 'rgba(255,255,255,0.68)',
+    color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
-    fontSize: 16,
-    lineHeight: 24,
-    marginTop: spacing.sm,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 4,
     textAlign: 'center',
+  },
+  appliedTitle: {
+    color: colors.textPrimary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 23,
+    lineHeight: 30,
+    letterSpacing: -0.4,
+    textAlign: 'center',
+    paddingHorizontal: spacing.sm,
   },
   doneButtonWrap: {
     width: '100%',
     borderRadius: radius.pill,
     overflow: 'hidden',
-    marginTop: spacing.xl,
+    marginTop: spacing.lg,
   },
   doneButton: {
-    height: 58,
+    height: 46,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.35)',
+    borderColor: 'rgba(255,255,255,0.32)',
   },
   doneButtonText: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
-    fontSize: 20,
+    fontSize: 16,
+    lineHeight: 20,
   },
 });
