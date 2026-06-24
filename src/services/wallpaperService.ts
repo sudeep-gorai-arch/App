@@ -1,14 +1,50 @@
 import API from './api';
-import {Wallpaper,ApiResponse} from './types';
+import { Wallpaper, ApiResponse } from './types';
 
-export const getWallpapers=(limit=10,offset=0,search='',category='')=>
- API.get<ApiResponse<Wallpaper[]>>('/wallpapers',{params:{limit,offset,search,category}}).then(r=>r.data);
+const buildWallpaperParams = (
+  limit: number,
+  offset: number,
+  search?: string,
+  category?: string,
+) => {
+  const params: Record<string, string | number> = {
+    limit,
+    offset,
+  };
 
-export const getFeaturedWallpapers=()=>
- API.get<ApiResponse<Wallpaper[]>>('/wallpapers/featured?limit=5').then(r=>r.data);
+  const cleanSearch = search?.trim();
+  const cleanCategory = category?.trim();
 
-export const getTrendingWallpapers=()=>
- API.get<ApiResponse<Wallpaper[]>>('/wallpapers/trending?limit=10').then(r=>r.data);
+  if (cleanSearch) {
+    params.search = cleanSearch;
+  }
 
-export const getWallpaperById=(id:string)=>
- API.get<ApiResponse<Wallpaper>>(`/wallpapers/${id}`).then(r=>r.data);
+  if (cleanCategory) {
+    params.category = cleanCategory;
+  }
+
+  return params;
+};
+
+export const getWallpapers = (
+  limit = 10,
+  offset = 0,
+  search?: string,
+  category?: string,
+) =>
+  API.get<ApiResponse<Wallpaper[]>>('/wallpapers', {
+    params: buildWallpaperParams(limit, offset, search, category),
+  }).then(r => r.data);
+
+export const getFeaturedWallpapers = (limit = 5) =>
+  API.get<ApiResponse<Wallpaper[]>>('/wallpapers/featured', {
+    params: { limit },
+  }).then(r => r.data);
+
+export const getTrendingWallpapers = (limit = 10) =>
+  API.get<ApiResponse<Wallpaper[]>>('/wallpapers/trending', {
+    params: { limit },
+  }).then(r => r.data);
+
+export const getWallpaperById = (id: string) =>
+  API.get<ApiResponse<Wallpaper>>(`/wallpapers/${id}`).then(r => r.data);
