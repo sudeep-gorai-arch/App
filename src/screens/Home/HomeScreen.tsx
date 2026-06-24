@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
+
 import {
   StyleSheet,
   View,
   Text,
-  ScrollView,
   Image,
   ImageBackground,
   Pressable,
@@ -11,100 +11,79 @@ import {
   NativeScrollEvent,
   ActivityIndicator,
   Animated,
+  FlatList,
+  RefreshControl,
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
+
 import { BlurView } from 'expo-blur';
+
 import { LinearGradient } from 'expo-linear-gradient';
+
 import { Ionicons } from '@expo/vector-icons';
+
 import { useNavigation } from '@react-navigation/native';
 
 import MeshBackground from '../../components/MeshBackground';
+
 import Button from '../../components/Button';
 
 import { colors } from '../../styles/colors';
+
 import { typography, fontFamily } from '../../styles/typography';
+
 import { spacing, radius, SCREEN } from '../../utils/constants';
 
 import API from '../../services/api';
+
 import {
   getFeaturedWallpapers,
-  getTrendingWallpapers,
   getWallpapers,
 } from '../../services/wallpaperService';
 
 import { Wallpaper } from '../../services/types';
 
 const flexiWallsLogo = require('../../assets/images/flexiwalls-logo.png');
+
 const proButtonIcon = require('../../assets/images/pro-button.png');
 
+// ================= HERO =================
+
 const HERO_W = SCREEN.width - spacing.xl * 2;
+
 const HERO_H = 480;
+
 const HERO_GAP = spacing.md;
+
 const HERO_SNAP = HERO_W + HERO_GAP;
 
-const TREND_CARD_W = 190;
-const TREND_CARD_H = 300;
-const TREND_SNAP = 110;
-const TREND_SIDE_PADDING = (SCREEN.width - TREND_SNAP) / 2;
+// ================= ALL WALLPAPER GRID =================
 
 const ALL_GRID_GAP = spacing.md;
+
 const ALL_GRID_CARD_W = (SCREEN.width - spacing.xl * 2 - ALL_GRID_GAP) / 2;
+
 const ALL_GRID_CARD_H = ALL_GRID_CARD_W * 1.52;
 
-const ALL_PAGE_SIZE = 80;
-const MAX_ALL_PAGES = 10;
+// pagination
 
-const LEFT_STACK_VISUAL_POSITIONS = {
-  farRight: 270,
-  right: 190,
-  center: 0,
-  left: -80,
-  farLeft: -80,
-};
+const INITIAL_PAGE_SIZE = 20;
 
-const LEFT_STACK_STYLES = {
-  farRight: {
-    scale: 0.76,
-    opacity: 0.3,
-    blur: 0.72,
-    fade: 0.52,
-  },
-  right: {
-    scale: 0.88,
-    opacity: 0.72,
-    blur: 0.32,
-    fade: 0.2,
-  },
-  center: {
-    scale: 1,
-    opacity: 1,
-    blur: 0,
-    fade: 0,
-  },
-  left: {
-    scale: 0.88,
-    opacity: 0.7,
-    blur: 0.36,
-    fade: 0.24,
-  },
-  farLeft: {
-    scale: 0.78,
-    opacity: 0.5,
-    blur: 0.55,
-    fade: 0.36,
-  },
-};
+const NEXT_PAGE_SIZE = 10;
 
 const API_ORIGIN = String(API.defaults.baseURL || '').replace(/\/api\/?$/, '');
 
 const heroFallbackImage =
   'https://picsum.photos/seed/flexiwalls-hero-fallback/800/1400';
 
+// ================= IMAGE HELPERS =================
+
 const toAbsoluteMediaUrl = (value?: string | null) => {
   if (!value) return undefined;
 
   const url = String(value).trim();
+
   if (!url) return undefined;
 
   if (/^https?:\/\//i.test(url)) {
@@ -112,6 +91,7 @@ const toAbsoluteMediaUrl = (value?: string | null) => {
 
     return url.replace(
       /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i,
+
       API_ORIGIN,
     );
   }
@@ -146,21 +126,28 @@ const getWallpaperImage = (item: Wallpaper, fallbackSeed: string) => {
 
 const formatLikes = (likes?: number) => {
   if (likes === undefined || likes === null) return '0';
+
   if (likes >= 1000) return `${(likes / 1000).toFixed(1).replace('.0', '')}K`;
+
   return String(likes);
 };
 
 const slugifyCategory = (value?: string) =>
   String(value || '')
     .trim()
+
     .toLowerCase()
+
     .replace(/&/g, 'and')
+
     .replace(/[^a-z0-9]+/g, '-')
+
     .replace(/(^-|-$)/g, '');
 
 const prettifyCategoryName = (value?: string) =>
   String(value || 'Category')
     .replace(/[-_]+/g, ' ')
+
     .replace(/\b\w/g, char => char.toUpperCase());
 
 const getWallpaperCategoryForNavigation = (wallpaper: Wallpaper) => {
@@ -168,12 +155,16 @@ const getWallpaperCategoryForNavigation = (wallpaper: Wallpaper) => {
 
   if (w.category && typeof w.category === 'object') {
     const categoryName = w.category.name || w.category.slug || 'Category';
+
     const categorySlug = w.category.slug || slugifyCategory(categoryName);
 
     return {
       ...w.category,
+
       id: w.category.id || categorySlug,
+
       name: categoryName,
+
       slug: categorySlug,
     };
   }
@@ -186,22 +177,26 @@ const getWallpaperCategoryForNavigation = (wallpaper: Wallpaper) => {
     w.category ||
     '';
 
-  if (!rawCategory || typeof rawCategory !== 'string') {
-    return null;
-  }
+  if (!rawCategory || typeof rawCategory !== 'string') return null;
 
   const slug = slugifyCategory(rawCategory);
 
   return {
     id: slug,
+
     name: prettifyCategoryName(rawCategory),
+
     slug,
   };
 };
 
+// ================= SORT UNIQUE =================
+
 const byNewest = (a: Wallpaper, b: Wallpaper) => {
   const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+
   const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+
   return tb - ta;
 };
 
@@ -209,48 +204,52 @@ const uniqueWallpapers = (items: Wallpaper[]) => {
   const seen = new Set<string>();
 
   return items
+
     .filter(item => {
       if (!item?.id || seen.has(item.id)) return false;
+
       seen.add(item.id);
+
       return true;
     })
+
     .sort(byNewest);
 };
 
 const placeholderWallpapers = (prefix: string, count: number): Wallpaper[] =>
   Array.from({ length: count }).map((_, index) => ({
     id: `${prefix}-placeholder-${index}`,
+
     title: `Wallpaper ${index + 1}`,
+
     subtitle: 'Premium 4K Collection',
+
     imageUrl: `https://picsum.photos/seed/${prefix}-${index}/800/1400`,
+
     thumbnailUrl: `https://picsum.photos/seed/${prefix}-${index}/600/900`,
+
     quality: index % 2 === 0 ? '4K' : '8K',
+
     likes: 1200 + index * 97,
+
     createdAt: new Date(Date.now() - index * 1000 * 60 * 60).toISOString(),
   }));
 
-const fetchAllWallpapers = async () => {
+// ================= PAGINATION API =================
+
+const fetchWallpaperPage = async (limit: number, offset: number) => {
   try {
-    let offset = 0;
-    let allItems: Wallpaper[] = [];
+    const res = await getWallpapers(limit, offset);
 
-    for (let page = 0; page < MAX_ALL_PAGES; page += 1) {
-      const res = await getWallpapers(ALL_PAGE_SIZE, offset);
-      const batch = res?.data ?? [];
-
-      allItems = [...allItems, ...batch];
-
-      if (batch.length < ALL_PAGE_SIZE) break;
-
-      offset += batch.length;
-    }
-
-    return uniqueWallpapers(allItems);
+    return res?.data ?? [];
   } catch (error) {
-    console.log('HOME ALL WALLPAPERS ERROR', error);
+    console.log('HOME WALLPAPER ERROR', error);
+
     return [];
   }
 };
+
+// ================= PRO ICON =================
 
 const ShinyProIcon = () => {
   const shineTranslate = useRef(new Animated.Value(-46)).current;
@@ -259,11 +258,13 @@ const ShinyProIcon = () => {
     const animation = Animated.loop(
       Animated.sequence([
         Animated.delay(1400),
+
         Animated.timing(shineTranslate, {
           toValue: 46,
           duration: 950,
           useNativeDriver: true,
         }),
+
         Animated.timing(shineTranslate, {
           toValue: -46,
           duration: 0,
@@ -291,27 +292,48 @@ const ShinyProIcon = () => {
         pointerEvents="none"
         style={[
           styles.homeProShine,
+
           {
-            transform: [{ translateX: shineTranslate }, { rotate: '18deg' }],
+            transform: [
+              {
+                translateX: shineTranslate,
+              },
+
+              {
+                rotate: '18deg',
+              },
+            ],
           },
         ]}
       >
         <LinearGradient
           colors={[
             'rgba(255,255,255,0)',
+
             'rgba(255,255,255,0.22)',
+
             'rgba(255,255,255,0.9)',
+
             'rgba(255,255,255,0.22)',
+
             'rgba(255,255,255,0)',
           ]}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
+          start={{
+            x: 0,
+            y: 0.5,
+          }}
+          end={{
+            x: 1,
+            y: 0.5,
+          }}
           style={styles.homeProShineGradient}
         />
       </Animated.View>
     </View>
   );
 };
+
+// ================= HEADER =================
 
 const HomeTopHeader = ({ navigation }: { navigation: any }) => {
   return (
@@ -329,7 +351,10 @@ const HomeTopHeader = ({ navigation }: { navigation: any }) => {
             hitSlop={8}
             style={({ pressed }) => [
               styles.homePremiumButton,
-              { opacity: pressed ? 0.7 : 1 },
+
+              {
+                opacity: pressed ? 0.7 : 1,
+              },
             ]}
           >
             <ShinyProIcon />
@@ -340,7 +365,10 @@ const HomeTopHeader = ({ navigation }: { navigation: any }) => {
             hitSlop={8}
             style={({ pressed }) => [
               styles.homeRightButton,
-              { opacity: pressed ? 0.6 : 1 },
+
+              {
+                opacity: pressed ? 0.6 : 1,
+              },
             ]}
           >
             <BlurView intensity={30} tint="dark" style={styles.homeRoundButton}>
@@ -353,6 +381,8 @@ const HomeTopHeader = ({ navigation }: { navigation: any }) => {
   );
 };
 
+// ================= HERO CARD =================
+
 const HeroCard = ({
   item,
   index,
@@ -360,8 +390,11 @@ const HeroCard = ({
   onExploreCategory,
 }: {
   item: Wallpaper;
+
   index: number;
+
   onPress?: () => void;
+
   onExploreCategory?: () => void;
 }) => {
   const [imageFailed, setImageFailed] = useState(false);
@@ -376,23 +409,33 @@ const HeroCard = ({
       onPress={onPress}
       style={({ pressed }) => [
         styles.heroCard,
+
         pressed && onPress && styles.heroPressed,
       ]}
     >
       <ImageBackground
         source={{ uri: image }}
         style={styles.heroImage}
-        imageStyle={{ borderRadius: radius.lg }}
+        imageStyle={{
+          borderRadius: radius.lg,
+        }}
         resizeMode="cover"
         onError={() => setImageFailed(true)}
       >
         <LinearGradient
           colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0)', 'rgba(10,8,25,0.85)']}
-          style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
+          style={[
+            StyleSheet.absoluteFill,
+
+            {
+              borderRadius: radius.lg,
+            },
+          ]}
         />
 
         <BlurView intensity={30} tint="dark" style={styles.qualityBadge}>
           <Text style={styles.qualityText}>{item.quality || '4K'}</Text>
+
           <Text style={styles.qualitySub}>ULTRA HD</Text>
         </BlurView>
 
@@ -422,6 +465,7 @@ const HeroCard = ({
 
             <View style={styles.likeRow}>
               <Ionicons name="heart" size={18} color={colors.textPrimary} />
+
               <Text style={styles.likeText}>{formatLikes(item.likes)}</Text>
             </View>
           </View>
@@ -430,6 +474,8 @@ const HeroCard = ({
     </Pressable>
   );
 };
+
+// ================= HERO CAROUSEL =================
 
 const HeroSmoothCarousel = ({
   data,
@@ -440,10 +486,15 @@ const HeroSmoothCarousel = ({
   onExploreCategory,
 }: {
   data: Wallpaper[];
+
   scrollX: Animated.Value;
+
   activeIndex: number;
+
   onMomentumEnd: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+
   onPressItem: (item: Wallpaper) => void;
+
   onExploreCategory: (item: Wallpaper) => void;
 }) => {
   if (!data.length) return null;
@@ -452,7 +503,7 @@ const HeroSmoothCarousel = ({
     <View style={styles.heroCarouselWrap}>
       <Animated.FlatList
         data={data}
-        keyExtractor={(item: Wallpaper) => item.id}
+        keyExtractor={item => item.id}
         horizontal
         showsHorizontalScrollIndicator={false}
         snapToInterval={HERO_SNAP}
@@ -461,39 +512,66 @@ const HeroSmoothCarousel = ({
         scrollEventThrottle={16}
         removeClippedSubviews={false}
         contentContainerStyle={styles.heroCarouselContent}
-        ItemSeparatorComponent={() => <View style={{ width: HERO_GAP }} />}
+        ItemSeparatorComponent={() => (
+          <View
+            style={{
+              width: HERO_GAP,
+            }}
+          />
+        )}
         onMomentumScrollEnd={onMomentumEnd}
         getItemLayout={(_, index) => ({
           length: HERO_SNAP,
+
           offset: HERO_SNAP * index,
+
           index,
         })}
         onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-          { useNativeDriver: true },
+          [
+            {
+              nativeEvent: {
+                contentOffset: {
+                  x: scrollX,
+                },
+              },
+            },
+          ],
+
+          {
+            useNativeDriver: true,
+          },
         )}
-        renderItem={({ item, index }: { item: Wallpaper; index: number }) => {
+        renderItem={({ item, index }) => {
           const inputRange = [
             (index - 1) * HERO_SNAP,
+
             index * HERO_SNAP,
+
             (index + 1) * HERO_SNAP,
           ];
 
           const scale = scrollX.interpolate({
             inputRange,
+
             outputRange: [0.92, 1, 0.92],
+
             extrapolate: 'clamp',
           });
 
           const opacity = scrollX.interpolate({
             inputRange,
+
             outputRange: [0.62, 1, 0.62],
+
             extrapolate: 'clamp',
           });
 
           const translateY = scrollX.interpolate({
             inputRange,
+
             outputRange: [16, 0, 16],
+
             extrapolate: 'clamp',
           });
 
@@ -501,8 +579,10 @@ const HeroSmoothCarousel = ({
             <Animated.View
               style={[
                 styles.heroCarouselCard,
+
                 {
                   opacity,
+
                   transform: [{ translateY }, { scale }],
                 },
               ]}
@@ -530,251 +610,7 @@ const HeroSmoothCarousel = ({
   );
 };
 
-const TrendFilterChip = ({
-  label,
-  active,
-}: {
-  label: string;
-  active?: boolean;
-}) => (
-  <BlurView
-    intensity={active ? 44 : 26}
-    tint="dark"
-    style={[styles.filterChip, active && styles.filterChipActive]}
-  >
-    <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-      {label}
-    </Text>
-  </BlurView>
-);
-
-const TrendStackCard = ({
-  item,
-  index,
-  onPress,
-}: {
-  item: Wallpaper;
-  index: number;
-  onPress: () => void;
-}) => {
-  const [imageFailed, setImageFailed] = useState(false);
-
-  const image = imageFailed
-    ? `https://picsum.photos/seed/flexiwalls-trending-fallback-${index}/600/1000`
-    : getWallpaperImage(item, `flexiwalls-trending-${index}`);
-
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.trendPressable,
-        pressed && styles.trendPressed,
-      ]}
-    >
-      <ImageBackground
-        source={{ uri: image }}
-        style={styles.trendStackImage}
-        imageStyle={{ borderRadius: radius.lg }}
-        resizeMode="cover"
-        onError={() => setImageFailed(true)}
-      >
-        <LinearGradient
-          colors={[
-            'rgba(0,0,0,0.18)',
-            'rgba(0,0,0,0.02)',
-            'rgba(0,0,0,0.82)',
-          ]}
-          style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
-        />
-
-        <View style={styles.trendStackTop}>
-          <BlurView intensity={34} tint="dark" style={styles.trendingBadge}>
-            <Text style={styles.trendingBadgeText}>Trending</Text>
-          </BlurView>
-        </View>
-
-        <View style={styles.trendStackBottom}>
-          <View style={styles.trendLikePill}>
-            <Ionicons
-              name="heart-outline"
-              size={16}
-              color={colors.textPrimary}
-            />
-            <Text style={styles.trendLikes}>{formatLikes(item.likes)}</Text>
-          </View>
-        </View>
-      </ImageBackground>
-    </Pressable>
-  );
-};
-
-const TrendingStackSlider = ({
-  data,
-  scrollX,
-  activeIndex,
-  onMomentumEnd,
-  onPressItem,
-}: {
-  data: Wallpaper[];
-  scrollX: Animated.Value;
-  activeIndex: number;
-  onMomentumEnd: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
-  onPressItem: (item: Wallpaper) => void;
-}) => {
-  if (!data.length) return null;
-
-  return (
-    <View style={styles.trendStackWrap}>
-      <Animated.FlatList
-        data={data}
-        keyExtractor={(item: Wallpaper) => item.id}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        snapToInterval={TREND_SNAP}
-        decelerationRate="fast"
-        bounces={false}
-        scrollEventThrottle={16}
-        removeClippedSubviews={false}
-        initialScrollIndex={activeIndex}
-        getItemLayout={(_, index) => ({
-          length: TREND_SNAP,
-          offset: TREND_SNAP * index,
-          index,
-        })}
-        style={styles.trendStackList}
-        contentContainerStyle={styles.trendStackContent}
-        onMomentumScrollEnd={onMomentumEnd}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-          { useNativeDriver: true },
-        )}
-        renderItem={({ item, index }: { item: Wallpaper; index: number }) => {
-          const inputRange = [
-            (index - 2) * TREND_SNAP,
-            (index - 1) * TREND_SNAP,
-            index * TREND_SNAP,
-            (index + 1) * TREND_SNAP,
-            (index + 2) * TREND_SNAP,
-          ];
-
-          const scale = scrollX.interpolate({
-            inputRange,
-            outputRange: [
-              LEFT_STACK_STYLES.farRight.scale,
-              LEFT_STACK_STYLES.right.scale,
-              LEFT_STACK_STYLES.center.scale,
-              LEFT_STACK_STYLES.left.scale,
-              LEFT_STACK_STYLES.farLeft.scale,
-            ],
-            extrapolate: 'clamp',
-          });
-
-          const translateX = scrollX.interpolate({
-            inputRange,
-            outputRange: [
-              LEFT_STACK_VISUAL_POSITIONS.farRight - TREND_SNAP * 2,
-              LEFT_STACK_VISUAL_POSITIONS.right - TREND_SNAP,
-              LEFT_STACK_VISUAL_POSITIONS.center,
-              LEFT_STACK_VISUAL_POSITIONS.left + TREND_SNAP,
-              LEFT_STACK_VISUAL_POSITIONS.farLeft + TREND_SNAP * 2,
-            ],
-            extrapolateLeft: 'clamp',
-            extrapolateRight: 'extend',
-          });
-
-          const opacity = scrollX.interpolate({
-            inputRange,
-            outputRange: [
-              LEFT_STACK_STYLES.farRight.opacity,
-              LEFT_STACK_STYLES.right.opacity,
-              LEFT_STACK_STYLES.center.opacity,
-              LEFT_STACK_STYLES.left.opacity,
-              LEFT_STACK_STYLES.farLeft.opacity,
-            ],
-            extrapolate: 'clamp',
-          });
-
-          const blurOpacity = scrollX.interpolate({
-            inputRange,
-            outputRange: [
-              LEFT_STACK_STYLES.farRight.blur,
-              LEFT_STACK_STYLES.right.blur,
-              LEFT_STACK_STYLES.center.blur,
-              LEFT_STACK_STYLES.left.blur,
-              LEFT_STACK_STYLES.farLeft.blur,
-            ],
-            extrapolate: 'clamp',
-          });
-
-          const fadeOpacity = scrollX.interpolate({
-            inputRange,
-            outputRange: [
-              LEFT_STACK_STYLES.farRight.fade,
-              LEFT_STACK_STYLES.right.fade,
-              LEFT_STACK_STYLES.center.fade,
-              LEFT_STACK_STYLES.left.fade,
-              LEFT_STACK_STYLES.farLeft.fade,
-            ],
-            extrapolate: 'clamp',
-          });
-
-          const isCenter = index === activeIndex;
-          const isRightSide = index > activeIndex;
-
-          const stackDepth = isRightSide
-            ? 2000 + index
-            : isCenter
-              ? 1000
-              : 300 + index;
-
-          return (
-            <View
-              style={[
-                styles.trendStackSlot,
-                {
-                  zIndex: stackDepth,
-                  elevation: stackDepth,
-                },
-              ]}
-            >
-              <Animated.View
-                style={[
-                  styles.trendStackCardShell,
-                  {
-                    opacity,
-                    transform: [{ translateX }, { scale }],
-                  },
-                ]}
-              >
-                <TrendStackCard
-                  item={item}
-                  index={index}
-                  onPress={() => onPressItem(item)}
-                />
-
-                <Animated.View
-                  pointerEvents="none"
-                  style={[styles.trendSoftBlurLayer, { opacity: blurOpacity }]}
-                >
-                  <BlurView
-                    intensity={22}
-                    tint="dark"
-                    style={styles.trendSoftBlur}
-                  />
-                </Animated.View>
-
-                <Animated.View
-                  pointerEvents="none"
-                  style={[styles.trendSoftFadeLayer, { opacity: fadeOpacity }]}
-                />
-              </Animated.View>
-            </View>
-          );
-        }}
-      />
-    </View>
-  );
-};
+// ================= ALL WALLPAPER CARD =================
 
 const AllWallpaperCard = ({
   item,
@@ -782,7 +618,9 @@ const AllWallpaperCard = ({
   onPress,
 }: {
   item: Wallpaper;
+
   index: number;
+
   onPress: () => void;
 }) => {
   const [imageFailed, setImageFailed] = useState(false);
@@ -796,23 +634,28 @@ const AllWallpaperCard = ({
       onPress={onPress}
       style={({ pressed }) => [
         styles.allWallpaperCard,
+
         pressed && styles.allWallpaperPressed,
       ]}
     >
       <ImageBackground
         source={{ uri: image }}
         style={styles.allWallpaperImage}
-        imageStyle={{ borderRadius: radius.lg }}
+        imageStyle={{
+          borderRadius: radius.lg,
+        }}
         resizeMode="cover"
         onError={() => setImageFailed(true)}
       >
         <LinearGradient
-          colors={[
-            'rgba(0,0,0,0.05)',
-            'rgba(0,0,0,0)',
-            'rgba(5,4,14,0.82)',
+          colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0)', 'rgba(5,4,14,0.82)']}
+          style={[
+            StyleSheet.absoluteFill,
+
+            {
+              borderRadius: radius.lg,
+            },
           ]}
-          style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
         />
 
         <View style={styles.allWallpaperTop}>
@@ -832,6 +675,7 @@ const AllWallpaperCard = ({
               size={13}
               color={colors.textPrimary}
             />
+
             <Text style={styles.allWallpaperMetaText}>
               {formatLikes(item.likes)}
             </Text>
@@ -842,169 +686,136 @@ const AllWallpaperCard = ({
   );
 };
 
-const AllWallpapersSection = ({
-  data,
-  onPressItem,
-}: {
-  data: Wallpaper[];
-  onPressItem: (item: Wallpaper) => void;
-}) => {
-  return (
-    <View style={styles.allSection}>
-      <View style={styles.sectionHeader}>
-        <View>
-          <Text style={styles.sectionTitle}>All Wallpapers</Text>
-          <Text style={styles.sectionSubtitle}>
-            {data.length ? `${data.length} wallpapers available` : 'Latest uploads'}
-          </Text>
-        </View>
-      </View>
-
-      {data.length ? (
-        <View style={styles.allGrid}>
-          {data.map((item, index) => (
-            <AllWallpaperCard
-              key={item.id}
-              item={item}
-              index={index}
-              onPress={() => onPressItem(item)}
-            />
-          ))}
-        </View>
-      ) : (
-        <View style={styles.emptyAllBox}>
-          <Ionicons
-            name="images-outline"
-            size={28}
-            color={colors.textSecondary}
-          />
-          <Text style={styles.emptyAllText}>No wallpapers found.</Text>
-        </View>
-      )}
-    </View>
-  );
-};
+// ================= HOME SCREEN =================
 
 const HomeScreen = () => {
   const navigation = useNavigation<any>();
 
   const heroScrollX = useRef(new Animated.Value(0)).current;
-  const trendScrollX = useRef(new Animated.Value(0)).current;
 
   const [activeHero, setActiveHero] = useState(0);
-  const [activeTrend, setActiveTrend] = useState(0);
+
   const [featured, setFeatured] = useState<Wallpaper[]>([]);
-  const [trending, setTrending] = useState<Wallpaper[]>([]);
+
   const [allWallpapers, setAllWallpapers] = useState<Wallpaper[]>([]);
+
   const [loading, setLoading] = useState(true);
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const [offset, setOffset] = useState(0);
+
+  const [hasMore, setHasMore] = useState(true);
 
   useEffect(() => {
     loadHome();
   }, []);
+
+  // ================= FIRST LOAD =================
 
   const loadHome = async () => {
     try {
       setLoading(true);
 
       let heroData: Wallpaper[] = [];
-      let trendData: Wallpaper[] = [];
-      let allData: Wallpaper[] = [];
 
       try {
         const hero = await getFeaturedWallpapers();
+
         heroData = hero?.data ?? [];
       } catch (error) {
-        console.log('HOME FEATURED ERROR', error);
+        console.log('FEATURED ERROR', error);
       }
 
-      try {
-        const trend = await getTrendingWallpapers();
-        trendData = trend?.data ?? [];
-      } catch (error) {
-        console.log('HOME TRENDING ERROR', error);
-      }
+      const allData = await fetchWallpaperPage(INITIAL_PAGE_SIZE, 0);
 
-      try {
-        allData = await fetchAllWallpapers();
-      } catch (error) {
-        console.log('HOME ALL ERROR', error);
-      }
+      const safeHero = heroData.length
+        ? heroData
+        : placeholderWallpapers('hero', 5);
 
-      const fallbackHero = placeholderWallpapers('hero', 5);
-      const fallbackTrending = placeholderWallpapers('trending', 10);
-      const fallbackAll = placeholderWallpapers('all', 20);
+      setFeatured(safeHero);
 
-      const safeHeroData =
-        heroData.length > 0
-          ? heroData
-          : trendData.length > 0
-            ? trendData.slice(0, 5)
-            : fallbackHero;
+      setAllWallpapers(uniqueWallpapers(allData));
 
-      const safeTrendingData =
-        trendData.length > 0
-          ? trendData
-          : heroData.length > 0
-            ? heroData
-            : fallbackTrending;
+      setOffset(allData.length);
 
-      const mergedAllData = uniqueWallpapers([
-        ...allData,
-        ...trendData,
-        ...heroData,
-      ]);
+      setHasMore(allData.length === INITIAL_PAGE_SIZE);
 
-      const safeAllData =
-        mergedAllData.length > 0 ? mergedAllData : fallbackAll;
-
-      const startTrendIndex = Math.min(
-        2,
-        Math.max(0, safeTrendingData.length - 1),
-      );
-
-      setFeatured(safeHeroData);
-      setTrending(safeTrendingData);
-      setAllWallpapers(safeAllData);
       setActiveHero(0);
-      setActiveTrend(startTrendIndex);
 
       heroScrollX.setValue(0);
-      trendScrollX.setValue(startTrendIndex * TREND_SNAP);
     } catch (error) {
-      console.log('HOME LOAD ERROR', error);
-
-      setFeatured(placeholderWallpapers('hero', 5));
-      setTrending(placeholderWallpapers('trending', 10));
-      setAllWallpapers(placeholderWallpapers('all', 20));
+      console.log('HOME ERROR', error);
     } finally {
       setLoading(false);
     }
   };
 
+  // ================= REFRESH =================
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+
+    await loadHome();
+
+    setRefreshing(false);
+  };
+
+  // ================= LOAD MORE =================
+
+  const loadMoreWallpapers = async () => {
+    if (loadingMore || !hasMore) return;
+
+    try {
+      setLoadingMore(true);
+
+      const next = await fetchWallpaperPage(
+        NEXT_PAGE_SIZE,
+
+        offset,
+      );
+
+      setAllWallpapers(prev => uniqueWallpapers([...prev, ...next]));
+
+      setOffset(prev => prev + next.length);
+
+      if (next.length < NEXT_PAGE_SIZE) {
+        setHasMore(false);
+      }
+    } catch (error) {
+      console.log('LOAD MORE ERROR', error);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // ================= EVENTS =================
+
   const onHeroScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const idx = Math.round(e.nativeEvent.contentOffset.x / HERO_SNAP);
+
     setActiveHero(Math.max(0, Math.min(idx, featured.length - 1)));
   };
 
-  const onTrendScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const idx = Math.round(e.nativeEvent.contentOffset.x / TREND_SNAP);
-    setActiveTrend(Math.max(0, Math.min(idx, trending.length - 1)));
-  };
-
   const openWallpaper = (wallpaper: Wallpaper) => {
-    navigation.navigate('WallpaperDetails', { wallpaper });
+    navigation.navigate('WallpaperDetails', {
+      wallpaper,
+    });
   };
 
   const openWallpaperCategory = (wallpaper: Wallpaper) => {
     const category = getWallpaperCategoryForNavigation(wallpaper);
 
-    if (!category?.slug) {
-      console.log('No category linked to this wallpaper');
-      return;
-    }
+    if (!category?.slug) return;
 
-    navigation.navigate('CategoryDetail', { category });
+    navigation.navigate('CategoryDetail', {
+      category,
+    });
   };
+
+  // ================= LOADER =================
 
   if (loading) {
     return (
@@ -1018,51 +829,75 @@ const HomeScreen = () => {
     <View style={styles.root}>
       <MeshBackground variant="home" />
 
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <ScrollView
+      <SafeAreaView
+        style={{
+          flex: 1,
+        }}
+        edges={['top']}
+      >
+        <FlatList
+          data={allWallpapers}
+          keyExtractor={item => item.id}
+          numColumns={2}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
-        >
-          <HomeTopHeader navigation={navigation} />
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          ListHeaderComponent={
+            <>
+              <HomeTopHeader navigation={navigation} />
 
-          <HeroSmoothCarousel
-            data={featured}
-            scrollX={heroScrollX}
-            activeIndex={activeHero}
-            onMomentumEnd={onHeroScrollEnd}
-            onPressItem={openWallpaper}
-            onExploreCategory={openWallpaperCategory}
-          />
+              <HeroSmoothCarousel
+                data={featured}
+                scrollX={heroScrollX}
+                activeIndex={activeHero}
+                onMomentumEnd={onHeroScrollEnd}
+                onPressItem={openWallpaper}
+                onExploreCategory={openWallpaperCategory}
+              />
 
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={styles.sectionTitle}>Trending Hub</Text>
-              <Text style={styles.sectionSubtitle}>
-                Swipe the stack to explore
-              </Text>
+              <View style={styles.sectionHeader}>
+                <View>
+                  <Text style={styles.sectionTitle}>All Wallpapers</Text>
+
+                  <Text style={styles.sectionSubtitle}>
+                    {allWallpapers.length
+                      ? `${allWallpapers.length} wallpapers available`
+                      : 'Latest uploads'}
+                  </Text>
+                </View>
+              </View>
+            </>
+          }
+          renderItem={({ item, index }) => (
+            <View
+              style={{
+                marginLeft: index % 2 === 0 ? spacing.xl : ALL_GRID_GAP,
+
+                marginBottom: ALL_GRID_GAP,
+              }}
+            >
+              <AllWallpaperCard
+                item={item}
+                index={index}
+                onPress={() => openWallpaper(item)}
+              />
             </View>
-          </View>
-
-          <View style={styles.filterRow}>
-            <TrendFilterChip label="All" active />
-            <TrendFilterChip label="Nature" />
-            <TrendFilterChip label="City" />
-            <TrendFilterChip label="Abstract" />
-          </View>
-
-          <TrendingStackSlider
-            data={trending}
-            scrollX={trendScrollX}
-            activeIndex={activeTrend}
-            onMomentumEnd={onTrendScrollEnd}
-            onPressItem={openWallpaper}
-          />
-
-          <AllWallpapersSection
-            data={allWallpapers}
-            onPressItem={openWallpaper}
-          />
-        </ScrollView>
+          )}
+          onEndReached={loadMoreWallpapers}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={
+            loadingMore ? (
+              <ActivityIndicator
+                style={{
+                  margin: 20,
+                }}
+                color={colors.textPrimary}
+              />
+            ) : null
+          }
+        />
       </SafeAreaView>
     </View>
   );
@@ -1075,21 +910,26 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.base,
   },
+
   loadingRoot: {
     flex: 1,
     backgroundColor: colors.base,
     justifyContent: 'center',
     alignItems: 'center',
   },
+
   scrollContent: {
     paddingBottom: 90,
   },
+
+  // ================= HEADER =================
 
   homeHeader: {
     paddingHorizontal: spacing.xl,
     paddingTop: 0,
     paddingBottom: 0,
   },
+
   homeActionRow: {
     height: 72,
     flexDirection: 'row',
@@ -1098,18 +938,21 @@ const styles = StyleSheet.create({
     overflow: 'visible',
     marginBottom: -8,
   },
+
   homeLogoLeft: {
     width: 175,
     height: 120,
     marginLeft: -18,
     marginTop: 8,
   },
+
   homeRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     zIndex: 5,
   },
+
   homePremiumButton: {
     width: 38,
     height: 38,
@@ -1119,6 +962,7 @@ const styles = StyleSheet.create({
     overflow: 'visible',
     backgroundColor: 'transparent',
   },
+
   homeProIconWrap: {
     width: 36,
     height: 36,
@@ -1127,10 +971,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
+
   homeProIcon: {
     width: 36,
     height: 36,
   },
+
   homeProShine: {
     position: 'absolute',
     top: -12,
@@ -1138,9 +984,11 @@ const styles = StyleSheet.create({
     width: 22,
     opacity: 0.95,
   },
+
   homeProShineGradient: {
     flex: 1,
   },
+
   homeRightButton: {
     width: 46,
     height: 46,
@@ -1148,6 +996,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 5,
   },
+
   homeRoundButton: {
     width: 46,
     height: 46,
@@ -1160,18 +1009,23 @@ const styles = StyleSheet.create({
     backgroundColor: colors.glassFill,
   },
 
+  // ================= HERO =================
+
   heroCarouselWrap: {
     marginTop: spacing.xs,
   },
+
   heroCarouselContent: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xs,
     paddingBottom: 0,
   },
+
   heroCarouselCard: {
     width: HERO_W,
     height: HERO_H,
   },
+
   heroCarouselDots: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -1179,6 +1033,7 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: spacing.xs,
   },
+
   heroCard: {
     width: HERO_W,
     height: HERO_H,
@@ -1187,14 +1042,17 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
   },
+
   heroPressed: {
     opacity: 0.92,
   },
+
   heroImage: {
     flex: 1,
     justifyContent: 'space-between',
     backgroundColor: colors.baseElevated,
   },
+
   qualityBadge: {
     position: 'absolute',
     top: 14,
@@ -1207,23 +1065,25 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
     zIndex: 10,
-    elevation: 10,
   },
+
   qualityText: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 14,
-    lineHeight: 16,
   },
+
   qualitySub: {
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
     fontSize: 8,
     letterSpacing: 1,
   },
+
   heroContent: {
     padding: spacing.xl,
   },
+
   tagPill: {
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(0,0,0,0.45)',
@@ -1232,6 +1092,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     marginBottom: spacing.md,
   },
+
   tagText: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
@@ -1239,10 +1100,12 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
+
   heroTitle: {
     color: colors.textPrimary,
     ...typography.heroTitle,
   },
+
   heroSubtitle: {
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
@@ -1250,17 +1113,20 @@ const styles = StyleSheet.create({
     marginTop: 4,
     maxWidth: '78%',
   },
+
   heroFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: spacing.xl,
   },
+
   likeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
+
   likeText: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
@@ -1273,10 +1139,13 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: colors.textTertiary,
   },
+
   dotActive: {
     width: 18,
     backgroundColor: colors.textPrimary,
   },
+
+  // ================= SECTION =================
 
   sectionHeader: {
     flexDirection: 'row',
@@ -1286,10 +1155,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
+
   sectionTitle: {
     color: colors.textPrimary,
     ...typography.sectionTitle,
   },
+
   sectionSubtitle: {
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
@@ -1297,149 +1168,8 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
-  filterRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    paddingHorizontal: spacing.xl,
-    marginBottom: 0,
-  },
-  filterChip: {
-    paddingHorizontal: 17,
-    paddingVertical: 9,
-    borderRadius: radius.pill,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.glassBorderSoft,
-    backgroundColor: colors.glassFill,
-  },
-  filterChipActive: {
-    borderColor: colors.glassBorder,
-    backgroundColor: colors.glassFillStrong,
-  },
-  filterChipText: {
-    color: colors.textSecondary,
-    fontFamily: fontFamily.semiBold,
-    fontSize: 13,
-  },
-  filterChipTextActive: {
-    color: colors.textPrimary,
-  },
+  // ================= ALL WALLPAPERS =================
 
-  trendStackWrap: {
-    height: TREND_CARD_H + 42,
-    marginTop: 0,
-  },
-  trendStackList: {
-    overflow: 'visible',
-  },
-  trendStackContent: {
-    paddingHorizontal: TREND_SIDE_PADDING,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
-  },
-  trendStackSlot: {
-    width: TREND_SNAP,
-    height: TREND_CARD_H + 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'visible',
-    position: 'relative',
-  },
-  trendStackCardShell: {
-    width: TREND_CARD_W,
-    height: TREND_CARD_H,
-    borderRadius: radius.lg,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.glassBorder,
-    backgroundColor: colors.baseElevated,
-    shadowColor: colors.shadow,
-    shadowOpacity: 0.45,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 14 },
-    elevation: 0,
-  },
-  trendSoftBlurLayer: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    borderRadius: radius.lg,
-    overflow: 'hidden',
-  },
-  trendSoftBlur: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-  },
-  trendSoftFadeLayer: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    borderRadius: radius.lg,
-    backgroundColor: 'rgba(8,8,18,0.48)',
-  },
-  trendPressable: {
-    flex: 1,
-  },
-  trendPressed: {
-    opacity: 0.86,
-  },
-  trendStackImage: {
-    flex: 1,
-    justifyContent: 'space-between',
-    backgroundColor: colors.baseElevated,
-  },
-  trendStackTop: {
-    alignItems: 'flex-start',
-    padding: spacing.md,
-  },
-  trendingBadge: {
-    borderRadius: radius.pill,
-    overflow: 'hidden',
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.glassBorderSoft,
-  },
-  trendingBadgeText: {
-    color: colors.textPrimary,
-    fontFamily: fontFamily.semiBold,
-    fontSize: 12,
-  },
-  trendStackBottom: {
-    alignItems: 'center',
-    paddingBottom: spacing.md,
-  },
-  trendLikePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  trendLikes: {
-    color: colors.textPrimary,
-    fontFamily: fontFamily.semiBold,
-    fontSize: 13,
-  },
-
-  allSection: {
-    marginTop: 0,
-  },
-  allGrid: {
-    paddingHorizontal: spacing.xl,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: ALL_GRID_GAP,
-  },
   allWallpaperCard: {
     width: ALL_GRID_CARD_W,
     height: ALL_GRID_CARD_H,
@@ -1449,19 +1179,27 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
   },
+
   allWallpaperPressed: {
     opacity: 0.88,
-    transform: [{ scale: 0.98 }],
+    transform: [
+      {
+        scale: 0.98,
+      },
+    ],
   },
+
   allWallpaperImage: {
     flex: 1,
     justifyContent: 'space-between',
     backgroundColor: colors.baseElevated,
   },
+
   allWallpaperTop: {
     alignItems: 'flex-start',
     padding: spacing.sm,
   },
+
   allQualityChip: {
     borderRadius: radius.pill,
     overflow: 'hidden',
@@ -1470,20 +1208,24 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorderSoft,
   },
+
   allQualityText: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 11,
   },
+
   allWallpaperBottom: {
     padding: spacing.sm,
   },
+
   allWallpaperTitle: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 13,
     marginBottom: 6,
   },
+
   allWallpaperMeta: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
@@ -1494,25 +1236,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
+
   allWallpaperMetaText: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 11,
-  },
-  emptyAllBox: {
-    marginHorizontal: spacing.xl,
-    height: 150,
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.glassFill,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.glassBorderSoft,
-  },
-  emptyAllText: {
-    color: colors.textSecondary,
-    fontFamily: fontFamily.semiBold,
-    fontSize: 14,
   },
 });
