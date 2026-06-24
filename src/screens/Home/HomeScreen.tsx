@@ -237,11 +237,18 @@ const placeholderWallpapers = (prefix: string, count: number): Wallpaper[] =>
 
 // ================= PAGINATION API =================
 
-const fetchWallpaperPage = async (limit: number, offset: number) => {
+// ================= PAGINATION API =================
+
+const fetchWallpaperPage = async (
+  limit: number,
+  offset: number,
+): Promise<Wallpaper[]> => {
   try {
     const res = await getWallpapers(limit, offset);
 
-    return res?.data ?? [];
+    console.log('WALLPAPER RESPONSE', res);
+
+    return Array.isArray(res) ? res : [];
   } catch (error) {
     console.log('HOME WALLPAPER ERROR', error);
 
@@ -841,6 +848,10 @@ const HomeScreen = () => {
           numColumns={2}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          columnWrapperStyle={{
+            paddingHorizontal: spacing.xl,
+            gap: ALL_GRID_GAP,
+          }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
@@ -873,8 +884,8 @@ const HomeScreen = () => {
           renderItem={({ item, index }) => (
             <View
               style={{
-                marginLeft: index % 2 === 0 ? spacing.xl : ALL_GRID_GAP,
-
+                width: '50%',
+                alignItems: 'center',
                 marginBottom: ALL_GRID_GAP,
               }}
             >
