@@ -23,7 +23,6 @@ import MeshBackground from '../../components/MeshBackground';
 import Button from '../../components/Button';
 
 import { colors } from '../../styles/colors';
-import { typography, fontFamily } from '../../styles/typography';
 import { spacing, radius, SCREEN } from '../../utils/constants';
 
 import API from '../../services/api';
@@ -42,14 +41,11 @@ const HERO_H = 480;
 const HERO_GAP = spacing.md;
 const HERO_SNAP = HERO_W + HERO_GAP;
 
-const ALL_GRID_GAP = spacing.md;
-const ALL_GRID_CARD_W = (SCREEN.width - spacing.xl * 2 - ALL_GRID_GAP) / 2;
-const ALL_GRID_CARD_H = ALL_GRID_CARD_W * 1.52;
+const HOME_WALLPAPER_LIMIT = 10;
 
-// Keep this 30 because backend max limit is 50.
-// 80 was making Home API fail.
-const ALL_PAGE_SIZE = 30;
-const MAX_ALL_PAGES = 10;
+const GRID_GAP = spacing.md;
+const CARD_W = (SCREEN.width - spacing.xl * 2 - GRID_GAP) / 2;
+const CARD_H = CARD_W * 1.52;
 
 const API_ORIGIN = String(API.defaults.baseURL || '').replace(/\/api\/?$/, '');
 
@@ -150,49 +146,14 @@ const getWallpaperCategoryForNavigation = (wallpaper: Wallpaper) => {
   };
 };
 
-const byNewest = (a: Wallpaper, b: Wallpaper) => {
-  const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-  const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-  return tb - ta;
-};
-
 const uniqueWallpapers = (items: Wallpaper[]) => {
   const seen = new Set<string>();
 
-  return items
-    .filter(item => {
-      if (!item?.id || seen.has(item.id)) return false;
-      seen.add(item.id);
-      return true;
-    })
-    .sort(byNewest);
-};
-
-const fetchAllWallpapers = async () => {
-  try {
-    let offset = 0;
-    let allItems: Wallpaper[] = [];
-
-    for (let page = 0; page < MAX_ALL_PAGES; page += 1) {
-      const res = await getWallpapers(ALL_PAGE_SIZE, offset);
-      const batch = res?.data ?? [];
-
-      allItems = [...allItems, ...batch];
-
-      if (batch.length < ALL_PAGE_SIZE) break;
-
-      offset += batch.length;
-    }
-
-    return uniqueWallpapers(allItems);
-  } catch (error) {
-    console.log(
-      'HOME ALL WALLPAPERS ERROR',
-      (error as any)?.response?.data || (error as any)?.message || error,
-    );
-
-    return [];
-  }
+  return items.filter(item => {
+    if (!item?.id || seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
 };
 
 const ShinyProIcon = () => {
@@ -302,7 +263,6 @@ const HeroCard = ({
   onExploreCategory,
 }: {
   item: Wallpaper;
-  index: number;
   onPress?: () => void;
   onExploreCategory?: () => void;
 }) => {
@@ -483,7 +443,6 @@ const HeroSmoothCarousel = ({
             >
               <HeroCard
                 item={item}
-                index={index}
                 onPress={() => onPressItem(item)}
                 onExploreCategory={() => onExploreCategory(item)}
               />
@@ -504,12 +463,11 @@ const HeroSmoothCarousel = ({
   );
 };
 
-const AllWallpaperCard = ({
+const WallpaperCard = ({
   item,
   onPress,
 }: {
   item: Wallpaper;
-  index: number;
   onPress: () => void;
 }) => {
   const [imageFailed, setImageFailed] = useState(false);
@@ -520,9 +478,9 @@ const AllWallpaperCard = ({
       <Pressable
         onPress={onPress}
         style={({ pressed }) => [
-          styles.allWallpaperCard,
-          styles.missingAllCard,
-          pressed && styles.allWallpaperPressed,
+          styles.wallpaperCard,
+          styles.missingCard,
+          pressed && styles.wallpaperPressed,
         ]}
       >
         <Ionicons
@@ -541,13 +499,13 @@ const AllWallpaperCard = ({
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
-        styles.allWallpaperCard,
-        pressed && styles.allWallpaperPressed,
+        styles.wallpaperCard,
+        pressed && styles.wallpaperPressed,
       ]}
     >
       <ImageBackground
         source={{ uri: image }}
-        style={styles.allWallpaperImage}
+        style={styles.wallpaperImage}
         imageStyle={{ borderRadius: radius.lg }}
         resizeMode="cover"
         onError={() => setImageFailed(true)}
@@ -561,24 +519,24 @@ const AllWallpaperCard = ({
           style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
         />
 
-        <View style={styles.allWallpaperTop}>
-          <BlurView intensity={28} tint="dark" style={styles.allQualityChip}>
-            <Text style={styles.allQualityText}>{item.quality || '4K'}</Text>
+        <View style={styles.wallpaperTop}>
+          <BlurView intensity={28} tint="dark" style={styles.qualityChip}>
+            <Text style={styles.qualityChipText}>{item.quality || '4K'}</Text>
           </BlurView>
         </View>
 
-        <View style={styles.allWallpaperBottom}>
-          <Text style={styles.allWallpaperTitle} numberOfLines={1}>
+        <View style={styles.wallpaperBottom}>
+          <Text style={styles.wallpaperTitle} numberOfLines={1}>
             {item.title || 'Wallpaper'}
           </Text>
 
-          <View style={styles.allWallpaperMeta}>
+          <View style={styles.wallpaperMeta}>
             <Ionicons
               name="heart-outline"
               size={13}
               color={colors.textPrimary}
             />
-            <Text style={styles.allWallpaperMetaText}>
+            <Text style={styles.wallpaperMetaText}>
               {formatLikes(item.likes)}
             </Text>
           </View>
@@ -588,12 +546,14 @@ const AllWallpaperCard = ({
   );
 };
 
-const AllWallpapersSection = ({
+const AllWallpapersPreview = ({
   data,
   onPressItem,
+  onViewAll,
 }: {
   data: Wallpaper[];
   onPressItem: (item: Wallpaper) => void;
+  onViewAll: () => void;
 }) => {
   return (
     <View style={styles.allSection}>
@@ -601,46 +561,57 @@ const AllWallpapersSection = ({
         <View>
           <Text style={styles.sectionTitle}>All Wallpapers</Text>
           <Text style={styles.sectionSubtitle}>
-            {data.length
-              ? `${data.length} wallpapers available`
-              : 'Latest uploads'}
+            {data.length ? 'Showing latest 10 wallpapers' : 'Latest uploads'}
           </Text>
         </View>
       </View>
 
       {data.length ? (
-        <View style={styles.allGrid}>
-          {data.map((item, index) => (
-            <AllWallpaperCard
+        <View style={styles.grid}>
+          {data.map(item => (
+            <WallpaperCard
               key={item.id}
               item={item}
-              index={index}
               onPress={() => onPressItem(item)}
             />
           ))}
         </View>
       ) : (
-        <View style={styles.emptyAllBox}>
+        <View style={styles.emptyBox}>
           <Ionicons
             name="images-outline"
             size={28}
             color={colors.textSecondary}
           />
-          <Text style={styles.emptyAllText}>No wallpapers found.</Text>
+          <Text style={styles.emptyText}>No wallpapers found.</Text>
         </View>
       )}
+
+      <Pressable
+        onPress={onViewAll}
+        style={({ pressed }) => [
+          styles.viewAllButton,
+          pressed && styles.viewAllButtonPressed,
+        ]}
+      >
+        <Text style={styles.viewAllText}>View All Wallpapers</Text>
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color={colors.textPrimary}
+        />
+      </Pressable>
     </View>
   );
 };
 
 const HomeScreen = () => {
   const navigation = useNavigation<any>();
-
   const heroScrollX = useRef(new Animated.Value(0)).current;
 
   const [activeHero, setActiveHero] = useState(0);
   const [featured, setFeatured] = useState<Wallpaper[]>([]);
-  const [allWallpapers, setAllWallpapers] = useState<Wallpaper[]>([]);
+  const [homeWallpapers, setHomeWallpapers] = useState<Wallpaper[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -653,7 +624,7 @@ const HomeScreen = () => {
       setLoading(true);
 
       let heroData: Wallpaper[] = [];
-      let allData: Wallpaper[] = [];
+      let latestData: Wallpaper[] = [];
 
       try {
         const hero = await getFeaturedWallpapers();
@@ -666,21 +637,25 @@ const HomeScreen = () => {
       }
 
       try {
-        allData = await fetchAllWallpapers();
+        const latest = await getWallpapers(HOME_WALLPAPER_LIMIT, 0);
+        latestData = latest?.data ?? [];
       } catch (error) {
         console.log(
-          'HOME ALL ERROR',
+          'HOME WALLPAPERS ERROR',
           (error as any)?.response?.data || (error as any)?.message || error,
         );
       }
 
-      const mergedAllData = uniqueWallpapers([...allData, ...heroData]);
+      const safeLatestData = uniqueWallpapers(latestData).slice(
+        0,
+        HOME_WALLPAPER_LIMIT,
+      );
 
       const safeHeroData =
-        heroData.length > 0 ? heroData : mergedAllData.slice(0, 5);
+        heroData.length > 0 ? heroData : safeLatestData.slice(0, 5);
 
       setFeatured(safeHeroData);
-      setAllWallpapers(mergedAllData);
+      setHomeWallpapers(safeLatestData);
       setActiveHero(0);
       heroScrollX.setValue(0);
     } catch (error) {
@@ -690,7 +665,7 @@ const HomeScreen = () => {
       );
 
       setFeatured([]);
-      setAllWallpapers([]);
+      setHomeWallpapers([]);
     } finally {
       setLoading(false);
     }
@@ -744,9 +719,10 @@ const HomeScreen = () => {
             onExploreCategory={openWallpaperCategory}
           />
 
-          <AllWallpapersSection
-            data={allWallpapers}
+          <AllWallpapersPreview
+            data={homeWallpapers}
             onPressItem={openWallpaper}
+            onViewAll={() => navigation.navigate('AllWallpapers')}
           />
         </ScrollView>
       </SafeAreaView>
@@ -768,9 +744,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scrollContent: {
-    paddingBottom: 90,
+    paddingBottom: 120,
   },
-
   homeHeader: {
     paddingHorizontal: spacing.xl,
     paddingTop: 0,
@@ -845,7 +820,6 @@ const styles = StyleSheet.create({
     borderColor: colors.glassBorder,
     backgroundColor: colors.glassFill,
   },
-
   heroCarouselWrap: {
     marginTop: spacing.xs,
   },
@@ -901,13 +875,13 @@ const styles = StyleSheet.create({
   },
   qualityText: {
     color: colors.textPrimary,
-    fontFamily: fontFamily.semiBold,
+    fontWeight: '800',
     fontSize: 14,
     lineHeight: 16,
   },
   qualitySub: {
     color: colors.textSecondary,
-    fontFamily: fontFamily.semiBold,
+    fontWeight: '700',
     fontSize: 8,
     letterSpacing: 1,
   },
@@ -924,19 +898,22 @@ const styles = StyleSheet.create({
   },
   tagText: {
     color: colors.textPrimary,
-    fontFamily: fontFamily.semiBold,
     fontSize: 11,
+    fontWeight: '700',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
   heroTitle: {
     color: colors.textPrimary,
-    ...typography.heroTitle,
+    fontSize: 30,
+    lineHeight: 36,
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
   heroSubtitle: {
     color: colors.textSecondary,
-    fontFamily: fontFamily.semiBold,
     fontSize: 15,
+    fontWeight: '600',
     marginTop: 4,
     maxWidth: '78%',
   },
@@ -953,10 +930,9 @@ const styles = StyleSheet.create({
   },
   likeText: {
     color: colors.textPrimary,
-    fontFamily: fontFamily.semiBold,
+    fontWeight: '700',
     fontSize: 14,
   },
-
   dot: {
     width: 6,
     height: 6,
@@ -967,7 +943,6 @@ const styles = StyleSheet.create({
     width: 18,
     backgroundColor: colors.textPrimary,
   },
-
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -978,43 +953,44 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: colors.textPrimary,
-    ...typography.sectionTitle,
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: -0.3,
   },
   sectionSubtitle: {
     color: colors.textSecondary,
-    fontFamily: fontFamily.semiBold,
     fontSize: 13,
+    fontWeight: '600',
     marginTop: 3,
   },
-
   allSection: {
     marginTop: spacing.md,
   },
-  allGrid: {
+  grid: {
     paddingHorizontal: spacing.xl,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: ALL_GRID_GAP,
+    gap: GRID_GAP,
   },
-  allWallpaperCard: {
-    width: ALL_GRID_CARD_W,
-    height: ALL_GRID_CARD_H,
+  wallpaperCard: {
+    width: CARD_W,
+    height: CARD_H,
     borderRadius: radius.lg,
     overflow: 'hidden',
     backgroundColor: colors.baseElevated,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
   },
-  allWallpaperPressed: {
+  wallpaperPressed: {
     opacity: 0.88,
     transform: [{ scale: 0.98 }],
   },
-  allWallpaperImage: {
+  wallpaperImage: {
     flex: 1,
     justifyContent: 'space-between',
     backgroundColor: colors.baseElevated,
   },
-  missingAllCard: {
+  missingCard: {
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.md,
@@ -1022,15 +998,15 @@ const styles = StyleSheet.create({
   },
   missingImageText: {
     color: colors.textSecondary,
-    fontFamily: fontFamily.semiBold,
+    fontWeight: '700',
     fontSize: 12,
     textAlign: 'center',
   },
-  allWallpaperTop: {
+  wallpaperTop: {
     alignItems: 'flex-start',
     padding: spacing.sm,
   },
-  allQualityChip: {
+  qualityChip: {
     borderRadius: radius.pill,
     overflow: 'hidden',
     paddingHorizontal: 9,
@@ -1038,21 +1014,21 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorderSoft,
   },
-  allQualityText: {
+  qualityChipText: {
     color: colors.textPrimary,
-    fontFamily: fontFamily.semiBold,
+    fontWeight: '700',
     fontSize: 11,
   },
-  allWallpaperBottom: {
+  wallpaperBottom: {
     padding: spacing.sm,
   },
-  allWallpaperTitle: {
+  wallpaperTitle: {
     color: colors.textPrimary,
-    fontFamily: fontFamily.semiBold,
+    fontWeight: '700',
     fontSize: 13,
     marginBottom: 6,
   },
-  allWallpaperMeta: {
+  wallpaperMeta: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
@@ -1062,12 +1038,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
-  allWallpaperMetaText: {
+  wallpaperMetaText: {
     color: colors.textPrimary,
-    fontFamily: fontFamily.semiBold,
+    fontWeight: '700',
     fontSize: 11,
   },
-  emptyAllBox: {
+  emptyBox: {
     marginHorizontal: spacing.xl,
     height: 150,
     borderRadius: radius.lg,
@@ -1078,9 +1054,32 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorderSoft,
   },
-  emptyAllText: {
+  emptyText: {
     color: colors.textSecondary,
-    fontFamily: fontFamily.semiBold,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  viewAllButton: {
+    alignSelf: 'center',
+    marginTop: spacing.xl,
+    marginBottom: spacing.md,
+    paddingHorizontal: 22,
+    paddingVertical: 13,
+    borderRadius: radius.pill,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.glassFillStrong,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorder,
+  },
+  viewAllButtonPressed: {
+    opacity: 0.78,
+    transform: [{ scale: 0.98 }],
+  },
+  viewAllText: {
+    color: colors.textPrimary,
+    fontWeight: '700',
     fontSize: 14,
   },
 });
