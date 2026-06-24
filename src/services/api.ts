@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API = axios.create({
   // baseURL:'http://localhost:5000/api',
-  baseURL:'http://192.168.1.6:5000/api',
+  baseURL:'https://backend-trail-6u5m.onrender.com/api',
   timeout:10000,
 });
 
