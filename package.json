@@ -5,8 +5,9 @@
   "scripts": {
     "lint": "eslint .",
     "test": "jest",
-    "start": "expo start",
+    "start": "expo start --dev-client",
     "android": "expo run:android",
+    "android:release": "expo run:android --variant release",
     "ios": "expo run:ios"
   },
   "dependencies": {
