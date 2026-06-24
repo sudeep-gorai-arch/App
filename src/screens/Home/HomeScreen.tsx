@@ -244,11 +244,35 @@ const fetchWallpaperPage = async (
   offset: number,
 ): Promise<Wallpaper[]> => {
   try {
-    const res = await getWallpapers(limit, offset);
+    const res: any = await getWallpapers(limit, offset);
 
-    console.log('WALLPAPER RESPONSE', res);
+    console.log('WALLPAPER RESPONSE', JSON.stringify(res, null, 2));
 
-    return Array.isArray(res) ? res : [];
+    // CASE 1:
+    // getWallpapers returns array
+    if (Array.isArray(res)) {
+      return res;
+    }
+
+    // CASE 2:
+    // axios response
+    if (Array.isArray(res?.data)) {
+      return res.data;
+    }
+
+    // CASE 3:
+    // paginated response
+    if (Array.isArray(res?.data?.data)) {
+      return res.data.data;
+    }
+
+    // CASE 4:
+    // { wallpapers: [] }
+    if (Array.isArray(res?.wallpapers)) {
+      return res.wallpapers;
+    }
+
+    return [];
   } catch (error) {
     console.log('HOME WALLPAPER ERROR', error);
 
@@ -884,8 +908,7 @@ const HomeScreen = () => {
           renderItem={({ item, index }) => (
             <View
               style={{
-                width: '50%',
-                alignItems: 'center',
+                flex: 1,
                 marginBottom: ALL_GRID_GAP,
               }}
             >
