@@ -11,14 +11,16 @@
             "photo"
           ]
         }
-      ]
+      ],
+      "expo-secure-store",
+      "expo-web-browser",
+      "@react-native-google-signin/google-signin"
     ],
     "name": "FlexiWalls",
     "slug": "flexiwalls",
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "flexiwalls",
-    
     "android": {
       "package": "com.flexiwalls.app",
       "permissions": [

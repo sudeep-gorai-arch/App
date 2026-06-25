@@ -4,6 +4,7 @@ import {
   View,
   Text,
   ScrollView,
+  RefreshControl,
   Image,
   ImageBackground,
   Pressable,
@@ -483,11 +484,7 @@ const WallpaperCard = ({
           pressed && styles.wallpaperPressed,
         ]}
       >
-        <Ionicons
-          name="image-outline"
-          size={26}
-          color={colors.textSecondary}
-        />
+        <Ionicons name="image-outline" size={26} color={colors.textSecondary} />
         <Text style={styles.missingImageText} numberOfLines={2}>
           Image URL missing
         </Text>
@@ -511,11 +508,7 @@ const WallpaperCard = ({
         onError={() => setImageFailed(true)}
       >
         <LinearGradient
-          colors={[
-            'rgba(0,0,0,0.05)',
-            'rgba(0,0,0,0)',
-            'rgba(5,4,14,0.82)',
-          ]}
+          colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0)', 'rgba(5,4,14,0.82)']}
           style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
         />
 
@@ -595,11 +588,7 @@ const AllWallpapersPreview = ({
         ]}
       >
         <Text style={styles.viewAllText}>View All Wallpapers</Text>
-        <Ionicons
-          name="chevron-forward"
-          size={18}
-          color={colors.textPrimary}
-        />
+        <Ionicons name="chevron-forward" size={18} color={colors.textPrimary} />
       </Pressable>
     </View>
   );
@@ -613,15 +602,24 @@ const HomeScreen = () => {
   const [featured, setFeatured] = useState<Wallpaper[]>([]);
   const [homeWallpapers, setHomeWallpapers] = useState<Wallpaper[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+
+    await loadHome(true);
+  };
 
   useEffect(() => {
     loadHome();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadHome = async () => {
+  const loadHome = async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (!isRefresh) {
+        setLoading(true);
+      }
 
       let heroData: Wallpaper[] = [];
       let latestData: Wallpaper[] = [];
@@ -668,6 +666,7 @@ const HomeScreen = () => {
       setHomeWallpapers([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -707,6 +706,13 @@ const HomeScreen = () => {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.textPrimary}
+            />
+          }
         >
           <HomeTopHeader navigation={navigation} />
 

@@ -57,4 +57,6 @@ export type RootStackParamList = {
 
   About: undefined;
 
+  Settings: undefined;
+
 };

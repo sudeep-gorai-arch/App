@@ -5,9 +5,6 @@ import BottomTabs from './BottomTabs';
 import { RootStackParamList } from './RootStackParamList';
 import { colors } from '../styles/colors';
 
-import LoginScreen from '../screens/Login/LoginScreen';
-import SignupScreen from '../screens/SignUp/SignUpScreen';
-
 import PremiumAccessScreen from '../screens/PremiumAccess/PremiumAccessScreen';
 import PaymentScreen from '../screens/Payment/PaymentScreen';
 
@@ -27,6 +24,8 @@ import ManagePremiumScreen from '../screens/ManagePremium/ManagePremiumScreen';
 
 import DownloadsScreen from '../screens/Downloads/DownloadsScreen';
 
+import SettingsScreen from '../screens/Settings/SettingsScreen';
+
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const RootNavigator = () => {
@@ -42,10 +41,6 @@ const RootNavigator = () => {
       }}
     >
       <Stack.Screen name="MainTabs" component={BottomTabs} />
-
-      <Stack.Screen name="Login" component={LoginScreen} />
-
-      <Stack.Screen name="Signup" component={SignupScreen} />
 
       <Stack.Screen name="PremiumAccess" component={PremiumAccessScreen} />
 
@@ -73,6 +68,8 @@ const RootNavigator = () => {
       <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
 
       <Stack.Screen name="Downloads" component={DownloadsScreen} />
+
+      <Stack.Screen name="Settings" component={SettingsScreen} />
     </Stack.Navigator>
   );
 };

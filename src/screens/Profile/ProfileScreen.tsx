@@ -1,197 +1,305 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+
 import {
-  StyleSheet,
   View,
   Text,
+  StyleSheet,
   Image,
   ScrollView,
   Pressable,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
+
 import { LinearGradient } from 'expo-linear-gradient';
+
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import MeshBackground from '../../components/MeshBackground';
 import Card from '../../components/Card';
 
 import { colors, gradients } from '../../styles/colors';
-import { spacing, radius, PROFILE } from '../../utils/constants';
+
+import { spacing, radius } from '../../utils/constants';
+
+import { useAuth } from '../../context/AuthContext';
 
 import { getDownloads } from '../../services/downloadService';
+
 import { Wallpaper } from '../../services/types';
 
-type Nav = {
-  navigate: (name: string) => void;
+type Props = {
+  navigation: any;
 };
 
-const USER = {
-  name: 'Ethan Hunt',
-  email: 'ethanhunt@email.com',
-  tier: 'Premium',
-  avatar: 'https://picsum.photos/seed/acct-ethan/400/400',
-};
+export default function ProfileScreen({ navigation }: Props) {
+  const { user, loading, authLoading, signInGoogle } = useAuth();
 
-const OptionRow = ({
-  icon,
-  title,
-  onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  onPress?: () => void;
-}) => (
-  <Pressable style={styles.option} onPress={onPress}>
-    <Ionicons name={icon} size={22} color={colors.textSecondary} />
+  const [refreshing, setRefreshing] = useState(false);
 
-    <Text style={styles.optionText}>{title}</Text>
+  const [downloads, setDownloads] = useState<string[]>([]);
 
-    <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-  </Pressable>
-);
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours();
 
-const ProfileScreen = ({ navigation }: { navigation: Nav }) => {
-  const [downloads, setDownloads] = useState<string[]>(PROFILE.downloads);
+    if (hour < 12) return 'Good Morning';
 
-  useEffect(() => {
-    loadDownloads();
+    if (hour < 17) return 'Good Afternoon';
+
+    return 'Good Evening';
   }, []);
 
   const loadDownloads = async () => {
+    if (!user) return;
+
     try {
       const res = await getDownloads();
 
-      const imgs = (res?.data ?? [])
-        .map((x: Wallpaper) => x.imageUrl ?? x.thumbnailUrl)
+      const images = (res?.data ?? [])
+        .map((wall: Wallpaper) => wall.imageUrl ?? wall.thumbnailUrl)
         .filter(Boolean) as string[];
 
-      if (imgs.length) {
-        setDownloads(imgs);
-      }
+      setDownloads(images);
     } catch (e) {
       console.log(e);
     }
   };
 
+  useEffect(() => {
+    loadDownloads();
+  }, [user]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+
+    await loadDownloads();
+
+    setRefreshing(false);
+  }, [user]);
+
+  const openPremium = () => {
+    navigation.navigate('ManagePremium');
+  };
+
+  const openSettings = () => {
+    navigation.navigate('Settings');
+  };
+
+  const openDownloads = () => {
+    navigation.navigate('Downloads');
+  };
+
+  const openFavorites = () => {
+    navigation.navigate('Favorites');
+  };
+
+  const openEditProfile = () => {
+    navigation.navigate('EditPersonalInfo');
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loader}>
+        <ActivityIndicator size="large" color={colors.accent} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.root}>
       <MeshBackground variant="profile" />
 
-      <SafeAreaView style={{ flex: 1 }}>
+      <SafeAreaView style={styles.safe}>
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingBottom: 120,
-          }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.accent}
+            />
+          }
+          contentContainerStyle={styles.content}
         >
-          {/* PROFILE */}
+          {/* Header */}
 
-          <View style={styles.avatarWrap}>
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.greeting}>{greeting}</Text>
+
+              <Text style={styles.username}>
+                {user ? user.username : 'Guest'}
+              </Text>
+            </View>
+
+            <Pressable style={styles.settingsButton} onPress={openSettings}>
+              <Ionicons name="settings-outline" size={24} color="#fff" />
+            </Pressable>
+          </View>
+
+          {/* Premium Banner */}
+
+          <Pressable onPress={openPremium}>
             <LinearGradient
               colors={gradients.violetMagenta}
-              style={styles.avatarRing}
+              style={styles.premiumCard}
             >
-              <Image
-                source={{
-                  uri: USER.avatar,
-                }}
-                style={styles.avatar}
-              />
+              <View style={styles.premiumLeft}>
+                <MaterialCommunityIcons
+                  name="crown"
+                  size={32}
+                  color="#FFD54F"
+                />
+
+                <View style={{ marginLeft: 14 }}>
+                  <Text style={styles.premiumTitle}>Go Premium</Text>
+
+                  <Text style={styles.premiumSubtitle}>
+                    Unlimited downloads • 4K Exclusive Wallpapers
+                  </Text>
+                </View>
+              </View>
+
+              <Ionicons name="chevron-forward" size={22} color="#fff" />
             </LinearGradient>
-          </View>
-
-          <Text style={styles.name}>{USER.name}</Text>
-
-          <Text style={styles.email}>{USER.email}</Text>
-
-          <View style={styles.badge}>
-            <MaterialCommunityIcons
-              name="crown"
-              size={15}
-              color={colors.accent}
-            />
-
-            <Text style={styles.badgeText}>{USER.tier} Member</Text>
-          </View>
-
-          {/* EDIT PROFILE */}
-
-          <Card style={styles.card} padding={0} strong>
-            <OptionRow
-              icon="create-outline"
-              title="Edit Profile"
-              onPress={() => navigation.navigate('EditProfile')}
-            />
-          </Card>
-
-          {/* RECENT DOWNLOADS */}
-
-          <Card style={styles.card} padding={spacing.lg} strong>
-            <View style={styles.sectionHead}>
-              <Text style={styles.title}>Recent Downloads</Text>
-
-              <Pressable onPress={() => navigation.navigate('Downloads')}>
-                <Text style={styles.view}>View All</Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.downloadRow}>
-              {downloads
-
-                .slice(0, 5)
-
-                .map((img, index) => (
-                  <Image
-                    key={index}
-                    source={{ uri: img }}
-                    style={styles.thumb}
-                  />
-                ))}
-            </View>
-          </Card>
-
-          {/* ACCOUNT SETTINGS */}
-
-          <Card style={styles.card} padding={0} strong>
-            <OptionRow
-              icon="card-outline"
-              title="Manage Subscription"
-              onPress={() => navigation.navigate('Subscription')}
-            />
-
-            <OptionRow
-              icon="shield-checkmark-outline"
-              title="Privacy & Security"
-              onPress={() => navigation.navigate('PrivacyPolicy')}
-            />
-
-            <OptionRow
-              icon="help-circle-outline"
-              title="Help & Support"
-              onPress={() => navigation.navigate('HelpSupport')}
-            />
-
-            <OptionRow
-              icon="information-circle-outline"
-              title="About"
-              onPress={() => navigation.navigate('About')}
-            />
-          </Card>
-
-          {/* LOGOUT */}
-
-          <Pressable style={styles.logout}>
-            <Ionicons name="log-out-outline" size={22} color="#FF5A6E" />
-
-            <Text style={styles.logoutText}>Logout</Text>
           </Pressable>
+
+          {/* Guest */}
+
+          {!user && (
+            <Card style={styles.card} padding={24} strong>
+              <View style={styles.googleHeader}>
+                <Ionicons
+                  name="cloud-done-outline"
+                  size={48}
+                  color={colors.accent}
+                />
+
+                <Text style={styles.cardTitle}>Sync your Wallpapers</Text>
+
+                <Text style={styles.cardDescription}>
+                  Save favourites, downloads and premium access across all your
+                  devices.
+                </Text>
+              </View>
+
+              <Pressable
+                style={styles.googleButton}
+                disabled={authLoading}
+                onPress={signInGoogle}
+              >
+                {authLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="logo-google" size={22} color="#fff" />
+
+                    <Text style={styles.googleText}>Continue with Google</Text>
+                  </>
+                )}
+              </Pressable>
+            </Card>
+          )}
+
+          {/* Logged User */}
+
+          {user && (
+            <>
+              <Card style={styles.card} padding={20} strong>
+                <View style={styles.profileRow}>
+                  <Image
+                    source={{
+                      uri: user.avatarUrl || 'https://i.pravatar.cc/300',
+                    }}
+                    style={styles.avatar}
+                  />
+
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.profileName}>{user.username}</Text>
+
+                    <Text style={styles.profileEmail}>{user.email}</Text>
+
+                    <View style={styles.memberBadge}>
+                      <MaterialCommunityIcons
+                        name={user.isPremium ? 'crown' : 'account'}
+                        size={14}
+                        color="#FFD54F"
+                      />
+
+                      <Text style={styles.memberText}>
+                        {user.isPremium ? 'Premium Member' : 'Free Member'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Pressable onPress={openEditProfile}>
+                    <Ionicons
+                      name="create-outline"
+                      size={22}
+                      color={colors.textSecondary}
+                    />
+                  </Pressable>
+                </View>
+              </Card>
+
+              {/* Quick Actions */}
+
+              <View style={styles.quickRow}>
+                <Pressable style={styles.quickCard} onPress={openFavorites}>
+                  <Ionicons name="heart" size={28} color="#FF4D6D" />
+
+                  <Text style={styles.quickTitle}>Favorites</Text>
+                </Pressable>
+
+                <Pressable style={styles.quickCard} onPress={openDownloads}>
+                  <Ionicons name="download" size={28} color="#4FC3F7" />
+
+                  <Text style={styles.quickTitle}>Downloads</Text>
+                </Pressable>
+              </View>
+
+              {/* Recent Downloads */}
+
+              <Card style={styles.card} padding={20} strong>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Recent Downloads</Text>
+
+                  <Pressable onPress={openDownloads}>
+                    <Text style={styles.viewAll}>View All</Text>
+                  </Pressable>
+                </View>
+
+                {downloads.length === 0 ? (
+                  <View style={styles.emptyBox}>
+                    <Ionicons
+                      name="download-outline"
+                      size={42}
+                      color={colors.textSecondary}
+                    />
+
+                    <Text style={styles.emptyText}>No downloads yet</Text>
+                  </View>
+                ) : (
+                  <View style={styles.downloadGrid}>
+                    {downloads.slice(0, 4).map((img, index) => (
+                      <Image
+                        key={index}
+                        source={{ uri: img }}
+                        style={styles.thumb}
+                      />
+                    ))}
+                  </View>
+                )}
+              </Card>
+            </>
+          )}
         </ScrollView>
       </SafeAreaView>
     </View>
   );
-};
-
-export default ProfileScreen;
+}
 
 const styles = StyleSheet.create({
   root: {
@@ -199,150 +307,233 @@ const styles = StyleSheet.create({
     backgroundColor: colors.base,
   },
 
-  avatarWrap: {
-    alignSelf: 'center',
-    marginTop: 30,
-  },
-
-  avatarRing: {
-    width: 130,
-
-    height: 130,
-
-    borderRadius: 65,
-
-    padding: 5,
-  },
-
-  avatar: {
-    width: '100%',
-
-    height: '100%',
-
-    borderRadius: 60,
-  },
-
-  name: {
-    color: colors.textPrimary,
-
-    fontSize: 28,
-
-    fontWeight: '800',
-
-    textAlign: 'center',
-
-    marginTop: 20,
-  },
-
-  email: {
-    color: colors.textSecondary,
-
-    textAlign: 'center',
-
-    marginTop: 5,
-  },
-
-  badge: {
-    flexDirection: 'row',
-
-    alignSelf: 'center',
-
-    gap: 6,
-
-    marginTop: 10,
-  },
-
-  badgeText: {
-    color: colors.accent,
-
-    fontWeight: '700',
-  },
-
-  card: {
-    marginHorizontal: spacing.xl,
-
-    marginTop: spacing.xl,
-  },
-
-  option: {
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    padding: 18,
-
-    gap: 15,
-  },
-
-  optionText: {
+  safe: {
     flex: 1,
+  },
 
-    color: colors.textPrimary,
+  loader: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.base,
+  },
 
-    fontSize: 16,
+  content: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
+    paddingBottom: 120,
+  },
 
+  /* ---------- Header ---------- */
+
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+
+  greeting: {
+    color: colors.textSecondary,
+    fontSize: 15,
     fontWeight: '600',
   },
 
-  sectionHead: {
-    flexDirection: 'row',
-
-    justifyContent: 'space-between',
-
-    marginBottom: 15,
+  username: {
+    marginTop: 6,
+    fontSize: 34,
+    fontWeight: '800',
+    color: colors.textPrimary,
   },
 
-  title: {
-    color: colors.textPrimary,
+  settingsButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
-    fontSize: 18,
+  /* ---------- Premium ---------- */
 
+  premiumCard: {
+    borderRadius: 26,
+    padding: 22,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 25,
+  },
+
+  premiumLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+
+  premiumTitle: {
+    color: '#fff',
+    fontSize: 22,
     fontWeight: '800',
   },
 
-  view: {
-    color: colors.accent,
+  premiumSubtitle: {
+    marginTop: 6,
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 14,
+  },
 
+  /* ---------- Card ---------- */
+
+  card: {
+    marginBottom: 22,
+  },
+
+  cardTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginTop: 15,
+  },
+
+  cardDescription: {
+    marginTop: 12,
+    textAlign: 'center',
+    color: colors.textSecondary,
+    lineHeight: 22,
+    fontSize: 15,
+  },
+
+  googleHeader: {
+    alignItems: 'center',
+    marginBottom: 22,
+  },
+
+  googleButton: {
+    height: 58,
+    borderRadius: 18,
+    backgroundColor: '#111',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+  },
+
+  googleText: {
+    color: '#fff',
+    fontSize: 17,
     fontWeight: '700',
   },
 
-  downloadRow: {
-    flexDirection: 'row',
+  /* ---------- Profile ---------- */
 
-    gap: 10,
+  profileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  avatar: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    marginRight: 16,
+  },
+
+  profileName: {
+    color: colors.textPrimary,
+    fontSize: 22,
+    fontWeight: '800',
+  },
+
+  profileEmail: {
+    marginTop: 4,
+    color: colors.textSecondary,
+    fontSize: 14,
+  },
+
+  memberBadge: {
+    marginTop: 10,
+    backgroundColor: 'rgba(255,255,255,.08)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  memberText: {
+    marginLeft: 6,
+    color: '#FFD54F',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+
+  /* ---------- Quick ---------- */
+
+  quickRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 22,
+  },
+
+  quickCard: {
+    width: '48%',
+    backgroundColor: 'rgba(255,255,255,.05)',
+    borderRadius: 22,
+    paddingVertical: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  quickTitle: {
+    color: colors.textPrimary,
+    marginTop: 12,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+
+  /* ---------- Downloads ---------- */
+
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+
+  sectionTitle: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '800',
+  },
+
+  viewAll: {
+    color: colors.accent,
+    fontWeight: '700',
+  },
+
+  downloadGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
 
   thumb: {
-    flex: 1,
-
-    aspectRatio: 0.75,
-
-    borderRadius: 12,
+    width: '23%',
+    aspectRatio: 0.65,
+    borderRadius: 16,
   },
 
-  logout: {
-    margin: spacing.xl,
-
-    padding: 18,
-
-    borderRadius: radius.lg,
-
-    flexDirection: 'row',
-
-    justifyContent: 'center',
-
-    gap: 10,
-
-    borderWidth: 1,
-
-    borderColor: '#FF5A6E',
+  emptyBox: {
+    alignItems: 'center',
+    paddingVertical: 30,
   },
 
-  logoutText: {
-    color: '#FF5A6E',
-
-    fontSize: 17,
-
-    fontWeight: '800',
+  emptyText: {
+    marginTop: 12,
+    color: colors.textSecondary,
+    fontSize: 15,
   },
 });
