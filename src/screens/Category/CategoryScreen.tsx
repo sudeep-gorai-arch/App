@@ -234,7 +234,11 @@ const CategoryTopHeader = ({ navigation }: { navigation: Nav }) => {
 
         <View style={styles.categoryRightActions}>
           <Pressable
-            onPress={() => navigation.navigate('Premium')}
+            onPress={() =>
+              navigation.navigate('Premium', {
+                returnTo: 'Category',
+              })
+            }
             hitSlop={8}
             style={({ pressed }) => [
               styles.categoryPremiumButton,
@@ -281,10 +285,10 @@ const CategoryCard = ({
   const imageSource = staticThumbnail
     ? staticThumbnail
     : {
-        uri: imageFailed
-          ? `https://picsum.photos/seed/flexiwalls-category-fallback-${item.id}/800/450`
-          : remoteImage,
-      };
+      uri: imageFailed
+        ? `https://picsum.photos/seed/flexiwalls-category-fallback-${item.id}/800/450`
+        : remoteImage,
+    };
 
   return (
     <Pressable

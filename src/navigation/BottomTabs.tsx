@@ -23,6 +23,8 @@ import { TAB_ITEMS } from '../utils/constants';
 
 const Tab = createBottomTabNavigator();
 
+const HIDDEN_TAB_ROUTES = ['Premium'];
+
 const TabIcon = ({ icon, color }: { icon: string; color: string }) => {
   if (icon === 'crown') {
     return (
@@ -42,6 +44,10 @@ const TabIcon = ({ icon, color }: { icon: string; color: string }) => {
 const GlassTabBar = ({ state, navigation }: BottomTabBarProps) => {
   const insets = useSafeAreaInsets();
   const activeRoute = state.routes[state.index]?.name;
+
+  if (HIDDEN_TAB_ROUTES.includes(activeRoute)) {
+    return null;
+  }
 
   return (
     <View
@@ -99,7 +105,9 @@ const GlassTabBar = ({ state, navigation }: BottomTabBarProps) => {
 export default function BottomTabs() {
   return (
     <Tab.Navigator
-      screenOptions={{ headerShown: false }}
+      screenOptions={{
+        headerShown: false,
+      }}
       tabBar={props => <GlassTabBar {...props} />}
     >
       <Tab.Screen name="Home" component={HomeScreen} />

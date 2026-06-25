@@ -5,7 +5,7 @@ import BottomTabs from './BottomTabs';
 import { RootStackParamList } from './RootStackParamList';
 import { colors } from '../styles/colors';
 
-import PremiumAccessScreen from '../screens/PremiumAccess/PremiumAccessScreen';
+
 import PaymentScreen from '../screens/Payment/PaymentScreen';
 
 import CategoryDetailScreen from '../screens/CategoryDetail/CategoryDetailScreen';
@@ -42,7 +42,6 @@ const RootNavigator = () => {
     >
       <Stack.Screen name="MainTabs" component={BottomTabs} />
 
-      <Stack.Screen name="PremiumAccess" component={PremiumAccessScreen} />
 
       <Stack.Screen name="Payment" component={PaymentScreen} />
 

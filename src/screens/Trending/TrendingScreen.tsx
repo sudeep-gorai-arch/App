@@ -157,11 +157,11 @@ const getWallpaperId = (item: Wallpaper, index = 0) => {
 
   return String(
     w.id ||
-      w._id ||
-      w.wallpaperId ||
-      w.wallpaper_id ||
-      w.uuid ||
-      `wallpaper-${index}`,
+    w._id ||
+    w.wallpaperId ||
+    w.wallpaper_id ||
+    w.uuid ||
+    `wallpaper-${index}`,
   );
 };
 
@@ -191,12 +191,12 @@ const normalizeWallpaper = (item: Wallpaper, index: number): Wallpaper => {
     likes: Number(w.likes ?? w.likeCount ?? w.like_count ?? 0),
     downloads: Number(
       w.downloads ??
-        w.downloadCount ??
-        w.download_count ??
-        w.downloadsThisWeek ??
-        w.weeklyDownloads ??
-        w.downloads_this_week ??
-        0,
+      w.downloadCount ??
+      w.download_count ??
+      w.downloadsThisWeek ??
+      w.weeklyDownloads ??
+      w.downloads_this_week ??
+      0,
     ),
     createdAt: w.createdAt || w.created_at || w.updatedAt || w.updated_at,
   };
@@ -257,13 +257,13 @@ const getDownloadCount = (item: Wallpaper) => {
 
   return Number(
     w.downloadsThisWeek ??
-      w.weeklyDownloads ??
-      w.downloads_this_week ??
-      w.week_downloads ??
-      w.downloadCount ??
-      w.download_count ??
-      w.downloads ??
-      0,
+    w.weeklyDownloads ??
+    w.downloads_this_week ??
+    w.week_downloads ??
+    w.downloadCount ??
+    w.download_count ??
+    w.downloads ??
+    0,
   );
 };
 
@@ -321,10 +321,10 @@ const fetchWeeklyTopWallpapers = async (
       category.slug === 'all'
         ? { limit: 10 }
         : {
-            limit: 10,
-            category: category.slug,
-            categorySlug: category.slug,
-          };
+          limit: 10,
+          category: category.slug,
+          categorySlug: category.slug,
+        };
 
     const response = await API.get('/wallpapers/top-week', {
       params,
@@ -431,7 +431,11 @@ const TrendingTopHeader = ({ navigation }: { navigation: any }) => {
 
         <View style={styles.trendingRightActions}>
           <Pressable
-            onPress={() => navigation.navigate('Premium')}
+            onPress={() =>
+              navigation.navigate('Premium', {
+                returnTo: 'Trending',
+              })
+            }
             hitSlop={8}
             style={({ pressed }) => [
               styles.trendingPremiumButton,

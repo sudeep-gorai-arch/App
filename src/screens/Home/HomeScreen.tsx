@@ -230,7 +230,11 @@ const HomeTopHeader = ({ navigation }: { navigation: any }) => {
 
         <View style={styles.homeRightActions}>
           <Pressable
-            onPress={() => navigation.navigate('Premium')}
+            onPress={() =>
+              navigation.navigate('Premium', {
+                returnTo: 'Home',
+              })
+            }
             hitSlop={8}
             style={({ pressed }) => [
               styles.homePremiumButton,

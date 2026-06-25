@@ -113,7 +113,11 @@ const FavoritesTopHeader = ({ navigation }: { navigation: any }) => {
 
         <View style={styles.favoritesRightActions}>
           <Pressable
-            onPress={() => navigation.navigate('Premium')}
+            onPress={() =>
+              navigation.navigate('Premium', {
+                returnTo: 'Favorites',
+              })
+            }
             hitSlop={8}
             style={({ pressed }) => [
               styles.favoritesPremiumButton,

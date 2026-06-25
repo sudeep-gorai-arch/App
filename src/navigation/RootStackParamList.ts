@@ -15,9 +15,6 @@ export type RootStackParamList = {
   Signup: undefined;
 
 
-  // Premium Flow
-  PremiumAccess: undefined;
-
   Payment:
   | {
     planLabel?: string;
