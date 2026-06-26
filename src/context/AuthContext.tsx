@@ -67,7 +67,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     GoogleSignin.configure({
-      webClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
+      webClientId:
+        '941020838367-3p357g930n99gi68aq4inclg6geqjn3c.apps.googleusercontent.com',
 
       offlineAccess: false,
     });
@@ -81,17 +82,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const savedUser = await SecureStore.getItemAsync('user');
 
-      if (savedToken && savedUser) {
-        API.defaults.headers.common.Authorization = `Bearer ${savedToken}`;
-
-        setToken(savedToken);
-
-        setUser(JSON.parse(savedUser));
+      if (!savedToken || !savedUser) {
+        setLoading(false);
+        return;
       }
-    } catch (err) {
+
+      API.defaults.headers.common.Authorization = `Bearer ${savedToken}`;
+
+      setToken(savedToken);
+
+      setUser(JSON.parse(savedUser));
+    } catch (error) {
+      console.log('RESTORE SESSION ERROR', error);
+
+      delete API.defaults.headers.common.Authorization;
+
       await SecureStore.deleteItemAsync('token');
 
       await SecureStore.deleteItemAsync('user');
+
+      setToken(null);
+
+      setUser(null);
     } finally {
       setLoading(false);
     }
@@ -104,11 +116,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   ) => {
     await SecureStore.setItemAsync('token', jwt);
 
-    await SecureStore.setItemAsync(
-      'user',
-
-      JSON.stringify(profile),
-    );
+    await SecureStore.setItemAsync('user', JSON.stringify(profile));
 
     API.defaults.headers.common.Authorization = `Bearer ${jwt}`;
 
@@ -121,26 +129,62 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setAuthLoading(true);
 
     try {
+      console.log('========== GOOGLE LOGIN ==========');
+
       await GoogleSignin.hasPlayServices();
 
+      /**
+       * Remove previous Google session if exists
+       */
+      try {
+        await GoogleSignin.signOut();
+      } catch {}
+
+      console.log('Opening Google Sign In...');
+
       const result = await GoogleSignin.signIn();
+
+      console.log('Google Result:', result);
 
       const idToken = result.data?.idToken;
 
       if (!idToken) {
-        throw new Error('Google token missing');
+        throw new Error('Google ID Token not received');
       }
+
+      console.log('Sending token to backend...');
 
       const response = await googleLogin(idToken);
 
-      await saveSession(
-        response.data.token,
+      console.log('Backend Response:', response);
 
-        response.data.user,
-      );
+      await saveSession(response.data.token, response.data.user);
+
+      console.log('Login Successful');
     } catch (error: any) {
-      if (error.code !== statusCodes.SIGN_IN_CANCELLED) {
-        console.log('GOOGLE ERROR', error);
+      console.log('========== GOOGLE ERROR ==========');
+
+      console.log(error);
+
+      console.log('Code:', error?.code);
+
+      console.log('Message:', error?.message);
+
+      switch (error?.code) {
+        case statusCodes.SIGN_IN_CANCELLED:
+          console.log('User cancelled Google Sign In');
+          break;
+
+        case statusCodes.IN_PROGRESS:
+          console.log('Google Sign In already in progress');
+          break;
+
+        case statusCodes.PLAY_SERVICES_NOT_AVAILABLE:
+          console.log('Google Play Services unavailable');
+          break;
+
+        default:
+          console.log('Unknown Google Sign In error');
       }
     } finally {
       setAuthLoading(false);
@@ -152,13 +196,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (token) {
         await API.post('/auth/logout');
       }
-    } catch (e) {}
+    } catch (error) {
+      console.log(error);
+    }
+
+    try {
+      await GoogleSignin.revokeAccess();
+    } catch {}
+
+    try {
+      await GoogleSignin.signOut();
+    } catch {}
 
     await SecureStore.deleteItemAsync('token');
 
     await SecureStore.deleteItemAsync('user');
-
-    await GoogleSignin.signOut().catch(() => {});
 
     delete API.defaults.headers.common.Authorization;
 
@@ -171,17 +223,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     <AuthContext.Provider
       value={{
         user,
-
         token,
-
         loading,
-
         authLoading,
-
         isLoggedIn: !!user,
-
         signInGoogle,
-
         logout,
       }}
     >

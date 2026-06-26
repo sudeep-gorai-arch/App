@@ -7,12 +7,14 @@ export const login = (data: AuthRequest) =>
 export const register = (data: AuthRequest) =>
     API.post<ApiResponse<AuthResponse>>('/auth/register', data).then(r => r.data);
 
-export const googleLogin = (idToken: string) =>
+export const googleLogin = async (idToken: string) => {
+    console.log("Sending Google Token to Backend");
 
-    API.post(
-        "/auth/google",
-        {
-            idToken
-        }
-    )
-        .then(r => r.data);
+    const response = await API.post("/auth/google", {
+        idToken,
+    });
+
+    console.log("Backend Response", response.data);
+
+    return response.data;
+};
