@@ -46,23 +46,14 @@ export interface AuthResponse {
 
 
 
-export interface Category {
-
-    id: string;
-
-    name: string;
-
-    slug: string;
-
-    count?: number;
-
-
-    imageUrl?: string;
-
-
-    icon?: string;
-
-}
+export type Category = {
+  id: string;
+  name: string;
+  slug: string;
+  thumbnailUrl?: string | null;
+  createdAt?: string;
+  count?: number;
+};
 
 
 

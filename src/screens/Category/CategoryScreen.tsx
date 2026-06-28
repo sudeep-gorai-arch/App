@@ -9,7 +9,6 @@ import {
   ImageBackground,
   ActivityIndicator,
   Animated,
-  ImageSourcePropType,
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,29 +22,17 @@ import API from '../../services/api';
 import { getCategories } from '../../services/categoryService';
 import { Category } from '../../services/types';
 
-import { colors, gradients } from '../../styles/colors';
+import { colors } from '../../styles/colors';
 import { fontFamily } from '../../styles/typography';
 
 import {
   spacing,
   radius,
   SCREEN,
-  CATEGORY_FILTERS,
 } from '../../utils/constants';
 
 const flexiWallsLogo = require('../../assets/images/flexiwalls-logo.png');
 const proButtonIcon = require('../../assets/images/pro-button.png');
-
-const animeCategoryThumbnail = require('../../assets/images/categories/anime-category-thumbnail.png');
-const sportsCategoryThumbnail = require('../../assets/images/categories/sports-category-thumbnail.png');
-const natureCategoryThumbnail = require('../../assets/images/categories/nature-category-thumbnail.png');
-const carsCategoryThumbnail = require('../../assets/images/categories/cars-category-thumbnail.png');
-const abstractCategoryThumbnail = require('../../assets/images/categories/abstract-category-thumbnail.png');
-const cityCategoryThumbnail = require('../../assets/images/categories/city-category-thumbnail.png');
-const spaceCategoryThumbnail = require('../../assets/images/categories/space-category-thumbnail.png');
-const gamingCategoryThumbnail = require('../../assets/images/categories/gaming-category-thumbnail.png');
-const animalsCategoryThumbnail = require('../../assets/images/categories/animals-category-thumbnail.png');
-const minimalCategoryThumbnail = require('../../assets/images/categories/minimal-category-thumbnail.png');
 
 type Nav = { navigate: (name: string, params?: any) => void };
 
@@ -55,53 +42,11 @@ const CARD_H = CARD_W * (9 / 16);
 
 const API_ORIGIN = String(API.defaults.baseURL || '').replace(/\/api\/?$/, '');
 
-const MINIMAL_CATEGORY = {
-  id: 'minimal',
-  name: 'Minimal',
-  slug: 'minimal',
-  count: 0,
-} as Category;
-
-const CATEGORY_THUMBNAILS: Record<string, ImageSourcePropType> = {
-  anime: animeCategoryThumbnail,
-  sports: sportsCategoryThumbnail,
-  sport: sportsCategoryThumbnail,
-  nature: natureCategoryThumbnail,
-  cars: carsCategoryThumbnail,
-  car: carsCategoryThumbnail,
-  abstract: abstractCategoryThumbnail,
-  city: cityCategoryThumbnail,
-  space: spaceCategoryThumbnail,
-  gaming: gamingCategoryThumbnail,
-  games: gamingCategoryThumbnail,
-  animals: animalsCategoryThumbnail,
-  animal: animalsCategoryThumbnail,
-  minimal: minimalCategoryThumbnail,
-};
-
-const slugify = (value?: string) =>
-  String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/&/g, 'and')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-
-const ensureMinimalCategory = (items: Category[]) => {
-  const exists = items.some(item => {
-    const slug = slugify(item.slug || item.name || item.id);
-    return slug === 'minimal';
-  });
-
-  if (exists) return items;
-
-  return [...items, MINIMAL_CATEGORY];
-};
-
 const toAbsoluteMediaUrl = (value?: string | null) => {
   if (!value) return undefined;
 
   const url = String(value).trim();
+
   if (!url) return undefined;
 
   if (/^https?:\/\//i.test(url)) {
@@ -113,7 +58,9 @@ const toAbsoluteMediaUrl = (value?: string | null) => {
     );
   }
 
-  if (url.startsWith('//')) return `https:${url}`;
+  if (url.startsWith('//')) {
+    return `https:${url}`;
+  }
 
   if (url.startsWith('/')) {
     return API_ORIGIN ? `${API_ORIGIN}${url}` : url;
@@ -122,42 +69,13 @@ const toAbsoluteMediaUrl = (value?: string | null) => {
   return API_ORIGIN ? `${API_ORIGIN}/${url}` : url;
 };
 
-const getStaticCategoryThumbnail = (item: Category) => {
-  const c = item as Category & Record<string, any>;
-
-  const keys = [
-    item.slug,
-    item.name,
-    item.id,
-    c.categorySlug,
-    c.category_slug,
-    c.categoryName,
-    c.category_name,
-  ]
-    .filter(Boolean)
-    .map(value => slugify(String(value)));
-
-  for (const key of keys) {
-    if (CATEGORY_THUMBNAILS[key]) {
-      return CATEGORY_THUMBNAILS[key];
-    }
-  }
-
-  return undefined;
-};
-
-const getCategoryRemoteImage = (item: Category) => {
-  const c = item as Category & Record<string, any>;
-  const seed = slugify(item.slug || item.name || item.id || 'category');
+const getCategoryThumbnailUrl = (item: Category) => {
+  const category = item as Category & Record<string, any>;
 
   return (
-    toAbsoluteMediaUrl(c.imageUrl) ||
-    toAbsoluteMediaUrl(c.thumbnailUrl) ||
-    toAbsoluteMediaUrl(c.image_url) ||
-    toAbsoluteMediaUrl(c.thumbnail_url) ||
-    toAbsoluteMediaUrl(c.image) ||
-    toAbsoluteMediaUrl(c.thumbnail) ||
-    `https://picsum.photos/seed/flexiwalls-category-${seed}/800/450`
+    toAbsoluteMediaUrl(category.thumbnailUrl) ||
+    toAbsoluteMediaUrl(category.thumbnail_url) ||
+    undefined
   );
 };
 
@@ -194,7 +112,7 @@ const ShinyProIcon = () => {
         source={proButtonIcon}
         style={styles.categoryProIcon}
         resizeMode="contain"
-      />
+      ></Image>
 
       <Animated.View
         pointerEvents="none"
@@ -279,52 +197,75 @@ const CategoryCard = ({
 }) => {
   const [imageFailed, setImageFailed] = useState(false);
 
-  const staticThumbnail = getStaticCategoryThumbnail(item);
-  const remoteImage = getCategoryRemoteImage(item);
-
-  const imageSource = staticThumbnail
-    ? staticThumbnail
-    : {
-      uri: imageFailed
-        ? `https://picsum.photos/seed/flexiwalls-category-fallback-${item.id}/800/450`
-        : remoteImage,
-    };
+  const thumbnailUrl = imageFailed ? undefined : getCategoryThumbnailUrl(item);
 
   return (
     <Pressable
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
       onPress={onPress}
     >
-      <ImageBackground
-        source={imageSource}
-        style={styles.cardImage}
-        imageStyle={{ borderRadius: radius.lg }}
-        resizeMode="cover"
-        onError={() => setImageFailed(true)}
-      >
-        <LinearGradient
-          colors={[
-            'rgba(0,0,0,0.04)',
-            'rgba(0,0,0,0.12)',
-            'rgba(0,0,0,0.76)',
-          ]}
-          style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
-        />
+      {thumbnailUrl ? (
+        <ImageBackground
+          source={{ uri: thumbnailUrl }}
+          style={styles.cardImage}
+          imageStyle={{ borderRadius: radius.lg }}
+          resizeMode="cover"
+          onError={() => setImageFailed(true)}
+        >
+          <LinearGradient
+            colors={[
+              'rgba(0,0,0,0.04)',
+              'rgba(0,0,0,0.12)',
+              'rgba(0,0,0,0.76)',
+            ]}
+            style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
+          />
 
-        <View style={styles.cardLabel}>
-          <Text style={styles.cardName} numberOfLines={1}>
-            {item.name}
-          </Text>
-          <Text style={styles.cardCount}>{item.count ?? 0} Wallpapers</Text>
+          <View style={styles.cardLabel}>
+            <Text style={styles.cardName} numberOfLines={1}>
+              {item.name}
+            </Text>
+
+            <Text style={styles.cardCount}>
+              {item.count ?? 0} Wallpapers
+            </Text>
+          </View>
+        </ImageBackground>
+      ) : (
+        <View style={styles.cardPlaceholder}>
+          <LinearGradient
+            colors={[
+              'rgba(255,255,255,0.08)',
+              'rgba(255,255,255,0.02)',
+              'rgba(0,0,0,0.35)',
+            ]}
+            style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
+          />
+
+          <Ionicons
+            name="image-outline"
+            size={28}
+            color={colors.textSecondary}
+          />
+
+          <View style={styles.cardLabel}>
+            <Text style={styles.cardName} numberOfLines={1}>
+              {item.name}
+            </Text>
+
+            <Text style={styles.cardCount}>
+              {item.count ?? 0} Wallpapers
+            </Text>
+          </View>
         </View>
-      </ImageBackground>
+      )}
     </Pressable>
   );
 };
 
 const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
-  const [filter, setFilter] = useState(CATEGORY_FILTERS[0]);
   const [categories, setCategories] = useState<Category[]>([]);
+
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -334,19 +275,25 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
   const loadData = async () => {
     try {
       const response = await getCategories();
-      const apiCategories = Array.isArray(response.data) ? response.data : [];
 
-      setCategories(ensureMinimalCategory(apiCategories));
+      const apiCategories = Array.isArray(response.data)
+        ? response.data
+        : [];
+
+      setCategories(apiCategories);
     } catch (error) {
       console.log('CATEGORY ERROR', error);
-      setCategories(ensureMinimalCategory([]));
+
+      setCategories([]);
     } finally {
       setLoading(false);
     }
   };
 
   const openCategory = (item: Category) =>
-    navigation.navigate('CategoryDetail', { category: item });
+    navigation.navigate('CategoryDetail', {
+      category: item,
+    });
 
   if (loading) {
     return (
@@ -374,35 +321,11 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
 
               <View style={styles.titleBlock}>
                 <Text style={styles.title}>Categories</Text>
+
                 <Text style={styles.subtitle}>
                   Explore wallpapers by your favorite themes
                 </Text>
               </View>
-
-              <BlurView intensity={30} tint="dark" style={styles.filterBar}>
-                {CATEGORY_FILTERS.map(f => {
-                  const active = f === filter;
-
-                  return (
-                    <Pressable
-                      key={f}
-                      style={styles.filterItem}
-                      onPress={() => setFilter(f)}
-                    >
-                      {active ? (
-                        <LinearGradient
-                          colors={gradients.blueViolet}
-                          style={styles.filterActive}
-                        >
-                          <Text style={styles.filterTextActive}>{f}</Text>
-                        </LinearGradient>
-                      ) : (
-                        <Text style={styles.filterText}>{f}</Text>
-                      )}
-                    </Pressable>
-                  );
-                })}
-              </BlurView>
             </View>
           }
           ListEmptyComponent={
@@ -412,6 +335,7 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
                 size={28}
                 color={colors.textSecondary}
               />
+
               <Text style={styles.emptyText}>No categories found.</Text>
             </View>
           }
@@ -431,6 +355,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.base,
   },
+
   loadingRoot: {
     flex: 1,
     backgroundColor: colors.base,
@@ -443,6 +368,7 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: 0,
   },
+
   categoryActionRow: {
     height: 72,
     flexDirection: 'row',
@@ -451,18 +377,21 @@ const styles = StyleSheet.create({
     overflow: 'visible',
     marginBottom: -8,
   },
+
   categoryLogoLeft: {
     width: 175,
     height: 120,
     marginLeft: -18,
     marginTop: 8,
   },
+
   categoryRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     zIndex: 5,
   },
+
   categoryPremiumButton: {
     width: 38,
     height: 38,
@@ -472,6 +401,7 @@ const styles = StyleSheet.create({
     overflow: 'visible',
     backgroundColor: 'transparent',
   },
+
   categoryProIconWrap: {
     width: 36,
     height: 36,
@@ -480,10 +410,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
+
   categoryProIcon: {
     width: 36,
     height: 36,
   },
+
   categoryProShine: {
     position: 'absolute',
     top: -12,
@@ -491,9 +423,11 @@ const styles = StyleSheet.create({
     width: 22,
     opacity: 0.95,
   },
+
   categoryProShineGradient: {
     flex: 1,
   },
+
   categoryRightButton: {
     width: 46,
     height: 46,
@@ -501,6 +435,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 5,
   },
+
   categoryRoundButton: {
     width: 46,
     height: 46,
@@ -518,12 +453,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     marginBottom: spacing.md,
   },
+
   title: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 28,
     letterSpacing: -0.5,
   },
+
   subtitle: {
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
@@ -534,46 +471,11 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 130,
   },
+
   columnWrapper: {
     paddingHorizontal: spacing.xl,
     gap: GAP,
     marginBottom: GAP,
-  },
-
-  filterBar: {
-    flexDirection: 'row',
-    marginHorizontal: spacing.xl,
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
-    padding: 5,
-    borderRadius: radius.pill,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.glassBorder,
-    backgroundColor: colors.glassFillSoft,
-  },
-  filterItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterActive: {
-    width: '100%',
-    paddingVertical: 10,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterText: {
-    color: colors.textSecondary,
-    fontFamily: fontFamily.semiBold,
-    fontSize: 14,
-    paddingVertical: 10,
-  },
-  filterTextActive: {
-    color: colors.textPrimary,
-    fontFamily: fontFamily.semiBold,
-    fontSize: 14,
   },
 
   card: {
@@ -585,25 +487,38 @@ const styles = StyleSheet.create({
     borderColor: colors.glassBorder,
     backgroundColor: colors.baseElevated,
   },
+
   cardPressed: {
     opacity: 0.88,
     transform: [{ scale: 0.98 }],
   },
+
   cardImage: {
     flex: 1,
   },
+
+  cardPlaceholder: {
+    flex: 1,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.glassFill,
+  },
+
   cardLabel: {
     position: 'absolute',
     left: 10,
     right: 10,
     bottom: 9,
   },
+
   cardName: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 15,
     letterSpacing: -0.2,
   },
+
   cardCount: {
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
@@ -622,6 +537,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorderSoft,
   },
+
   emptyText: {
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
