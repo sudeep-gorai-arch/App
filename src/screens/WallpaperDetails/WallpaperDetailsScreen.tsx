@@ -16,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
 import { colors } from '../../styles/colors';
 import { fontFamily } from '../../styles/typography';
@@ -40,6 +41,64 @@ const APPLY_GRADIENT = ['#0EA5E9', '#14B8A6', '#22D3EE'] as const;
 const POPUP_GRADIENT = ['#3B82F6', '#8B5CF6', '#EC4899'] as const;
 
 const API_ORIGIN = String(API.defaults.baseURL || '').replace(/\/api\/?$/, '');
+const LOCAL_DOWNLOADS_KEY = '@flexiwalls:guestDownloads';
+const MAX_LOCAL_DOWNLOADS = 100;
+
+const saveGuestDownloadHistory = async (
+  wallpaper: any,
+  wallpaperId: string,
+  downloadedUrl: string,
+) => {
+  try {
+    const id = String(
+      wallpaperId ||
+        wallpaper?.id ||
+        wallpaper?._id ||
+        wallpaper?.wallpaperId ||
+        wallpaper?.wallpaper_id ||
+        downloadedUrl,
+    );
+
+    const record = {
+      ...wallpaper,
+      id,
+      imageUrl:
+        wallpaper?.imageUrl ||
+        wallpaper?.image_url ||
+        wallpaper?.url ||
+        wallpaper?.image ||
+        wallpaper?.mediaUrl ||
+        downloadedUrl,
+      thumbnailUrl:
+        wallpaper?.thumbnailUrl ||
+        wallpaper?.thumbnail_url ||
+        wallpaper?.thumbnail ||
+        wallpaper?.photoUrl ||
+        wallpaper?.photo_url ||
+        downloadedUrl,
+      downloadedAt: new Date().toISOString(),
+    };
+
+    const raw = await AsyncStorage.getItem(LOCAL_DOWNLOADS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    const existing = Array.isArray(parsed) ? parsed : [];
+
+    const withoutDuplicate = existing.filter((item: any) => {
+      const existingId = String(
+        item?.id || item?._id || item?.wallpaperId || item?.wallpaper_id || '',
+      );
+
+      return existingId !== id;
+    });
+
+    await AsyncStorage.setItem(
+      LOCAL_DOWNLOADS_KEY,
+      JSON.stringify([record, ...withoutDuplicate].slice(0, MAX_LOCAL_DOWNLOADS)),
+    );
+  } catch (error) {
+    console.log('SAVE GUEST DOWNLOAD HISTORY ERROR', error);
+  }
+};
 
 const toAbsoluteMediaUrl = (value?: string | null) => {
   if (!value) return undefined;
@@ -237,7 +296,8 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
     setStatus('downloading');
 
     try {
-      const token = await AsyncStorage.getItem('token');
+      const token = await SecureStore.getItemAsync('token');
+      let shouldSaveLocalDownload = !token;
 
       let downloadUrl: string = finalImage;
 
@@ -252,7 +312,8 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
           console.log('addDownload skipped:', error?.response?.data || error);
 
           if (error?.response?.status === 401) {
-            await AsyncStorage.removeItem('token');
+            await SecureStore.deleteItemAsync('token');
+            shouldSaveLocalDownload = true;
           }
 
           downloadUrl = finalImage;
@@ -267,6 +328,10 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
       if (!ok) {
         setStatus('idle');
         return;
+      }
+
+      if (shouldSaveLocalDownload) {
+        await saveGuestDownloadHistory(wallpaper, wallpaperId, downloadUrl);
       }
 
       setStatus('done');

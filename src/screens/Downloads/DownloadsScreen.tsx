@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -8,29 +8,30 @@ import {
   StyleSheet,
   Text,
   View,
-} from "react-native";
+} from 'react-native';
 
-import { SafeAreaView } from "react-native-safe-area-context";
-import { BlurView } from "expo-blur";
-import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
-import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import MeshBackground from "../../components/MeshBackground";
-import Card from "../../components/Card";
-import { colors, gradients } from "../../styles/colors";
-import { fontFamily } from "../../styles/typography";
-import { spacing, radius } from "../../utils/constants";
-import { RootStackParamList } from "../../navigation/RootStackParamList";
-import { useAuth } from "../../context/AuthContext";
-import { getDownloads } from "../../services/downloadService";
-import API from "../../services/api";
-import { Wallpaper } from "../../services/types";
+import MeshBackground from '../../components/MeshBackground';
+import Card from '../../components/Card';
+import { colors, gradients } from '../../styles/colors';
+import { fontFamily } from '../../styles/typography';
+import { spacing, radius } from '../../utils/constants';
+import { RootStackParamList } from '../../navigation/RootStackParamList';
+import { useAuth } from '../../context/AuthContext';
+import { getDownloads } from '../../services/downloadService';
+import API from '../../services/api';
+import { Wallpaper } from '../../services/types';
 
-type Props = NativeStackScreenProps<RootStackParamList, "Downloads">;
+type Props = NativeStackScreenProps<RootStackParamList, 'Downloads'>;
 
-type DownloadWallpaper = Omit<Wallpaper, "category"> & {
-  category?: Wallpaper["category"] | null;
+type DownloadWallpaper = Omit<Wallpaper, 'category'> & {
+  category?: Wallpaper['category'] | null;
   downloadedAt?: string | Date | null;
   downloadCount?: number;
   downloads?: number;
@@ -38,10 +39,11 @@ type DownloadWallpaper = Omit<Wallpaper, "category"> & {
   resolution?: string | null;
 };
 
-type Filter = "All" | "4K" | "8K" | "Premium";
+type Filter = 'All' | '4K' | '8K' | 'Premium';
 
-const FILTERS: Filter[] = ["All", "4K", "8K", "Premium"];
-const API_ORIGIN = String(API.defaults.baseURL || "").replace(/\/api\/?$/, "");
+const FILTERS: Filter[] = ['All', '4K', '8K', 'Premium'];
+const API_ORIGIN = String(API.defaults.baseURL || '').replace(/\/api\/?$/, '');
+const LOCAL_DOWNLOADS_KEY = '@flexiwalls:guestDownloads';
 
 const fallbackImage = (seed: string) =>
   `https://picsum.photos/seed/flexiwalls-download-${seed}/700/1100`;
@@ -61,9 +63,9 @@ const toAbsoluteMediaUrl = (value?: string | null) => {
     );
   }
 
-  if (url.startsWith("//")) return `https:${url}`;
+  if (url.startsWith('//')) return `https:${url}`;
 
-  if (url.startsWith("/")) {
+  if (url.startsWith('/')) {
     return API_ORIGIN ? `${API_ORIGIN}${url}` : url;
   }
 
@@ -92,28 +94,41 @@ const getWallpaperImage = (item?: DownloadWallpaper | null) => {
 
 const getPayloadArray = (response: any): any[] => {
   const payload = response?.data?.data ?? response?.data ?? response;
-  return Array.isArray(payload) ? payload : [];
+
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.downloads)) return payload.downloads;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.results)) return payload.results;
+
+  return [];
 };
 
 const normalizeDownload = (record: any): DownloadWallpaper | null => {
   const wallpaper = record?.wallpaper ?? record?.Wallpaper ?? record;
 
-  if (!wallpaper || typeof wallpaper !== "object") {
+  if (!wallpaper || typeof wallpaper !== 'object') {
     return null;
   }
 
-  const id = wallpaper.id ?? record?.wallpaperId ?? record?.id;
+  const id =
+    wallpaper.id ?? record?.wallpaperId ?? record?.wallpaper_id ?? record?.id;
+
   const imageUrl =
     wallpaper.imageUrl ??
     wallpaper.image_url ??
     wallpaper.url ??
     wallpaper.image ??
-    wallpaper.mediaUrl;
+    wallpaper.mediaUrl ??
+    record?.imageUrl ??
+    record?.image_url;
+
   const thumbnailUrl =
     wallpaper.thumbnailUrl ??
     wallpaper.thumbnail_url ??
     wallpaper.thumbnail ??
-    wallpaper.photoUrl;
+    wallpaper.photoUrl ??
+    record?.thumbnailUrl ??
+    record?.thumbnail_url;
 
   if (!id && !imageUrl && !thumbnailUrl) {
     return null;
@@ -122,10 +137,10 @@ const normalizeDownload = (record: any): DownloadWallpaper | null => {
   return {
     ...wallpaper,
     id: String(id ?? imageUrl ?? thumbnailUrl),
-    title: wallpaper.title ?? wallpaper.name ?? "Downloaded Wallpaper",
+    title: wallpaper.title ?? wallpaper.name ?? 'Downloaded Wallpaper',
     imageUrl,
     thumbnailUrl,
-    quality: wallpaper.quality ?? wallpaper.type ?? "4K",
+    quality: wallpaper.quality ?? wallpaper.type ?? '4K',
     category: wallpaper.category ?? record?.category ?? null,
     downloadedAt:
       record?.downloadedAt ??
@@ -165,13 +180,28 @@ const uniqueById = (items: DownloadWallpaper[]) => {
   });
 };
 
+const getLocalDownloads = async (): Promise<DownloadWallpaper[]> => {
+  try {
+    const raw = await AsyncStorage.getItem(LOCAL_DOWNLOADS_KEY);
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.map(normalizeDownload).filter(Boolean) as DownloadWallpaper[];
+  } catch (error) {
+    console.log('LOCAL DOWNLOADS LOAD ERROR', error);
+    return [];
+  }
+};
+
 const DownloadsHeader = ({
   navigation,
   activeFilter,
   onFilterChange,
   onBrowse,
 }: {
-  navigation: Props["navigation"];
+  navigation: Props['navigation'];
   activeFilter: Filter;
   onFilterChange: (filter: Filter) => void;
   onBrowse: () => void;
@@ -271,10 +301,10 @@ const DownloadsAreaCard = ({
           <Text style={styles.cardTitle}>All Downloads</Text>
 
           <Text style={styles.downloadCount}>
-            {activeFilter === "All"
-              ? `${totalDownloads} Wallpaper${totalDownloads !== 1 ? "s" : ""}`
+            {activeFilter === 'All'
+              ? `${totalDownloads} Wallpaper${totalDownloads !== 1 ? 's' : ''}`
               : `${downloads.length} ${activeFilter} Wallpaper${
-                  downloads.length !== 1 ? "s" : ""
+                  downloads.length !== 1 ? 's' : ''
                 }`}
           </Text>
         </View>
@@ -314,104 +344,81 @@ const DownloadsAreaCard = ({
 };
 
 const EmptyState = ({
-  signedIn,
-  authLoading,
   title,
   subtitle,
   onBrowse,
-  onSignIn,
 }: {
-  signedIn: boolean;
-  authLoading: boolean;
   title?: string;
   subtitle?: string;
   onBrowse: () => void;
-  onSignIn: () => void;
 }) => (
   <View style={styles.emptyWrap}>
-    <Card style={styles.cardNoMargin} padding={24} strong>
-      <View style={styles.emptyContent}>
-        <View style={styles.emptyIcon}>
-          <Ionicons
-            name={signedIn ? "download-outline" : "person-circle-outline"}
-            size={46}
-            color={colors.accent}
-          />
-        </View>
+    <Card style={styles.cardNoMargin} padding={20} strong>
+      <View style={styles.emptyDownloads}>
+        <Ionicons
+          name="download-outline"
+          size={55}
+          color={colors.textSecondary}
+        />
 
-        <Text style={styles.emptyTitle}>
-          {title ??
-            (signedIn ? "No Downloads Yet" : "Sign in to sync downloads")}
-        </Text>
+        <Text style={styles.emptyTitle}>{title ?? 'No Downloads Yet'}</Text>
 
         <Text style={styles.emptySubtitle}>
-          {subtitle ??
-            (signedIn
-              ? "Wallpapers you download will appear here."
-              : "Create your account to save favorites, synchronize downloads and access premium features across all your devices.")}
+          {subtitle ?? 'Wallpapers you download will appear here.'}
         </Text>
 
-        <View style={styles.emptyActions}>
-          <Pressable
-            disabled={authLoading}
-            style={styles.googleButton}
-            onPress={signedIn ? onBrowse : onSignIn}
-          >
-            {authLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Ionicons
-                  name={signedIn ? "grid-outline" : "logo-google"}
-                  size={22}
-                  color="#fff"
-                />
-
-                <Text style={styles.googleText}>
-                  {signedIn ? "Browse Wallpapers" : "Continue with Google"}
-                </Text>
-              </>
-            )}
-          </Pressable>
-        </View>
+        <Pressable style={styles.browseButton} onPress={onBrowse}>
+          <Text style={styles.browseText}>Browse Wallpapers</Text>
+        </Pressable>
       </View>
     </Card>
   </View>
 );
 
 export default function DownloadsScreen({ navigation }: Props) {
-  const { user, authLoading, signInGoogle } = useAuth();
+  const { user } = useAuth();
 
   const [downloads, setDownloads] = useState<DownloadWallpaper[]>([]);
-  const [activeFilter, setActiveFilter] = useState<Filter>("All");
+  const [activeFilter, setActiveFilter] = useState<Filter>('All');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadDownloads = useCallback(async () => {
-    if (!user) {
-      setDownloads([]);
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
+    let localItems: DownloadWallpaper[] = [];
 
     try {
+      localItems = await getLocalDownloads();
+
+      if (!user) {
+        const sortedLocal = uniqueById(localItems).sort(
+          (a, b) => parseTime(b.downloadedAt) - parseTime(a.downloadedAt),
+        );
+
+        setDownloads(sortedLocal);
+        return;
+      }
+
       const response = await getDownloads();
-      const items = getPayloadArray(response)
+      const serverItems = getPayloadArray(response)
         .map(normalizeDownload)
         .filter(Boolean) as DownloadWallpaper[];
 
-      const sorted = uniqueById(items).sort(
+      const sorted = uniqueById([...serverItems, ...localItems]).sort(
         (a, b) => parseTime(b.downloadedAt) - parseTime(a.downloadedAt),
       );
 
       setDownloads(sorted);
     } catch (error) {
       console.log(
-        "DOWNLOADS LOAD ERROR",
+        'DOWNLOADS LOAD ERROR',
         (error as any)?.response?.data || (error as any)?.message || error,
       );
-      setDownloads([]);
+
+      const sortedLocal = uniqueById(localItems).sort(
+        (a, b) => parseTime(b.downloadedAt) - parseTime(a.downloadedAt),
+      );
+
+      setDownloads(sortedLocal);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -428,27 +435,27 @@ export default function DownloadsScreen({ navigation }: Props) {
   }, [loadDownloads]);
 
   const filteredDownloads = useMemo(() => {
-    if (activeFilter === "All") return downloads;
+    if (activeFilter === 'All') return downloads;
 
-    if (activeFilter === "Premium") {
+    if (activeFilter === 'Premium') {
       return downloads.filter((item) => item.isPremium);
     }
 
     return downloads.filter((item) =>
-      String(item.quality ?? "")
+      String(item.quality ?? '')
         .toUpperCase()
         .includes(activeFilter),
     );
   }, [activeFilter, downloads]);
 
   const openWallpaper = (wallpaper: DownloadWallpaper) => {
-    navigation.navigate("WallpaperDetails", {
+    navigation.navigate('WallpaperDetails', {
       wallpaper,
     });
   };
 
   const browseWallpapers = () => {
-    navigation.navigate("MainTabs");
+    navigation.navigate('MainTabs');
   };
 
   if (loading) {
@@ -465,7 +472,7 @@ export default function DownloadsScreen({ navigation }: Props) {
     <View style={styles.root}>
       <MeshBackground variant="profile" />
 
-      <SafeAreaView style={styles.safe} edges={["top"]}>
+      <SafeAreaView style={styles.safe} edges={['top']}>
         <ScrollView
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -490,24 +497,19 @@ export default function DownloadsScreen({ navigation }: Props) {
               totalDownloads={downloads.length}
               activeFilter={activeFilter}
               onOpenWallpaper={openWallpaper}
-              onViewAll={() => setActiveFilter("All")}
+              onViewAll={() => setActiveFilter('All')}
             />
           ) : (
             <EmptyState
-              signedIn={!!user}
-              authLoading={authLoading}
               title={
-                user && downloads.length > 0
-                  ? `No ${activeFilter} Downloads`
-                  : undefined
+                downloads.length > 0 ? `No ${activeFilter} Downloads` : undefined
               }
               subtitle={
-                user && downloads.length > 0
-                  ? "Try another filter or download more wallpapers from the gallery."
+                downloads.length > 0
+                  ? 'Try another filter or download more wallpapers from the gallery.'
                   : undefined
               }
               onBrowse={browseWallpapers}
-              onSignIn={signInGoogle}
             />
           )}
         </ScrollView>
@@ -525,8 +527,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   loadingRoot: {
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   loadingText: {
     color: colors.textSecondary,
@@ -541,13 +543,13 @@ const styles = StyleSheet.create({
   topBar: {
     minHeight: 72,
     paddingHorizontal: spacing.xl,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   topTitleWrap: {
     flex: 1,
-    alignItems: "center",
+    alignItems: 'center',
     paddingHorizontal: spacing.md,
   },
   topTitle: {
@@ -571,9 +573,9 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
     backgroundColor: colors.glassFill,
@@ -584,24 +586,24 @@ const styles = StyleSheet.create({
     marginTop: spacing.xxl,
   },
   filterBar: {
-    flexDirection: "row",
+    flexDirection: 'row',
     padding: 5,
     borderRadius: radius.pill,
-    overflow: "hidden",
+    overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
     backgroundColor: colors.glassFillSoft,
   },
   filterItem: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filterActive: {
-    width: "100%",
+    width: '100%',
     paddingVertical: 10,
     borderRadius: radius.pill,
-    alignItems: "center",
+    alignItems: 'center',
   },
   filterText: {
     color: colors.textSecondary,
@@ -623,15 +625,15 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   cardTitle: {
-    color: "#fff",
+    color: '#fff',
     fontSize: 24,
-    fontWeight: "900",
-    textAlign: "left",
+    fontWeight: '900',
+    textAlign: 'left',
   },
   downloadCount: {
     color: colors.textSecondary,
@@ -640,74 +642,63 @@ const styles = StyleSheet.create({
   },
   viewAll: {
     color: colors.accent,
-    fontWeight: "800",
+    fontWeight: '800',
     fontSize: 15,
   },
   downloadGrid: {
     marginTop: 20,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
   },
   wallpaperButton: {
-    width: "48%",
+    width: '48%',
     aspectRatio: 0.68,
     borderRadius: 18,
     marginBottom: 14,
-    backgroundColor: "#1d1d1d",
-    overflow: "hidden",
+    backgroundColor: '#1d1d1d',
+    overflow: 'hidden',
   },
   wallpaper: {
-    width: "100%",
-    height: "100%",
+    width: '100%',
+    height: '100%',
     borderRadius: 18,
-    backgroundColor: "#1d1d1d",
+    backgroundColor: '#1d1d1d',
   },
 
   emptyWrap: {
     paddingHorizontal: spacing.xl,
     marginTop: spacing.xl,
   },
-  emptyContent: {
-    alignItems: "center",
-  },
-  emptyIcon: {
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 14,
+  emptyDownloads: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 30,
   },
   emptyTitle: {
-    color: "#fff",
-    fontSize: 20,
-    fontWeight: "900",
-    textAlign: "center",
+    marginTop: 15,
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 18,
+    textAlign: 'center',
   },
   emptySubtitle: {
+    marginTop: 10,
     color: colors.textSecondary,
-    textAlign: "center",
-    marginTop: 12,
+    textAlign: 'center',
     lineHeight: 22,
-    fontSize: 15,
-    marginBottom: 24,
+    marginBottom: 22,
   },
-  emptyActions: {
-    width: "100%",
+  browseButton: {
+    backgroundColor: colors.accent,
+    paddingHorizontal: 24,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  googleButton: {
-    width: "100%",
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: "#111827",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,.08)",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-  },
-  googleText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "800",
+  browseText: {
+    color: '#fff',
+    fontWeight: '800',
   },
 });

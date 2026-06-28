@@ -253,7 +253,7 @@ const MenuItem = ({ icon, title, subtitle, onPress }: MenuItemProps) => (
 );
 
 export default function ProfileScreen({ navigation }: Props) {
-  const { user, loading, authLoading, logout } = useAuth();
+  const { user, loading, authLoading, signInGoogle, logout } = useAuth();
 
   const [downloads, setDownloads] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -268,7 +268,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
   const isGuest = !user;
   const displayName = user?.username || 'Guest User';
-  const displayEmail = user?.email || 'Sign in to sync your wallpapers';
+  const displayEmail = user?.email || 'Sign in to sync your account';
   const planLabel = user?.isPremium ? 'Premium' : 'Free';
 
   const flyingTranslateY = flyingIconProgress.interpolate({
@@ -490,8 +490,13 @@ export default function ProfileScreen({ navigation }: Props) {
     });
   };
 
-  const handleLogout = () => {
-    if (!user || authLoading) {
+  const handleAuthAction = () => {
+    if (authLoading) {
+      return;
+    }
+
+    if (!user) {
+      signInGoogle();
       return;
     }
 
@@ -597,19 +602,25 @@ export default function ProfileScreen({ navigation }: Props) {
                 <Pressable
                   style={({ pressed }) => [
                     styles.middleLogoutButton,
-                    (!user || authLoading) && styles.middleLogoutButtonDisabled,
-                    pressed && user && !authLoading && styles.heroButtonPressed,
+                    authLoading && styles.middleLogoutButtonDisabled,
+                    pressed && !authLoading && styles.heroButtonPressed,
                   ]}
-                  onPress={handleLogout}
-                  disabled={!user || authLoading}
+                  onPress={handleAuthAction}
+                  disabled={authLoading}
                 >
-                  {authLoading && user ? (
+                  {authLoading ? (
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
                     <>
-                      <Ionicons name="log-out-outline" size={17} color="#fff" />
+                      <Ionicons
+                        name={user ? 'log-out-outline' : 'log-in-outline'}
+                        size={17}
+                        color="#fff"
+                      />
 
-                      <Text style={styles.middleButtonText}>Logout</Text>
+                      <Text style={styles.middleButtonText}>
+                        {user ? 'Logout' : 'Login'}
+                      </Text>
                     </>
                   )}
                 </Pressable>
