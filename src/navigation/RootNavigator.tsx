@@ -26,6 +26,8 @@ import DownloadsScreen from '../screens/Downloads/DownloadsScreen';
 
 import SettingsScreen from '../screens/Settings/SettingsScreen';
 
+import AboutScreen from '../screens/About/AboutScreen';
+
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const RootNavigator = () => {
@@ -67,6 +69,8 @@ const RootNavigator = () => {
       <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
 
       <Stack.Screen name="Downloads" component={DownloadsScreen} />
+
+      <Stack.Screen name="About" component={AboutScreen} />
 
       <Stack.Screen name="Settings" component={SettingsScreen} />
     </Stack.Navigator>

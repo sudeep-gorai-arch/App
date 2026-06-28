@@ -1,206 +1,713 @@
-import React from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  StyleSheet,
-  View,
-  Text,
+  ActivityIndicator,
+  Image,
   Pressable,
+  RefreshControl,
   ScrollView,
-  ImageBackground,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
-import MeshBackground from '../../components/MeshBackground';
-import Card from '../../components/Card';
-import { RoundButton } from '../../components/Header';
-import { colors, gradients } from '../../styles/colors';
-import { spacing, radius, SCREEN } from '../../utils/constants';
+import { SafeAreaView } from "react-native-safe-area-context";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
+import { NativeStackScreenProps } from "@react-navigation/native-stack";
 
-type Nav = { goBack?: () => void };
+import MeshBackground from "../../components/MeshBackground";
+import Card from "../../components/Card";
+import { colors, gradients } from "../../styles/colors";
+import { fontFamily } from "../../styles/typography";
+import { spacing, radius } from "../../utils/constants";
+import { RootStackParamList } from "../../navigation/RootStackParamList";
+import { useAuth } from "../../context/AuthContext";
+import { getDownloads } from "../../services/downloadService";
+import API from "../../services/api";
+import { Wallpaper } from "../../services/types";
 
-const img = (seed: string) => `https://picsum.photos/seed/${seed}/500/800`;
+type Props = NativeStackScreenProps<RootStackParamList, "Downloads">;
 
-const ITEMS = [
-  { id: 'd1', q: '8K', seed: 'dl-tiger' },
-  { id: 'd2', q: '8K', seed: 'dl-mountain' },
-  { id: 'd3', q: '4K', seed: 'dl-citynight' },
-  { id: 'd4', q: '4K', seed: 'dl-wolf' },
-  { id: 'd5', q: '8K', seed: 'dl-astronaut' },
-  { id: 'd6', q: '4K', seed: 'dl-pagoda' },
-  { id: 'd7', q: '4K', seed: 'dl-car' },
-  { id: 'd8', q: '8K', seed: 'dl-turtle' },
-  { id: 'd9', q: '4K', seed: 'dl-lion' },
-];
+type DownloadWallpaper = Omit<Wallpaper, "category"> & {
+  category?: Wallpaper["category"] | null;
+  downloadedAt?: string | Date | null;
+  downloadCount?: number;
+  downloads?: number;
+  isPremium?: boolean;
+  resolution?: string | null;
+};
 
-const COLS = 3;
-const GAP = spacing.md;
-const TILE = (SCREEN.width - spacing.xl * 2 - GAP * (COLS - 1)) / COLS;
+type Filter = "All" | "4K" | "8K" | "Premium";
 
-const DownloadsScreen = ({ navigation }: { navigation?: Nav }) => {
+const FILTERS: Filter[] = ["All", "4K", "8K", "Premium"];
+const API_ORIGIN = String(API.defaults.baseURL || "").replace(/\/api\/?$/, "");
+
+const fallbackImage = (seed: string) =>
+  `https://picsum.photos/seed/flexiwalls-download-${seed}/700/1100`;
+
+const toAbsoluteMediaUrl = (value?: string | null) => {
+  if (!value) return undefined;
+
+  const url = String(value).trim();
+  if (!url) return undefined;
+
+  if (/^https?:\/\//i.test(url)) {
+    if (!API_ORIGIN) return url;
+
+    return url.replace(
+      /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i,
+      API_ORIGIN,
+    );
+  }
+
+  if (url.startsWith("//")) return `https:${url}`;
+
+  if (url.startsWith("/")) {
+    return API_ORIGIN ? `${API_ORIGIN}${url}` : url;
+  }
+
+  return API_ORIGIN ? `${API_ORIGIN}/${url}` : url;
+};
+
+const getWallpaperImage = (item?: DownloadWallpaper | null) => {
+  if (!item) return undefined;
+
+  const record = item as DownloadWallpaper & Record<string, any>;
+
   return (
-    <View style={styles.root}>
-      <MeshBackground variant="profile" />
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 130 }}
+    toAbsoluteMediaUrl(record.thumbnailUrl) ||
+    toAbsoluteMediaUrl(record.imageUrl) ||
+    toAbsoluteMediaUrl(record.thumbnail_url) ||
+    toAbsoluteMediaUrl(record.image_url) ||
+    toAbsoluteMediaUrl(record.url) ||
+    toAbsoluteMediaUrl(record.image) ||
+    toAbsoluteMediaUrl(record.thumbnail) ||
+    toAbsoluteMediaUrl(record.photoUrl) ||
+    toAbsoluteMediaUrl(record.photo_url) ||
+    toAbsoluteMediaUrl(record.mediaUrl) ||
+    toAbsoluteMediaUrl(record.media_url)
+  );
+};
+
+const getPayloadArray = (response: any): any[] => {
+  const payload = response?.data?.data ?? response?.data ?? response;
+  return Array.isArray(payload) ? payload : [];
+};
+
+const normalizeDownload = (record: any): DownloadWallpaper | null => {
+  const wallpaper = record?.wallpaper ?? record?.Wallpaper ?? record;
+
+  if (!wallpaper || typeof wallpaper !== "object") {
+    return null;
+  }
+
+  const id = wallpaper.id ?? record?.wallpaperId ?? record?.id;
+  const imageUrl =
+    wallpaper.imageUrl ??
+    wallpaper.image_url ??
+    wallpaper.url ??
+    wallpaper.image ??
+    wallpaper.mediaUrl;
+  const thumbnailUrl =
+    wallpaper.thumbnailUrl ??
+    wallpaper.thumbnail_url ??
+    wallpaper.thumbnail ??
+    wallpaper.photoUrl;
+
+  if (!id && !imageUrl && !thumbnailUrl) {
+    return null;
+  }
+
+  return {
+    ...wallpaper,
+    id: String(id ?? imageUrl ?? thumbnailUrl),
+    title: wallpaper.title ?? wallpaper.name ?? "Downloaded Wallpaper",
+    imageUrl,
+    thumbnailUrl,
+    quality: wallpaper.quality ?? wallpaper.type ?? "4K",
+    category: wallpaper.category ?? record?.category ?? null,
+    downloadedAt:
+      record?.downloadedAt ??
+      record?.createdAt ??
+      record?.created_at ??
+      wallpaper.downloadedAt ??
+      wallpaper.createdAt ??
+      null,
+    isPremium: Boolean(wallpaper.isPremium ?? wallpaper.premium ?? false),
+    resolution: wallpaper.resolution ?? wallpaper.dimensions ?? null,
+    downloads:
+      wallpaper.downloads ??
+      wallpaper.downloadCount ??
+      wallpaper.totalDownloads ??
+      record?.downloads ??
+      record?.downloadCount ??
+      0,
+  };
+};
+
+const parseTime = (value?: string | Date | null) => {
+  if (!value) return 0;
+
+  const time =
+    value instanceof Date ? value.getTime() : new Date(value).getTime();
+
+  return Number.isFinite(time) ? time : 0;
+};
+
+const uniqueById = (items: DownloadWallpaper[]) => {
+  const seen = new Set<string>();
+
+  return items.filter((item) => {
+    if (!item?.id || seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+};
+
+const DownloadsHeader = ({
+  navigation,
+  activeFilter,
+  onFilterChange,
+  onBrowse,
+}: {
+  navigation: Props["navigation"];
+  activeFilter: Filter;
+  onFilterChange: (filter: Filter) => void;
+  onBrowse: () => void;
+}) => {
+  return (
+    <View>
+      <View style={styles.topBar}>
+        <Pressable
+          onPress={() => navigation.goBack()}
+          hitSlop={8}
+          style={({ pressed }) => [
+            styles.roundAction,
+            { opacity: pressed ? 0.65 : 1 },
+          ]}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <RoundButton icon="chevron-back" onPress={() => navigation?.goBack?.()} />
-            <View style={styles.headerCenter}>
-              <Text style={styles.headerTitle}>Downloads</Text>
-              <Text style={styles.headerSub}>Your downloaded wallpapers</Text>
-            </View>
-            <View style={styles.headerRight}>
-              <RoundButton icon="search" />
-              <RoundButton icon="ellipsis-horizontal" />
-            </View>
-          </View>
+          <BlurView intensity={30} tint="dark" style={styles.roundBlur}>
+            <Ionicons
+              name="chevron-back"
+              size={21}
+              color={colors.textPrimary}
+            />
+          </BlurView>
+        </Pressable>
 
-          {/* Storage summary */}
-          <Card style={styles.summary} padding={spacing.lg} strong>
-            <View style={styles.summaryRow}>
-              <LinearGradient colors={gradients.blueViolet} style={styles.summaryIcon}>
-                <Ionicons name="download-outline" size={24} color={colors.textPrimary} />
-              </LinearGradient>
-              <View style={{ flex: 1, marginLeft: spacing.lg }}>
-                <Text style={styles.summaryTitle}>128 Items</Text>
-                <Text style={styles.summarySub}>45.2 GB Used</Text>
-              </View>
-              <Pressable hitSlop={8}>
-                <Text style={styles.edit}>Edit</Text>
-              </Pressable>
-            </View>
-          </Card>
+        <View style={styles.topTitleWrap}>
+          <Text style={styles.topTitle}>Downloads</Text>
+          <Text style={styles.topSubtitle}>Your saved wallpaper gallery</Text>
+        </View>
 
-          {/* Sort + filter */}
-          <View style={styles.controls}>
-            <View style={styles.sortWrap}>
-              <Text style={styles.sortLabel}>Sort by</Text>
-              <Pressable style={styles.sortPill} hitSlop={6}>
-                <Text style={styles.sortValue}>Newest First</Text>
-                <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
-              </Pressable>
-            </View>
-            <Pressable style={styles.filter} hitSlop={6}>
-              <Ionicons name="funnel-outline" size={16} color={colors.accent} />
-              <Text style={styles.filterText}>Filter</Text>
-            </Pressable>
-          </View>
+        <Pressable
+          onPress={onBrowse}
+          hitSlop={8}
+          style={({ pressed }) => [
+            styles.roundAction,
+            { opacity: pressed ? 0.65 : 1 },
+          ]}
+        >
+          <BlurView intensity={30} tint="dark" style={styles.roundBlur}>
+            <Ionicons
+              name="grid-outline"
+              size={20}
+              color={colors.textPrimary}
+            />
+          </BlurView>
+        </Pressable>
+      </View>
 
-          {/* Grid */}
-          <View style={styles.grid}>
-            {ITEMS.map(it => (
-              <ImageBackground
-                key={it.id}
-                source={{ uri: img(it.seed) }}
-                style={styles.tile}
-                imageStyle={{ borderRadius: radius.md }}
+      <View style={styles.filterWrap}>
+        <BlurView intensity={32} tint="dark" style={styles.filterBar}>
+          {FILTERS.map((filter) => {
+            const active = activeFilter === filter;
+
+            return (
+              <Pressable
+                key={filter}
+                onPress={() => onFilterChange(filter)}
+                style={styles.filterItem}
               >
-                <Pressable style={styles.menu} hitSlop={6}>
-                  <Ionicons name="ellipsis-horizontal" size={16} color={colors.textPrimary} />
-                </Pressable>
-                <View style={styles.quality}>
-                  <Text style={styles.qualityText}>{it.q}</Text>
-                </View>
-              </ImageBackground>
-            ))}
-          </View>
-        </ScrollView>
-      </SafeAreaView>
+                {active ? (
+                  <LinearGradient
+                    colors={gradients.blueViolet}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.filterActive}
+                  >
+                    <Text style={styles.filterTextActive}>{filter}</Text>
+                  </LinearGradient>
+                ) : (
+                  <Text style={styles.filterText}>{filter}</Text>
+                )}
+              </Pressable>
+            );
+          })}
+        </BlurView>
+      </View>
     </View>
   );
 };
 
-export default DownloadsScreen;
+const DownloadsAreaCard = ({
+  downloads,
+  totalDownloads,
+  activeFilter,
+  onOpenWallpaper,
+  onViewAll,
+}: {
+  downloads: DownloadWallpaper[];
+  totalDownloads: number;
+  activeFilter: Filter;
+  onOpenWallpaper: (wallpaper: DownloadWallpaper) => void;
+  onViewAll: () => void;
+}) => {
+  return (
+    <Card style={styles.card} padding={20} strong>
+      <View style={styles.sectionHeader}>
+        <View>
+          <Text style={styles.cardTitle}>All Downloads</Text>
+
+          <Text style={styles.downloadCount}>
+            {activeFilter === "All"
+              ? `${totalDownloads} Wallpaper${totalDownloads !== 1 ? "s" : ""}`
+              : `${downloads.length} ${activeFilter} Wallpaper${
+                  downloads.length !== 1 ? "s" : ""
+                }`}
+          </Text>
+        </View>
+
+        <Pressable onPress={onViewAll} hitSlop={8}>
+          <Text style={styles.viewAll}>View All</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.downloadGrid}>
+        {downloads.map((item) => {
+          const image = getWallpaperImage(item) ?? fallbackImage(item.id);
+
+          return (
+            <Pressable
+              key={item.id}
+              onPress={() => onOpenWallpaper(item)}
+              style={({ pressed }) => [
+                styles.wallpaperButton,
+                {
+                  opacity: pressed ? 0.78 : 1,
+                  transform: [{ scale: pressed ? 0.98 : 1 }],
+                },
+              ]}
+            >
+              <Image
+                source={{ uri: image }}
+                style={styles.wallpaper}
+                resizeMode="cover"
+              />
+            </Pressable>
+          );
+        })}
+      </View>
+    </Card>
+  );
+};
+
+const EmptyState = ({
+  signedIn,
+  authLoading,
+  title,
+  subtitle,
+  onBrowse,
+  onSignIn,
+}: {
+  signedIn: boolean;
+  authLoading: boolean;
+  title?: string;
+  subtitle?: string;
+  onBrowse: () => void;
+  onSignIn: () => void;
+}) => (
+  <View style={styles.emptyWrap}>
+    <Card style={styles.cardNoMargin} padding={24} strong>
+      <View style={styles.emptyContent}>
+        <View style={styles.emptyIcon}>
+          <Ionicons
+            name={signedIn ? "download-outline" : "person-circle-outline"}
+            size={46}
+            color={colors.accent}
+          />
+        </View>
+
+        <Text style={styles.emptyTitle}>
+          {title ??
+            (signedIn ? "No Downloads Yet" : "Sign in to sync downloads")}
+        </Text>
+
+        <Text style={styles.emptySubtitle}>
+          {subtitle ??
+            (signedIn
+              ? "Wallpapers you download will appear here."
+              : "Create your account to save favorites, synchronize downloads and access premium features across all your devices.")}
+        </Text>
+
+        <View style={styles.emptyActions}>
+          <Pressable
+            disabled={authLoading}
+            style={styles.googleButton}
+            onPress={signedIn ? onBrowse : onSignIn}
+          >
+            {authLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons
+                  name={signedIn ? "grid-outline" : "logo-google"}
+                  size={22}
+                  color="#fff"
+                />
+
+                <Text style={styles.googleText}>
+                  {signedIn ? "Browse Wallpapers" : "Continue with Google"}
+                </Text>
+              </>
+            )}
+          </Pressable>
+        </View>
+      </View>
+    </Card>
+  </View>
+);
+
+export default function DownloadsScreen({ navigation }: Props) {
+  const { user, authLoading, signInGoogle } = useAuth();
+
+  const [downloads, setDownloads] = useState<DownloadWallpaper[]>([]);
+  const [activeFilter, setActiveFilter] = useState<Filter>("All");
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadDownloads = useCallback(async () => {
+    if (!user) {
+      setDownloads([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
+    try {
+      const response = await getDownloads();
+      const items = getPayloadArray(response)
+        .map(normalizeDownload)
+        .filter(Boolean) as DownloadWallpaper[];
+
+      const sorted = uniqueById(items).sort(
+        (a, b) => parseTime(b.downloadedAt) - parseTime(a.downloadedAt),
+      );
+
+      setDownloads(sorted);
+    } catch (error) {
+      console.log(
+        "DOWNLOADS LOAD ERROR",
+        (error as any)?.response?.data || (error as any)?.message || error,
+      );
+      setDownloads([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadDownloads();
+  }, [loadDownloads]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadDownloads();
+  }, [loadDownloads]);
+
+  const filteredDownloads = useMemo(() => {
+    if (activeFilter === "All") return downloads;
+
+    if (activeFilter === "Premium") {
+      return downloads.filter((item) => item.isPremium);
+    }
+
+    return downloads.filter((item) =>
+      String(item.quality ?? "")
+        .toUpperCase()
+        .includes(activeFilter),
+    );
+  }, [activeFilter, downloads]);
+
+  const openWallpaper = (wallpaper: DownloadWallpaper) => {
+    navigation.navigate("WallpaperDetails", {
+      wallpaper,
+    });
+  };
+
+  const browseWallpapers = () => {
+    navigation.navigate("MainTabs");
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.root, styles.loadingRoot]}>
+        <MeshBackground variant="profile" />
+        <ActivityIndicator size="large" color={colors.accent} />
+        <Text style={styles.loadingText}>Loading downloads...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.root}>
+      <MeshBackground variant="profile" />
+
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.accent}
+            />
+          }
+          contentContainerStyle={styles.scrollContent}
+        >
+          <DownloadsHeader
+            navigation={navigation}
+            activeFilter={activeFilter}
+            onFilterChange={setActiveFilter}
+            onBrowse={browseWallpapers}
+          />
+
+          {filteredDownloads.length > 0 ? (
+            <DownloadsAreaCard
+              downloads={filteredDownloads}
+              totalDownloads={downloads.length}
+              activeFilter={activeFilter}
+              onOpenWallpaper={openWallpaper}
+              onViewAll={() => setActiveFilter("All")}
+            />
+          ) : (
+            <EmptyState
+              signedIn={!!user}
+              authLoading={authLoading}
+              title={
+                user && downloads.length > 0
+                  ? `No ${activeFilter} Downloads`
+                  : undefined
+              }
+              subtitle={
+                user && downloads.length > 0
+                  ? "Try another filter or download more wallpapers from the gallery."
+                  : undefined
+              }
+              onBrowse={browseWallpapers}
+              onSignIn={signInGoogle}
+            />
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.base },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  root: {
+    flex: 1,
+    backgroundColor: colors.base,
+  },
+  safe: {
+    flex: 1,
+  },
+  loadingRoot: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingText: {
+    color: colors.textSecondary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 14,
+    marginTop: spacing.md,
+  },
+  scrollContent: {
+    paddingBottom: 130,
+  },
+
+  topBar: {
+    minHeight: 72,
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
-  headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitle: { color: colors.textPrimary, fontSize: 24, fontWeight: '800' },
-  headerSub: { color: colors.textSecondary, fontSize: 13, marginTop: 2 },
-  headerRight: { flexDirection: 'row', gap: spacing.sm },
-  summary: { marginHorizontal: spacing.xl, marginTop: spacing.xl },
-  summaryRow: { flexDirection: 'row', alignItems: 'center' },
-  summaryIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
+  topTitleWrap: {
+    flex: 1,
+    alignItems: "center",
+    paddingHorizontal: spacing.md,
   },
-  summaryTitle: { color: colors.textPrimary, fontSize: 22, fontWeight: '800' },
-  summarySub: { color: colors.textSecondary, fontSize: 14, marginTop: 2 },
-  edit: { color: colors.accentBlue, fontSize: 15, fontWeight: '700' },
-  controls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  topTitle: {
+    color: colors.textPrimary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 24,
+    letterSpacing: -0.4,
+  },
+  topSubtitle: {
+    color: colors.textSecondary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  roundAction: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+  },
+  roundBlur: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorder,
+    backgroundColor: colors.glassFill,
+  },
+
+  filterWrap: {
+    paddingHorizontal: spacing.xl,
+    marginTop: spacing.xxl,
+  },
+  filterBar: {
+    flexDirection: "row",
+    padding: 5,
+    borderRadius: radius.pill,
+    overflow: "hidden",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorder,
+    backgroundColor: colors.glassFillSoft,
+  },
+  filterItem: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  filterActive: {
+    width: "100%",
+    paddingVertical: 10,
+    borderRadius: radius.pill,
+    alignItems: "center",
+  },
+  filterText: {
+    color: colors.textSecondary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 13,
+    paddingVertical: 10,
+  },
+  filterTextActive: {
+    color: colors.textPrimary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 13,
+  },
+
+  card: {
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.xl,
+  },
+  cardNoMargin: {
+    marginTop: 0,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  cardTitle: {
+    color: "#fff",
+    fontSize: 24,
+    fontWeight: "900",
+    textAlign: "left",
+  },
+  downloadCount: {
+    color: colors.textSecondary,
+    marginTop: 4,
+    fontSize: 13,
+  },
+  viewAll: {
+    color: colors.accent,
+    fontWeight: "800",
+    fontSize: 15,
+  },
+  downloadGrid: {
+    marginTop: 20,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+  wallpaperButton: {
+    width: "48%",
+    aspectRatio: 0.68,
+    borderRadius: 18,
+    marginBottom: 14,
+    backgroundColor: "#1d1d1d",
+    overflow: "hidden",
+  },
+  wallpaper: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 18,
+    backgroundColor: "#1d1d1d",
+  },
+
+  emptyWrap: {
     paddingHorizontal: spacing.xl,
     marginTop: spacing.xl,
-    marginBottom: spacing.lg,
   },
-  sortWrap: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  sortLabel: { color: colors.textSecondary, fontSize: 14 },
-  sortPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 10,
-    borderRadius: radius.pill,
-    backgroundColor: colors.glassFillSoft,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.glassBorder,
+  emptyContent: {
+    alignItems: "center",
   },
-  sortValue: { color: colors.textPrimary, fontSize: 14, fontWeight: '600' },
-  filter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 10,
-    borderRadius: radius.pill,
-    backgroundColor: colors.chipViolet,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.glassBorder,
+  emptyIcon: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
   },
-  filterText: { color: colors.accent, fontSize: 14, fontWeight: '600' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP, paddingHorizontal: spacing.xl },
-  tile: {
-    width: TILE,
-    height: TILE * 1.55,
-    justifyContent: 'space-between',
-    borderRadius: radius.md,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.glassBorderSoft,
+  emptyTitle: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "900",
+    textAlign: "center",
   },
-  menu: {
-    alignSelf: 'flex-end',
-    margin: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.4)',
+  emptySubtitle: {
+    color: colors.textSecondary,
+    textAlign: "center",
+    marginTop: 12,
+    lineHeight: 22,
+    fontSize: 15,
+    marginBottom: 24,
   },
-  quality: {
-    alignSelf: 'flex-start',
-    margin: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+  emptyActions: {
+    width: "100%",
   },
-  qualityText: { color: colors.textPrimary, fontSize: 11, fontWeight: '800' },
+  googleButton: {
+    width: "100%",
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: "#111827",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,.08)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  googleText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "800",
+  },
 });

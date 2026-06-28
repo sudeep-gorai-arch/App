@@ -13,9 +13,7 @@
         }
       ],
       "expo-secure-store",
-      "expo-web-browser",
-      "@react-native-google-signin/google-signin",
-      "expo-asset"
+      "@react-native-google-signin/google-signin"
     ],
     "name": "FlexiWalls",
     "slug": "flexiwalls",

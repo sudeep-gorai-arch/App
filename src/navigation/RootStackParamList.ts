@@ -11,8 +11,8 @@ export type RootStackParamList = {
 
 
   // Auth
-  Login: undefined;
-  Signup: undefined;
+  // Login: undefined;
+  // Signup: undefined;
 
 
   Payment:
@@ -36,7 +36,7 @@ export type RootStackParamList = {
 
 
   // Account/Profile
-  AccountSettings: undefined;
+  // AccountSettings: undefined;
 
   EditProfile: undefined;
 
@@ -48,7 +48,7 @@ export type RootStackParamList = {
   // Other Pages
   HelpSupport: undefined;
 
-  PrivacySecurity: undefined;
+  // PrivacySecurity: undefined;
 
   PrivacyPolicy: undefined;
 

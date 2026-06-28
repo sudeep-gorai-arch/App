@@ -17,7 +17,6 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HomeScreen from '../screens/Home/HomeScreen';
-import AboutScreen from '../screens/About/AboutScreen';
 import CategoryScreen from '../screens/Category/CategoryScreen';
 import ProfileScreen from '../screens/Profile/ProfileScreen';
 import FavoritesScreen from '../screens/Favorites/FavoritesScreen';
@@ -251,7 +250,6 @@ export default function BottomTabs() {
       <Tab.Screen name="Favorites" component={FavoritesScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
 
-      <Tab.Screen name="About" component={AboutScreen} />
       <Tab.Screen name="Premium" component={PremiumScreen} />
       <Tab.Screen name="Search" component={SearchScreen} />
     </Tab.Navigator>

@@ -17,6 +17,7 @@ import { spacing, radius } from '../../utils/constants';
 
 type Nav = {
   goBack: () => void;
+  navigate: (screen: string) => void;
 };
 
 const ABOUT_DATA = {
@@ -111,10 +112,7 @@ const AboutScreen = ({ navigation }: { navigation: Nav }) => {
           }}
         >
           <View style={styles.topBar}>
-            <RoundButton
-              icon="chevron-back"
-              onPress={() => navigation.goBack()}
-            />
+            <RoundButton icon="chevron-back" onPress={() => navigation?.goBack?.()} />
 
             <RoundButton icon="ellipsis-horizontal" />
           </View>
