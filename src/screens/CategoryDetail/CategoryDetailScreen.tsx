@@ -23,7 +23,7 @@ import { fontFamily } from '../../styles/typography';
 import { spacing, radius, SCREEN } from '../../utils/constants';
 
 import { RootStackParamList } from '../../navigation/RootStackParamList';
-import { getCategoryWallpapers } from '../../services/categoryService';
+import { getCategoryWallpapers } from '../../services/wallpaperService';
 import { Wallpaper } from '../../services/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CategoryDetail'>;
@@ -38,9 +38,46 @@ const placeholderFor = (category: any): Wallpaper[] =>
 
     return {
       id: `ph-${seed}`,
+
       title: `${category?.name ?? 'Wallpaper'} ${i + 1}`,
+
+      subtitle: undefined,
+
+      description: undefined,
+
+      slug: undefined,
+
       imageUrl: `https://picsum.photos/seed/${seed}/600/900`,
+
       thumbnailUrl: `https://picsum.photos/seed/${seed}/600/900`,
+
+      videoUrl: undefined,
+
+      quality: '4K',
+
+      resolution: '2160x3840',
+
+      isFeatured: false,
+
+      isPremium: false,
+
+      active: true,
+
+      likes: 0,
+
+      downloadCount: 0,
+
+      createdAt: new Date().toISOString(),
+
+      updatedAt: new Date().toISOString(),
+
+      category,
+
+      categoryId: category?.id,
+
+      isFavorite: false,
+
+      isLiked: false,
     };
   });
 
@@ -69,11 +106,7 @@ const WallpaperTile = ({
         resizeMode="cover"
       >
         <LinearGradient
-          colors={[
-            'rgba(0,0,0,0.02)',
-            'rgba(0,0,0,0.12)',
-            'rgba(0,0,0,0.88)',
-          ]}
+          colors={['rgba(0,0,0,0.02)', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0.88)']}
           style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
         />
 
@@ -107,7 +140,8 @@ const CategoryDetailScreen = ({ navigation, route }: Props) => {
   const load = async () => {
     try {
       const res = await getCategoryWallpapers(category.slug);
-      const list = res.data?.wallpapers ?? [];
+
+      const list = res.data ?? [];
 
       setItems(list.length ? list : placeholderFor(category));
     } catch (error) {
@@ -124,7 +158,10 @@ const CategoryDetailScreen = ({ navigation, route }: Props) => {
 
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <View style={styles.header}>
-          <RoundButton icon="chevron-back" onPress={() => navigation.goBack()} />
+          <RoundButton
+            icon="chevron-back"
+            onPress={() => navigation.goBack()}
+          />
 
           <View style={styles.headerCenter}>
             <Text style={styles.headerTitle} numberOfLines={1}>

@@ -1,34 +1,69 @@
-import api from './api';
+import API from './api';
+import { ApiResponse, Download } from './types';
 
+export interface DownloadQuery {
+    limit?: number;
+    offset?: number;
+}
 
-// Auth user download
-export const addDownload = (
-    wallpaperId: string
-) =>
-    api.post(
+/**
+ * User Download History
+ */
+export const getDownloads = async (
+    query: DownloadQuery = {},
+) => {
+    const response = await API.get<ApiResponse<Download[]>>(
+        '/downloads',
+        {
+            params: query,
+        },
+    );
+
+    return response.data;
+};
+
+/**
+ * Record Download (Logged-in User)
+ */
+export const recordDownload = async (
+    wallpaperId: string,
+) => {
+    const response = await API.post<ApiResponse<Download>>(
         '/downloads',
         {
             wallpaperId,
-        }
+        },
     );
 
+    return response.data;
+};
 
-
-// Public / Guest download
-export const addPublicDownload = (
-    wallpaperId: string
-) =>
-    api.post(
+/**
+ * Record Download (Guest User)
+ */
+export const recordPublicDownload = async (
+    wallpaperId: string,
+) => {
+    const response = await API.post<ApiResponse<null>>(
         '/downloads/public',
         {
             wallpaperId,
-        }
+        },
     );
 
+    return response.data;
+};
 
+/**
+ * Smart Download Recorder
+ */
+export const addDownload = async (
+    wallpaperId: string,
+    loggedIn: boolean,
+) => {
+    if (loggedIn) {
+        return recordDownload(wallpaperId);
+    }
 
-// User download history
-export const getDownloads = () =>
-    api.get(
-        '/downloads'
-    );
+    return recordPublicDownload(wallpaperId);
+};

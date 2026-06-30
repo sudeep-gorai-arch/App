@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import {
   ActivityIndicator,
@@ -183,7 +189,11 @@ const ProfileTopHeader = ({
               { opacity: pressed ? 0.6 : 1 },
             ]}
           >
-            <BlurView intensity={30} tint="dark" style={styles.profileRoundButton}>
+            <BlurView
+              intensity={30}
+              tint="dark"
+              style={styles.profileRoundButton}
+            >
               <Ionicons
                 name="settings-outline"
                 size={20}
@@ -350,8 +360,8 @@ export default function ProfileScreen({ navigation }: Props) {
     try {
       const res = await getDownloads();
 
-      const images = (res?.data ?? [])
-        .map((item: Wallpaper) => getWallpaperImage(item))
+      const images = (res.data ?? [])
+        .map(download => getWallpaperImage(download.wallpaper))
         .filter(Boolean) as string[];
 
       setDownloads(images);
@@ -382,7 +392,9 @@ export default function ProfileScreen({ navigation }: Props) {
     particleProgress.setValue(0);
     blastGlowProgress.setValue(0);
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
+      () => undefined,
+    );
 
     if (blastTimeoutRef.current) {
       clearTimeout(blastTimeoutRef.current);
@@ -692,7 +704,10 @@ export default function ProfileScreen({ navigation }: Props) {
                 </View>
 
                 {downloads.length > 3 && (
-                  <Pressable style={styles.moreDownloads} onPress={openDownloads}>
+                  <Pressable
+                    style={styles.moreDownloads}
+                    onPress={openDownloads}
+                  >
                     <Text style={styles.moreText}>
                       +{downloads.length - 3} More Wallpapers
                     </Text>
@@ -783,7 +798,7 @@ export default function ProfileScreen({ navigation }: Props) {
             resizeMode="contain"
           />
 
-          {STAR_PARTICLES.map((particle) => {
+          {STAR_PARTICLES.map(particle => {
             const translateX = particleProgress.interpolate({
               inputRange: [0, 1],
               outputRange: [0, particle.x],

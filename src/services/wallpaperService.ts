@@ -1,50 +1,182 @@
 import API from './api';
-import { Wallpaper, ApiResponse } from './types';
+import { ApiResponse, Wallpaper } from './types';
 
-const buildWallpaperParams = (
-  limit: number,
-  offset: number,
-  search?: string,
-  category?: string,
-) => {
-  const params: Record<string, string | number> = {
+export interface WallpaperQuery {
+  limit?: number;
+  offset?: number;
+  search?: string;
+  category?: string;
+  active?: boolean;
+}
+
+const buildParams = ({
+  limit = 20,
+  offset = 0,
+  search,
+  category,
+  active,
+}: WallpaperQuery) => {
+  const params: Record<string, any> = {
     limit,
     offset,
   };
 
-  const cleanSearch = search?.trim();
-  const cleanCategory = category?.trim();
-
-  if (cleanSearch) {
-    params.search = cleanSearch;
-  }
-
-  if (cleanCategory) {
-    params.category = cleanCategory;
-  }
+  if (search?.trim()) params.search = search.trim();
+  if (category?.trim()) params.category = category.trim();
+  if (active !== undefined) params.active = active;
 
   return params;
 };
 
-export const getWallpapers = (
-  limit = 10,
+/**
+ * All Wallpapers
+ */
+export const getWallpapers = async (
+  query: WallpaperQuery = {},
+) => {
+  const response = await API.get<ApiResponse<Wallpaper[]>>(
+    '/wallpapers',
+    {
+      params: buildParams(query),
+    },
+  );
+
+  return response.data;
+};
+
+/**
+ * Featured Wallpapers
+ */
+export const getFeaturedWallpapers = async (limit = 5) => {
+  const response = await API.get<ApiResponse<Wallpaper[]>>(
+    '/wallpapers/featured',
+    {
+      params: { limit },
+    },
+  );
+
+  return response.data;
+};
+
+export const getTrendingWallpapers = async (
+  limit = 20,
+) => {
+  const response = await API.get(
+    "/wallpapers/trending",
+    {
+      params: { limit },
+    },
+  );
+
+  return response.data;
+};
+
+/**
+ * Premium Wallpapers
+ */
+export const getPremiumWallpapers = async (limit = 20) => {
+  const response = await API.get<ApiResponse<Wallpaper[]>>(
+    '/wallpapers/premium',
+    {
+      params: { limit },
+    },
+  );
+
+  return response.data;
+};
+
+/**
+ * Search Wallpapers
+ */
+export const searchWallpapers = async (
+  search: string,
+  limit = 20,
   offset = 0,
-  search?: string,
-  category?: string,
-) =>
-  API.get<ApiResponse<Wallpaper[]>>('/wallpapers', {
-    params: buildWallpaperParams(limit, offset, search, category),
-  }).then(r => r.data);
+) => {
+  const response = await API.get<ApiResponse<Wallpaper[]>>(
+    '/wallpapers/search',
+    {
+      params: {
+        search,
+        limit,
+        offset,
+      },
+    },
+  );
 
-export const getFeaturedWallpapers = (limit = 5) =>
-  API.get<ApiResponse<Wallpaper[]>>('/wallpapers/featured', {
-    params: { limit },
-  }).then(r => r.data);
+  return response.data;
+};
 
-export const getTrendingWallpapers = (limit = 10) =>
-  API.get<ApiResponse<Wallpaper[]>>('/wallpapers/trending', {
-    params: { limit },
-  }).then(r => r.data);
+/**
+ * Wallpapers by Category Slug
+ */
+export const getCategoryWallpapers = async (
+  slug: string,
+  limit = 20,
+  offset = 0,
+) => {
+  const response = await API.get<ApiResponse<Wallpaper[]>>(
+    `/wallpapers/category/${slug}`,
+    {
+      params: {
+        limit,
+        offset,
+      },
+    },
+  );
 
-export const getWallpaperById = (id: string) =>
-  API.get<ApiResponse<Wallpaper>>(`/wallpapers/${id}`).then(r => r.data);
+  return response.data;
+};
+
+/**
+ * Wallpaper Details
+ */
+export const getWallpaperById = async (id: string) => {
+  const response = await API.get<ApiResponse<Wallpaper>>(
+    `/wallpapers/${id}`,
+  );
+
+  return response.data;
+};
+
+/**
+ * Wallpaper By Slug
+ */
+export const getWallpaperBySlug = async (slug: string) => {
+  const response = await API.get<ApiResponse<Wallpaper>>(
+    `/wallpapers/slug/${slug}`,
+  );
+
+  return response.data;
+};
+
+/**
+ * Related Wallpapers
+ */
+export const getRelatedWallpapers = async (
+  id: string,
+) => {
+  const response = await API.get<ApiResponse<Wallpaper[]>>(
+    `/wallpapers/${id}/related`,
+  );
+
+  return response.data;
+};
+
+/**
+ * Increment View Count
+ */
+export const incrementView = async (
+  id: string,
+) => {
+  return API.post(`/wallpapers/${id}/view`);
+};
+
+/**
+ * Increment Download Count
+ */
+export const incrementDownload = async (
+  id: string,
+) => {
+  return API.post(`/wallpapers/${id}/download`);
+};

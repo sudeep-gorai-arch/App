@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -25,8 +25,19 @@ import { RootStackParamList } from '../../navigation/RootStackParamList';
 
 import API from '../../services/api';
 import { downloadWallpaper } from '../../utils/downloadHelper';
-import { addDownload, addPublicDownload } from '../../services/downloadService';
-import { addFavorite } from '../../services/favoriteService';
+import {
+  recordDownload,
+  recordPublicDownload,
+} from '../../services/downloadService';
+import {
+  toggleFavorite,
+  getFavoriteStatus,
+} from '../../services/favoriteService';
+
+import {
+  getWallpaperById,
+  incrementView,
+} from '../../services/wallpaperService';
 import {
   applyWallpaperToAndroid,
   WallpaperApplyTarget,
@@ -93,7 +104,9 @@ const saveGuestDownloadHistory = async (
 
     await AsyncStorage.setItem(
       LOCAL_DOWNLOADS_KEY,
-      JSON.stringify([record, ...withoutDuplicate].slice(0, MAX_LOCAL_DOWNLOADS)),
+      JSON.stringify(
+        [record, ...withoutDuplicate].slice(0, MAX_LOCAL_DOWNLOADS),
+      ),
     );
   } catch (error) {
     console.log('SAVE GUEST DOWNLOAD HISTORY ERROR', error);
@@ -252,7 +265,9 @@ const ApplyButtonIcon = () => {
 };
 
 const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
-  const wallpaper: any = route.params?.wallpaper ?? {};
+  const [wallpaper, setWallpaper] = useState<any>(
+    route.params?.wallpaper ?? {},
+  );
   const wallpaperId = getWallpaperId(wallpaper);
 
   const image = getWallpaperImage(wallpaper);
@@ -271,6 +286,27 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
   const [applyTarget, setApplyTarget] = useState<WallpaperApplyTarget | null>(
     null,
   );
+
+  const loadWallpaper = async () => {
+    try {
+      const [details, favorite] = await Promise.all([
+        getWallpaperById(wallpaperId),
+        getFavoriteStatus(wallpaperId),
+        incrementView(wallpaperId),
+      ]);
+
+      setWallpaper(details.data);
+      setIsFavorite(favorite.data.isFavorite);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  useEffect(() => {
+    if (!wallpaperId) return;
+
+    loadWallpaper();
+  }, [wallpaperId]);
 
   const finalImage = imageFailed
     ? 'https://picsum.photos/seed/flexiwalls-details-error/900/1600'
@@ -304,8 +340,8 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
       if (!isPlaceholder(wallpaperId)) {
         try {
           const response = token
-            ? await addDownload(wallpaperId)
-            : await addPublicDownload(wallpaperId);
+            ? await recordDownload(wallpaperId)
+            : await recordPublicDownload(wallpaperId);
 
           downloadUrl = getDownloadUrlFromResponse(response, finalImage);
         } catch (error: any) {
@@ -358,9 +394,15 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
     try {
       setFavoriteLoading(true);
 
-      await addFavorite(wallpaperId);
+      const response = await toggleFavorite(wallpaperId);
 
-      setIsFavorite(true);
+      setIsFavorite(response.data.isFavorite);
+
+      setWallpaper((prev: any) => ({
+        ...prev,
+        isFavorite: response.data.isFavorite,
+      }));
+
       Alert.alert('Added', 'Wallpaper added to favorites.');
     } catch (error: any) {
       console.log('Add favorite failed:', error?.response?.data || error);
@@ -507,7 +549,10 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
             </Text>
 
             <View style={styles.infoRow}>
-              <InfoPill icon="image-outline" text={getCategoryName(wallpaper)} />
+              <InfoPill
+                icon="image-outline"
+                text={getCategoryName(wallpaper)}
+              />
 
               <InfoPill icon="crop-outline" text={getDimensions(wallpaper)} />
 
@@ -640,11 +685,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
             resizeMode="cover"
           >
             <LinearGradient
-              colors={[
-                'rgba(0,0,0,0.34)',
-                'rgba(0,0,0,0)',
-                'rgba(0,0,0,0.38)',
-              ]}
+              colors={['rgba(0,0,0,0.34)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.38)']}
               style={StyleSheet.absoluteFill}
             />
 
@@ -1016,7 +1057,10 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
             pointerEvents="none"
           />
 
-          <Pressable style={StyleSheet.absoluteFill} onPress={closeSavedPopup} />
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={closeSavedPopup}
+          />
 
           <View style={styles.savedCardBorder}>
             <BlurView intensity={48} tint="dark" style={styles.savedCard}>

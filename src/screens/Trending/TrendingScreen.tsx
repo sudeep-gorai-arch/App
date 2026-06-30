@@ -22,7 +22,10 @@ import MeshBackground from '../../components/MeshBackground';
 
 import API from '../../services/api';
 import { getCategories } from '../../services/categoryService';
-import { getTrendingWallpapers, getWallpapers } from '../../services/wallpaperService';
+import {
+  getTrendingWallpapers,
+  getWallpapers,
+} from '../../services/wallpaperService';
 import { Category, Wallpaper } from '../../services/types';
 
 import { colors } from '../../styles/colors';
@@ -157,11 +160,11 @@ const getWallpaperId = (item: Wallpaper, index = 0) => {
 
   return String(
     w.id ||
-    w._id ||
-    w.wallpaperId ||
-    w.wallpaper_id ||
-    w.uuid ||
-    `wallpaper-${index}`,
+      w._id ||
+      w.wallpaperId ||
+      w.wallpaper_id ||
+      w.uuid ||
+      `wallpaper-${index}`,
   );
 };
 
@@ -170,8 +173,17 @@ const normalizeWallpaper = (item: Wallpaper, index: number): Wallpaper => {
 
   return {
     ...item,
+
     id: getWallpaperId(item, index),
+
     title: w.title || w.name || `Wallpaper ${index + 1}`,
+
+    subtitle: w.subtitle,
+
+    description: w.description,
+
+    slug: w.slug,
+
     imageUrl:
       w.imageUrl ||
       w.image_url ||
@@ -181,24 +193,49 @@ const normalizeWallpaper = (item: Wallpaper, index: number): Wallpaper => {
       w.photo_url ||
       w.mediaUrl ||
       w.media_url,
+
     thumbnailUrl:
       w.thumbnailUrl ||
       w.thumbnail_url ||
       w.thumbnail ||
       w.thumbUrl ||
       w.thumb_url,
+
     quality: w.quality || '4K',
+
+    resolution: w.resolution,
+
     likes: Number(w.likes ?? w.likeCount ?? w.like_count ?? 0),
-    downloads: Number(
-      w.downloads ??
+
+    downloadCount: Number(
       w.downloadCount ??
-      w.download_count ??
-      w.downloadsThisWeek ??
-      w.weeklyDownloads ??
-      w.downloads_this_week ??
-      0,
+        w.download_count ??
+        w.downloads ??
+        w.downloadsThisWeek ??
+        w.weeklyDownloads ??
+        0,
     ),
-    createdAt: w.createdAt || w.created_at || w.updatedAt || w.updated_at,
+
+    isFeatured: Boolean(w.isFeatured),
+
+    isPremium: Boolean(w.isPremium),
+
+    active: w.active === undefined ? true : Boolean(w.active),
+
+    createdAt: w.createdAt || w.created_at || new Date().toISOString(),
+
+    updatedAt:
+      w.updatedAt || w.updated_at || w.createdAt || new Date().toISOString(),
+
+    category: w.category,
+
+    categoryId: w.categoryId,
+
+    isFavorite: Boolean(w.isFavorite),
+
+    isLiked: Boolean(w.isLiked),
+
+    videoUrl: w.videoUrl,
   };
 };
 
@@ -257,13 +294,13 @@ const getDownloadCount = (item: Wallpaper) => {
 
   return Number(
     w.downloadsThisWeek ??
-    w.weeklyDownloads ??
-    w.downloads_this_week ??
-    w.week_downloads ??
-    w.downloadCount ??
-    w.download_count ??
-    w.downloads ??
-    0,
+      w.weeklyDownloads ??
+      w.downloads_this_week ??
+      w.week_downloads ??
+      w.downloadCount ??
+      w.download_count ??
+      w.downloads ??
+      0,
   );
 };
 
@@ -277,18 +314,55 @@ const placeholderWallpapers = (
 ): Wallpaper[] =>
   Array.from({ length: count }).map((_, index) => ({
     id: `${prefix}-placeholder-${index}`,
+
     title:
       categoryName && categoryName !== 'All'
         ? `${categoryName} Top Pick ${index + 1}`
         : prefix === 'weekly'
-          ? `Top Pick ${index + 1}`
-          : `Trending Wallpaper ${index + 1}`,
-    imageUrl: `https://picsum.photos/seed/${prefix}-${categoryName || 'all'}-${index}/800/1400`,
-    thumbnailUrl: `https://picsum.photos/seed/${prefix}-${categoryName || 'all'}-${index}/600/900`,
+        ? `Top Pick ${index + 1}`
+        : `Trending Wallpaper ${index + 1}`,
+
+    subtitle: undefined,
+
+    description: undefined,
+
+    slug: undefined,
+
+    imageUrl: `https://picsum.photos/seed/${prefix}-${
+      categoryName || 'all'
+    }-${index}/800/1400`,
+
+    thumbnailUrl: `https://picsum.photos/seed/${prefix}-${
+      categoryName || 'all'
+    }-${index}/600/900`,
+
+    videoUrl: undefined,
+
     quality: index % 2 === 0 ? '4K' : '8K',
+
+    resolution: '2160x3840',
+
+    isFeatured: false,
+
+    isPremium: false,
+
+    active: true,
+
     likes: 1200 + index * 97,
-    downloads: 900 + index * 64,
+
+    downloadCount: 900 + index * 64,
+
     createdAt: new Date(Date.now() - index * 1000 * 60 * 60).toISOString(),
+
+    updatedAt: new Date(Date.now() - index * 1000 * 60 * 60).toISOString(),
+
+    categoryId: undefined,
+
+    category: undefined,
+
+    isFavorite: false,
+
+    isLiked: false,
   }));
 
 const fetchCategoryWallpapersFallback = async (category: CategoryOption) => {
@@ -304,7 +378,11 @@ const fetchCategoryWallpapersFallback = async (category: CategoryOption) => {
       return uniqueWallpapers(extractWallpapers(response.data));
     }
 
-    const response = await getWallpapers(80, 0, '', category.slug);
+    const response = await getWallpapers({
+      limit: 80,
+      offset: 0,
+      category: category.slug,
+    });
     return uniqueWallpapers(extractWallpapers(response));
   } catch (error) {
     console.log('CATEGORY WEEKLY FALLBACK ERROR', error);
@@ -321,10 +399,10 @@ const fetchWeeklyTopWallpapers = async (
       category.slug === 'all'
         ? { limit: 10 }
         : {
-          limit: 10,
-          category: category.slug,
-          categorySlug: category.slug,
-        };
+            limit: 10,
+            category: category.slug,
+            categorySlug: category.slug,
+          };
 
     const response = await API.get('/wallpapers/top-week', {
       params,
@@ -489,7 +567,10 @@ const CategoryChip = ({
       style={[styles.categoryChip, active && styles.categoryChipActive]}
     >
       <Text
-        style={[styles.categoryChipText, active && styles.categoryChipTextActive]}
+        style={[
+          styles.categoryChipText,
+          active && styles.categoryChipTextActive,
+        ]}
         numberOfLines={1}
       >
         {label}
@@ -565,11 +646,7 @@ const TrendStackCard = ({
         onError={() => setImageFailed(true)}
       >
         <LinearGradient
-          colors={[
-            'rgba(0,0,0,0.18)',
-            'rgba(0,0,0,0.02)',
-            'rgba(0,0,0,0.82)',
-          ]}
+          colors={['rgba(0,0,0,0.18)', 'rgba(0,0,0,0.02)', 'rgba(0,0,0,0.82)']}
           style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
         />
 
@@ -710,8 +787,8 @@ const TrendingStackSlider = ({
           const stackDepth = isRightSide
             ? 2000 + index
             : isCenter
-              ? 1000
-              : 300 + index;
+            ? 1000
+            : 300 + index;
 
           return (
             <View
@@ -793,11 +870,7 @@ const TopPickCard = ({
         onError={() => setImageFailed(true)}
       >
         <LinearGradient
-          colors={[
-            'rgba(0,0,0,0.04)',
-            'rgba(0,0,0,0)',
-            'rgba(0,0,0,0.88)',
-          ]}
+          colors={['rgba(0,0,0,0.04)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.88)']}
           style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
         />
 
@@ -883,10 +956,7 @@ const TrendingScreen = ({ navigation }: { navigation: any }) => {
       setActiveTrend(startIndex);
       scrollX.setValue(startIndex * TREND_SNAP);
 
-      const weeklyTop = await fetchWeeklyTopWallpapers(
-        trendList,
-        ALL_CATEGORY,
-      );
+      const weeklyTop = await fetchWeeklyTopWallpapers(trendList, ALL_CATEGORY);
 
       setTopPicks(weeklyTop.slice(0, 10));
     } catch (error) {

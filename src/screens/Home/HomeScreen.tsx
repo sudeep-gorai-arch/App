@@ -639,7 +639,10 @@ const HomeScreen = () => {
       }
 
       try {
-        const latest = await getWallpapers(HOME_WALLPAPER_LIMIT, 0);
+        const latest = await getWallpapers({
+          limit: HOME_WALLPAPER_LIMIT,
+          offset: 0,
+        });
         latestData = latest?.data ?? [];
       } catch (error) {
         console.log(

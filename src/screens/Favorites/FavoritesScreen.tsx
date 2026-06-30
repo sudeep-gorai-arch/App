@@ -27,7 +27,7 @@ import { spacing, radius, SCREEN } from '../../utils/constants';
 
 import { getFavorites, removeFavorite } from '../../services/favoriteService';
 
-import { Wallpaper } from '../../services/types';
+import { Favorite, Wallpaper } from '../../services/types';
 
 const flexiWallsLogo = require('../../assets/images/flexiwalls-logo.png');
 const proButtonIcon = require('../../assets/images/pro-button.png');
@@ -153,9 +153,11 @@ const FavoriteCard = ({
   item,
   onRemove,
 }: {
-  item: Wallpaper;
-  onRemove: (id: string) => void;
+  item: Favorite;
+  onRemove: (wallpaperId: string) => void;
 }) => {
+  const wallpaper = item.wallpaper;
+
   return (
     <Pressable
       style={({ pressed }) => [
@@ -172,8 +174,8 @@ const FavoriteCard = ({
       <ImageBackground
         source={{
           uri:
-            item.imageUrl ??
-            item.thumbnailUrl ??
+            wallpaper.thumbnailUrl ||
+            wallpaper.imageUrl ||
             'https://picsum.photos/600/900',
         }}
         style={styles.cardImage}
@@ -196,12 +198,12 @@ const FavoriteCard = ({
         />
 
         <BlurView intensity={26} tint="dark" style={styles.qualityChip}>
-          <Text style={styles.qualityText}>{item.quality ?? '4K'}</Text>
+          <Text style={styles.qualityText}>{wallpaper.quality ?? '4K'}</Text>
         </BlurView>
 
         <Pressable
           hitSlop={8}
-          onPress={() => onRemove(item.id)}
+          onPress={() => onRemove(wallpaper.id)}
           style={styles.heartWrap}
         >
           <BlurView intensity={30} tint="dark" style={styles.heartChip}>
@@ -211,18 +213,18 @@ const FavoriteCard = ({
 
         <View style={styles.cardMeta}>
           <Text style={styles.cardTitle} numberOfLines={1}>
-            {item.title}
+            {wallpaper.title}
           </Text>
 
           <View style={styles.cardMetaRow}>
             <Text style={styles.cardCategory}>
-              {item.category?.name ?? 'Wallpaper'}
+              {wallpaper.category?.name ?? 'Wallpaper'}
             </Text>
 
             <View style={styles.likeRow}>
               <Ionicons name="heart" size={12} color={colors.textSecondary} />
 
-              <Text style={styles.likeText}>{item.likes ?? 0}</Text>
+              <Text style={styles.likeText}>{wallpaper.likes ?? 0}</Text>
             </View>
           </View>
         </View>
@@ -256,7 +258,7 @@ const EmptyState = () => (
 const FavoritesScreen = () => {
   const navigation = useNavigation<any>();
 
-  const [items, setItems] = useState<Wallpaper[]>([]);
+  const [items, setItems] = useState<Favorite[]>([]);
   const [filter, setFilter] = useState<Filter>('All');
   const [loading, setLoading] = useState(true);
 
@@ -266,23 +268,25 @@ const FavoritesScreen = () => {
 
   const loadFavorites = async () => {
     try {
-      const res = await getFavorites();
+      setLoading(true);
 
-      setItems(res.data ?? []);
+      const response = await getFavorites();
+
+      setItems(response.data ?? []);
     } catch (error) {
-      console.log('FAVORITE ERROR', error);
+      console.log('FAVORITES ERROR', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const remove = async (id: string) => {
+  const remove = async (wallpaperId: string) => {
     try {
-      await removeFavorite(id);
+      await removeFavorite(wallpaperId);
 
-      setItems(prev => prev.filter(x => x.id !== id));
+      setItems(prev => prev.filter(item => item.wallpaper.id !== wallpaperId));
     } catch (error) {
-      console.log('REMOVE ERROR', error);
+      console.log(error);
     }
   };
 
@@ -290,7 +294,9 @@ const FavoritesScreen = () => {
     const copy = [...items];
 
     if (filter === 'Category') {
-      return copy.sort((a, b) => (b.likes ?? 0) - (a.likes ?? 0));
+      return copy.sort(
+        (a, b) => (b.wallpaper.likes ?? 0) - (a.wallpaper.likes ?? 0),
+      );
     }
 
     return copy;
@@ -311,7 +317,7 @@ const FavoritesScreen = () => {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <FlatList
           data={data}
-          keyExtractor={i => i.id}
+          keyExtractor={item => item.wallpaper.id}
           numColumns={2}
           showsVerticalScrollIndicator={false}
           columnWrapperStyle={styles.columnWrapper}

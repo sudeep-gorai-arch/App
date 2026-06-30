@@ -25,11 +25,7 @@ import { Category } from '../../services/types';
 import { colors } from '../../styles/colors';
 import { fontFamily } from '../../styles/typography';
 
-import {
-  spacing,
-  radius,
-  SCREEN,
-} from '../../utils/constants';
+import { spacing, radius, SCREEN } from '../../utils/constants';
 
 const flexiWallsLogo = require('../../assets/images/flexiwalls-logo.png');
 const proButtonIcon = require('../../assets/images/pro-button.png');
@@ -227,7 +223,7 @@ const CategoryCard = ({
             </Text>
 
             <Text style={styles.cardCount}>
-              {item.count ?? 0} Wallpapers
+              {item.wallpaperCount ?? 0} Wallpapers
             </Text>
           </View>
         </ImageBackground>
@@ -254,7 +250,7 @@ const CategoryCard = ({
             </Text>
 
             <Text style={styles.cardCount}>
-              {item.count ?? 0} Wallpapers
+              {item.wallpaperCount ?? 0} Wallpapers
             </Text>
           </View>
         </View>
@@ -274,11 +270,11 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
 
   const loadData = async () => {
     try {
-      const response = await getCategories();
+      const response = await getCategories({
+        active: true,
+      });
 
-      const apiCategories = Array.isArray(response.data)
-        ? response.data
-        : [];
+      const apiCategories = Array.isArray(response.data) ? response.data : [];
 
       setCategories(apiCategories);
     } catch (error) {
@@ -293,6 +289,7 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
   const openCategory = (item: Category) =>
     navigation.navigate('CategoryDetail', {
       category: item,
+      slug: item.slug,
     });
 
   if (loading) {

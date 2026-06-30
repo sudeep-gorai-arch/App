@@ -34,7 +34,6 @@ type DownloadWallpaper = Omit<Wallpaper, 'category'> & {
   category?: Wallpaper['category'] | null;
   downloadedAt?: string | Date | null;
   downloadCount?: number;
-  downloads?: number;
   isPremium?: boolean;
   resolution?: string | null;
 };
@@ -151,12 +150,12 @@ const normalizeDownload = (record: any): DownloadWallpaper | null => {
       null,
     isPremium: Boolean(wallpaper.isPremium ?? wallpaper.premium ?? false),
     resolution: wallpaper.resolution ?? wallpaper.dimensions ?? null,
-    downloads:
-      wallpaper.downloads ??
+    downloadCount:
       wallpaper.downloadCount ??
+      wallpaper.downloads ??
       wallpaper.totalDownloads ??
-      record?.downloads ??
       record?.downloadCount ??
+      record?.downloads ??
       0,
   };
 };
@@ -173,7 +172,7 @@ const parseTime = (value?: string | Date | null) => {
 const uniqueById = (items: DownloadWallpaper[]) => {
   const seen = new Set<string>();
 
-  return items.filter((item) => {
+  return items.filter(item => {
     if (!item?.id || seen.has(item.id)) return false;
     seen.add(item.id);
     return true;
@@ -251,7 +250,7 @@ const DownloadsHeader = ({
 
       <View style={styles.filterWrap}>
         <BlurView intensity={32} tint="dark" style={styles.filterBar}>
-          {FILTERS.map((filter) => {
+          {FILTERS.map(filter => {
             const active = activeFilter === filter;
 
             return (
@@ -315,7 +314,7 @@ const DownloadsAreaCard = ({
       </View>
 
       <View style={styles.downloadGrid}>
-        {downloads.map((item) => {
+        {downloads.map(item => {
           const image = getWallpaperImage(item) ?? fallbackImage(item.id);
 
           return (
@@ -438,10 +437,10 @@ export default function DownloadsScreen({ navigation }: Props) {
     if (activeFilter === 'All') return downloads;
 
     if (activeFilter === 'Premium') {
-      return downloads.filter((item) => item.isPremium);
+      return downloads.filter(item => item.isPremium);
     }
 
-    return downloads.filter((item) =>
+    return downloads.filter(item =>
       String(item.quality ?? '')
         .toUpperCase()
         .includes(activeFilter),
@@ -502,7 +501,9 @@ export default function DownloadsScreen({ navigation }: Props) {
           ) : (
             <EmptyState
               title={
-                downloads.length > 0 ? `No ${activeFilter} Downloads` : undefined
+                downloads.length > 0
+                  ? `No ${activeFilter} Downloads`
+                  : undefined
               }
               subtitle={
                 downloads.length > 0

@@ -111,11 +111,7 @@ const WallpaperTile = ({
           pressed && styles.cardPressed,
         ]}
       >
-        <Ionicons
-          name="image-outline"
-          size={28}
-          color={colors.textSecondary}
-        />
+        <Ionicons name="image-outline" size={28} color={colors.textSecondary} />
         <Text style={styles.missingText}>Image URL missing</Text>
       </Pressable>
     );
@@ -134,18 +130,18 @@ const WallpaperTile = ({
         onError={() => setImageFailed(true)}
       >
         <LinearGradient
-          colors={[
-            'rgba(0,0,0,0.04)',
-            'rgba(0,0,0,0)',
-            'rgba(5,4,14,0.82)',
-          ]}
+          colors={['rgba(0,0,0,0.04)', 'rgba(0,0,0,0)', 'rgba(5,4,14,0.82)']}
           style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
         />
 
         <View style={styles.cardTop}>
           {(item as any).isPremium ? (
             <BlurView intensity={30} tint="dark" style={styles.lockChip}>
-              <Ionicons name="lock-closed" size={14} color={colors.textPrimary} />
+              <Ionicons
+                name="lock-closed"
+                size={14}
+                color={colors.textPrimary}
+              />
             </BlurView>
           ) : null}
         </View>
@@ -203,8 +199,12 @@ const AllWallpapersScreen = ({ navigation }: Props) => {
           setLoadingMore(true);
         }
 
-        const res = await getWallpapers(PAGE_SIZE, nextOffset);
-        const batch = res?.data ?? [];
+        const res = await getWallpapers({
+          limit: PAGE_SIZE,
+          offset: nextOffset,
+        });
+
+        const batch = res.data ?? [];
 
         setItems(prev => (reset ? batch : mergeUnique(prev, batch)));
         setOffset(nextOffset + batch.length);
@@ -238,7 +238,9 @@ const AllWallpapersScreen = ({ navigation }: Props) => {
   const renderItem = ({ item }: { item: Wallpaper }) => (
     <WallpaperTile
       item={item}
-      onPress={() => navigation.navigate('WallpaperDetails', { wallpaper: item })}
+      onPress={() =>
+        navigation.navigate('WallpaperDetails', { wallpaper: item })
+      }
     />
   );
 

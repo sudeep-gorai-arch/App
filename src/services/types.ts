@@ -1,125 +1,149 @@
 export interface ApiResponse<T> {
-
     success: boolean;
-
     data: T;
-
     message?: string;
-
 }
 
+/* ===========================
+   AUTH
+=========================== */
 
-
-// USER
+export interface Role {
+    id: string;
+    name: string;
+}
 
 export interface User {
-
     id: string;
-
-    email: string;
 
     username: string;
 
-}
-
-
-
-export interface AuthRequest {
-
     email: string;
 
-    password: string;
+    avatarUrl?: string | null;
 
-    username?: string;
+    bio?: string | null;
 
-}
+    isPremium: boolean;
 
-
-
-export interface AuthResponse {
-
-    user: User;
-
-    token: string;
-
-}
-
-
-
-export type Category = {
-  id: string;
-  name: string;
-  slug: string;
-  thumbnailUrl?: string | null;
-  createdAt?: string;
-  count?: number;
-};
-
-
-
-// WALLPAPER
-
-export interface Wallpaper {
-
-    id: string;
-
-
-    title: string;
-
-
-    subtitle?: string;
-
-
-    imageUrl?: string;
-
-
-    thumbnailUrl?: string;
-
-
-    quality?: string;
-
-
-    category?: Category;
-
-
-    likes?: number;
-
-
-    downloads?: number;
-
-
-    isFeatured?: boolean;
-
+    role?: Role | null;
 
     createdAt?: string;
 
+    updatedAt?: string;
+}
+
+export interface AuthRequest {
+    email: string;
+    password: string;
+    username?: string;
+}
+
+export interface AuthResponse {
+    token: string;
+    user: User;
+}
+
+/* ===========================
+   CATEGORY
+=========================== */
+
+export interface Category {
+    id: string;
+
+    name: string;
+
+    slug: string;
+
+    thumbnailUrl?: string | null;
+
+    active?: boolean;
+
+    sortOrder?: number;
+
+    wallpaperCount?: number;
+
+    createdAt?: string;
 
     updatedAt?: string;
-
 }
 
+/* ===========================
+   WALLPAPER
+=========================== */
 
+export interface Wallpaper {
+    id: string;
 
-// FAVORITE
+    title: string;
+
+    subtitle?: string | null;
+
+    description?: string | null;
+
+    slug?: string;
+
+    imageUrl: string;
+
+    thumbnailUrl?: string | null;
+
+    videoUrl?: string | null;
+
+    quality: string;
+
+    resolution?: string;
+
+    active?: boolean;
+
+    isFeatured: boolean;
+
+    isPremium: boolean;
+
+    likes: number;
+
+    downloadCount: number;
+
+    viewCount?: number;
+
+    createdAt: string;
+
+    updatedAt: string;
+
+    categoryId?: string;
+
+    category?: Category;
+
+    isLiked?: boolean;
+
+    isFavorite?: boolean;
+}
+
+/* ===========================
+   FAVORITE
+=========================== */
 
 export interface Favorite {
-
     id: string;
 
-    wallpaper: Wallpaper;
-
-}
-
-
-
-// DOWNLOAD
-
-export interface Download {
-
-    id: string;
+    wallpaperId: string;
 
     wallpaper: Wallpaper;
 
     createdAt: string;
+}
 
+/* ===========================
+   DOWNLOAD
+=========================== */
+
+export interface Download {
+    id: string;
+
+    wallpaperId: string;
+
+    wallpaper: Wallpaper;
+
+    quality: string;
+
+    createdAt: string;
 }

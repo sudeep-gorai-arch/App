@@ -1,20 +1,55 @@
 import API from './api';
-import { AuthRequest, AuthResponse, ApiResponse } from './types';
+import {
+    ApiResponse,
+    AuthRequest,
+    AuthResponse,
+    User,
+} from './types';
 
-export const login = (data: AuthRequest) =>
-    API.post<ApiResponse<AuthResponse>>('/auth/login', data).then(r => r.data);
+/**
+ * Email Login (for admin if enabled)
+ */
+export const login = async (data: AuthRequest) => {
+    const response = await API.post<ApiResponse<AuthResponse>>(
+        '/auth/login',
+        data,
+    );
 
-export const register = (data: AuthRequest) =>
-    API.post<ApiResponse<AuthResponse>>('/auth/register', data).then(r => r.data);
+    return response.data;
+};
 
+/**
+ * Google Login
+ */
 export const googleLogin = async (idToken: string) => {
-    console.log("Sending Google Token to Backend");
+    const response = await API.post<ApiResponse<AuthResponse>>(
+        '/auth/google',
+        {
+            idToken,
+        },
+    );
 
-    const response = await API.post("/auth/google", {
-        idToken,
-    });
+    return response.data;
+};
 
-    console.log("Backend Response", response.data);
+/**
+ * Logout
+ */
+export const logoutUser = async () => {
+    const response = await API.post<ApiResponse<null>>(
+        '/auth/logout',
+    );
+
+    return response.data;
+};
+
+/**
+ * Get Logged-in User
+ */
+export const getProfile = async () => {
+    const response = await API.get<ApiResponse<User>>(
+        '/users/me',
+    );
 
     return response.data;
 };

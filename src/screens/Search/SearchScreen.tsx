@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -15,58 +15,114 @@ import MeshBackground from '../../components/MeshBackground';
 import { colors } from '../../styles/colors';
 import { spacing, radius, SCREEN } from '../../utils/constants';
 
+import { searchWallpapers } from '../../services/wallpaperService';
+
+import { getCategories } from '../../services/categoryService';
+
+import { toggleFavorite } from '../../services/favoriteService';
+
+import { Wallpaper, Category } from '../../services/types';
+
+import { useAuth } from '../../context/AuthContext';
+
 type Nav = { goBack?: () => void };
-
-/** picsum seeds render instantly; swap for images.unsplash.com when wiring real data. */
-const img = (seed: string) => `https://picsum.photos/seed/${seed}/500/800`;
-
-const POPULAR = ['Nature', 'Anime', 'Dark', 'Abstract', 'Cars', 'Space'];
-
-const RESULTS = Array.from({ length: 12 }).map((_, i) => ({
-  id: `r${i}`,
-  image: img(`search-night-${i}`),
-  quality: i % 4 === 0 ? '8K' : '4K',
-  liked: i === 2,
-}));
 
 const COLS = 3;
 const GAP = spacing.md;
 const TILE = (SCREEN.width - spacing.xl * 2 - GAP * (COLS - 1)) / COLS;
 
-const ResultTile = ({
-  image,
-  quality,
-  liked,
-}: {
-  image: string;
-  quality: string;
-  liked: boolean;
-}) => {
-  const [fav, setFav] = useState(liked);
+const ResultTile = ({ wallpaper }: { wallpaper: Wallpaper }) => {
+  const [fav, setFav] = useState(wallpaper.isFavorite ?? false);
+
+  const { isLoggedIn } = useAuth();
+  const onToggleFavorite = async () => {
+    if (!isLoggedIn) {
+      return;
+    }
+
+    const next = !fav;
+    setFav(next);
+
+    try {
+      await toggleFavorite(wallpaper.id);
+    } catch (err) {
+      console.log(err);
+      setFav(!next);
+    }
+  };
+
   return (
     <ImageBackground
-      source={{ uri: image }}
+      source={{
+        uri: wallpaper.thumbnailUrl || wallpaper.imageUrl,
+      }}
       style={styles.tile}
       imageStyle={{ borderRadius: radius.md }}
     >
-      <Pressable style={styles.heart} hitSlop={6} onPress={() => setFav(f => !f)}>
+      <Pressable style={styles.heart} hitSlop={6} onPress={onToggleFavorite}>
         <Ionicons
           name={fav ? 'heart' : 'heart-outline'}
           size={16}
           color={fav ? colors.heart : colors.textPrimary}
         />
       </Pressable>
+
       <View style={styles.quality}>
-        <Text style={styles.qualityText}>{quality}</Text>
+        <Text style={styles.qualityText}>{wallpaper.quality}</Text>
       </View>
     </ImageBackground>
   );
 };
 
 const SearchScreen = (_: { navigation?: Nav }) => {
-  const [query, setQuery] = useState('night city');
+  const [query, setQuery] = useState('');
 
-  const results = useMemo(() => RESULTS, []);
+  const [results, setResults] = useState<Wallpaper[]>([]);
+
+  const [popular, setPopular] = useState<Category[]>([]);
+
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  const loadCategories = async () => {
+    try {
+      const response = await getCategories();
+
+      setPopular(response.data);
+    } catch (err) {
+      console.log(err);
+    }
+  };
+
+  const search = async () => {
+    try {
+      setLoading(true);
+
+      const response = await searchWallpapers(query);
+
+      setResults(response.data);
+    } catch (err) {
+      console.log(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!query.trim()) {
+      setResults([]);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      search();
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [query]);
 
   return (
     <View style={styles.root}>
@@ -78,7 +134,9 @@ const SearchScreen = (_: { navigation?: Nav }) => {
         >
           <View style={styles.head}>
             <Text style={styles.title}>Search Wallpapers</Text>
-            <Text style={styles.subtitle}>Find the perfect wallpaper for your device</Text>
+            <Text style={styles.subtitle}>
+              Find the perfect wallpaper for your device
+            </Text>
 
             <View style={styles.searchBar}>
               <Ionicons name="search" size={20} color={colors.textSecondary} />
@@ -91,31 +149,47 @@ const SearchScreen = (_: { navigation?: Nav }) => {
                 selectionColor={colors.accent}
               />
               {query.length > 0 ? (
-                <Pressable onPress={() => setQuery('')} hitSlop={8} style={styles.clear}>
-                  <Ionicons name="close" size={16} color={colors.textSecondary} />
+                <Pressable
+                  onPress={() => setQuery('')}
+                  hitSlop={8}
+                  style={styles.clear}
+                >
+                  <Ionicons
+                    name="close"
+                    size={16}
+                    color={colors.textSecondary}
+                  />
                 </Pressable>
               ) : null}
             </View>
 
             <Text style={styles.section}>Popular Searches</Text>
             <View style={styles.chips}>
-              {POPULAR.map(c => (
+              {popular.map(category => (
                 <Pressable
-                  key={c}
-                  onPress={() => setQuery(c)}
-                  style={({ pressed }) => [styles.chip, pressed && { opacity: 0.7 }]}
+                  key={category.id}
+                  onPress={() => setQuery(category.name)}
+                  style={({ pressed }) => [
+                    styles.chip,
+                    pressed && { opacity: 0.7 },
+                  ]}
                 >
-                  <Text style={styles.chipText}>{c}</Text>
+                  <Text style={styles.chipText}>{category.name}</Text>
                 </Pressable>
               ))}
             </View>
 
             <View style={styles.resultsHead}>
               <Text style={styles.resultsTitle}>
-                Search Results <Text style={styles.count}>({results.length * 10 + 8})</Text>
+                Search Results{' '}
+                <Text style={styles.count}>({results.length})</Text>
               </Text>
               <Pressable style={styles.filters} hitSlop={6}>
-                <Ionicons name="options-outline" size={16} color={colors.accent} />
+                <Ionicons
+                  name="options-outline"
+                  size={16}
+                  color={colors.accent}
+                />
                 <Text style={styles.filtersText}>Filters</Text>
               </Pressable>
             </View>
@@ -123,7 +197,7 @@ const SearchScreen = (_: { navigation?: Nav }) => {
 
           <View style={styles.grid}>
             {results.map(r => (
-              <ResultTile key={r.id} image={r.image} quality={r.quality} liked={r.liked} />
+              <ResultTile key={r.id} wallpaper={r} />
             ))}
           </View>
         </ScrollView>
@@ -137,7 +211,12 @@ export default SearchScreen;
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.base },
   head: { paddingHorizontal: spacing.xl, paddingTop: spacing.md },
-  title: { color: colors.textPrimary, fontSize: 34, fontWeight: '800', letterSpacing: -0.5 },
+  title: {
+    color: colors.textPrimary,
+    fontSize: 34,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
   subtitle: { color: colors.textSecondary, fontSize: 15, marginTop: 4 },
   searchBar: {
     flexDirection: 'row',

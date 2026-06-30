@@ -1,31 +1,37 @@
 import API from './api';
-import { Category, Wallpaper, ApiResponse } from './types';
+import { ApiResponse, Category } from './types';
 
-export const getCategories = () =>
-  API.get<ApiResponse<Category[]>>('/categories').then(r => r.data);
-
-export interface CategoryWallpapers {
-  category: Pick<
-    Category,
-    'id' | 'name' | 'slug' | 'thumbnailUrl'
-  >;
-
-  wallpapers: Wallpaper[];
+export interface CategoryQuery {
+  limit?: number;
+  offset?: number;
+  active?: boolean;
 }
 
-export const getCategoryWallpapers = (
+/**
+ * Get All Categories
+ */
+export const getCategories = async (
+  query: CategoryQuery = {},
+) => {
+  const response = await API.get<ApiResponse<Category[]>>(
+    '/categories',
+    {
+      params: query,
+    },
+  );
+
+  return response.data;
+};
+
+/**
+ * Get Category By Slug
+ */
+export const getCategoryBySlug = async (
   slug: string,
-  limit = 20,
-  offset = 0,
-) =>
-  API
-    .get<ApiResponse<CategoryWallpapers>>(
-      `/categories/${slug}/wallpapers`,
-      {
-        params: {
-          limit,
-          offset,
-        },
-      },
-    )
-    .then(r => r.data);
+) => {
+  const response = await API.get<ApiResponse<Category>>(
+    `/categories/${slug}`,
+  );
+
+  return response.data;
+};

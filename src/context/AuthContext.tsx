@@ -15,43 +15,25 @@ import {
 
 import API from '../services/api';
 
-import { googleLogin } from '../services/authService';
+import { googleLogin, logoutUser, getProfile } from '../services/authService';
 
-export type Role = {
-  id: string;
-  name: string;
-};
-
-export type User = {
-  id: string;
-
-  username: string;
-
-  email: string;
-
-  avatarUrl?: string | null;
-
-  bio?: string | null;
-
-  isPremium: boolean;
-
-  role?: Role | null;
-};
+import type { User, Role } from '../services/types';
 
 type AuthContextType = {
   user: User | null;
-
   token: string | null;
 
   loading: boolean;
-
   authLoading: boolean;
-
   isLoggedIn: boolean;
 
   signInGoogle: () => Promise<void>;
-
   logout: () => Promise<void>;
+
+  refreshProfile: () => Promise<void>;
+
+  setUser: React.Dispatch<React.SetStateAction<User | null>>;
+  setToken: React.Dispatch<React.SetStateAction<string | null>>;
 };
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -91,7 +73,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       setToken(savedToken);
 
-      setUser(JSON.parse(savedUser));
+      await refreshProfile();
     } catch (error) {
       console.log('RESTORE SESSION ERROR', error);
 
@@ -122,7 +104,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     setToken(jwt);
 
-    setUser(profile);
+    await refreshProfile();
   };
 
   const signInGoogle = async () => {
@@ -194,7 +176,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = async () => {
     try {
       if (token) {
-        await API.post('/auth/logout');
+        await logoutUser();
       }
     } catch (error) {
       console.log(error);
@@ -219,6 +201,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
   };
 
+  const refreshProfile = async () => {
+    try {
+      setLoading(true);
+
+      const response = await getProfile();
+
+      setUser(response.data);
+
+      await SecureStore.setItemAsync('user', JSON.stringify(response.data));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -227,8 +223,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         loading,
         authLoading,
         isLoggedIn: !!user,
+
         signInGoogle,
         logout,
+        refreshProfile,
+
+        setUser,
+        setToken,
       }}
     >
       {children}
