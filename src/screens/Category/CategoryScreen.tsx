@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -25,12 +25,20 @@ import { Category } from '../../services/types';
 import { colors } from '../../styles/colors';
 import { fontFamily } from '../../styles/typography';
 
-import { spacing, radius, SCREEN } from '../../utils/constants';
+import {
+  spacing,
+  radius,
+  SCREEN,
+} from '../../utils/constants';
 
 const flexiWallsLogo = require('../../assets/images/flexiwalls-logo.png');
 const proButtonIcon = require('../../assets/images/pro-button.png');
 
 type Nav = { navigate: (name: string, params?: any) => void };
+
+type CategoryTab = 'All' | 'Popular' | 'New' | 'Premium';
+
+const CATEGORY_TABS: CategoryTab[] = ['All', 'Popular', 'New', 'Premium'];
 
 const GAP = spacing.md;
 const CARD_W = (SCREEN.width - spacing.xl * 2 - GAP) / 2;
@@ -75,6 +83,38 @@ const getCategoryThumbnailUrl = (item: Category) => {
   );
 };
 
+const getCountValue = (item: Category) => {
+  const rawCount = (item as Category & Record<string, any>).count;
+
+  if (typeof rawCount === 'number') return rawCount;
+
+  const parsed = Number(String(rawCount ?? '').replace(/[^\d]/g, ''));
+
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getCreatedTime = (item: Category) => {
+  const value = (item as Category & Record<string, any>).createdAt;
+
+  if (!value) return 0;
+
+  const time = new Date(value).getTime();
+
+  return Number.isFinite(time) ? time : 0;
+};
+
+const isPremiumCategory = (item: Category) => {
+  const category = item as Category & Record<string, any>;
+
+  return Boolean(
+    category.isPremium ||
+      category.premium ||
+      category.premiumOnly ||
+      category.premiumCount ||
+      category.premium_count,
+  );
+};
+
 const ShinyProIcon = () => {
   const shineTranslate = useRef(new Animated.Value(-46)).current;
 
@@ -108,7 +148,7 @@ const ShinyProIcon = () => {
         source={proButtonIcon}
         style={styles.categoryProIcon}
         resizeMode="contain"
-      ></Image>
+      />
 
       <Animated.View
         pointerEvents="none"
@@ -184,6 +224,57 @@ const CategoryTopHeader = ({ navigation }: { navigation: Nav }) => {
   );
 };
 
+const CategoryTabs = ({
+  activeTab,
+  onChange,
+}: {
+  activeTab: CategoryTab;
+  onChange: (tab: CategoryTab) => void;
+}) => {
+  return (
+    <View style={styles.tabsWrap}>
+      <BlurView intensity={34} tint="dark" style={styles.tabsGlass}>
+        <View style={styles.tabsRow}>
+          {CATEGORY_TABS.map(tab => {
+            const selected = activeTab === tab;
+
+            return (
+              <Pressable
+                key={tab}
+                onPress={() => onChange(tab)}
+                style={({ pressed }) => [
+                  styles.tabButton,
+                  selected && styles.tabButtonActive,
+                  pressed && !selected && styles.tabButtonPressed,
+                ]}
+              >
+                {selected ? (
+                  <LinearGradient
+                    colors={['#4D8DFF', '#8B35FF']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                  />
+                ) : null}
+
+                <Text
+                  style={[
+                    styles.tabText,
+                    selected ? styles.tabTextActive : styles.tabTextInactive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {tab}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </BlurView>
+    </View>
+  );
+};
+
 const CategoryCard = ({
   item,
   onPress,
@@ -222,9 +313,7 @@ const CategoryCard = ({
               {item.name}
             </Text>
 
-            <Text style={styles.cardCount}>
-              {item.wallpaperCount ?? 0} Wallpapers
-            </Text>
+            <Text style={styles.cardCount}>{item.wallpaperCount ?? 0} Wallpapers</Text>
           </View>
         </ImageBackground>
       ) : (
@@ -249,9 +338,7 @@ const CategoryCard = ({
               {item.name}
             </Text>
 
-            <Text style={styles.cardCount}>
-              {item.wallpaperCount ?? 0} Wallpapers
-            </Text>
+            <Text style={styles.cardCount}>{item.wallpaperCount ?? 0} Wallpapers</Text>
           </View>
         </View>
       )}
@@ -261,18 +348,36 @@ const CategoryCard = ({
 
 const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
   const [categories, setCategories] = useState<Category[]>([]);
-
+  const [activeTab, setActiveTab] = useState<CategoryTab>('All');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadData();
   }, []);
 
+  const visibleCategories = useMemo(() => {
+    const list = [...categories];
+
+    if (activeTab === 'Popular') {
+      return list.sort((a, b) => getCountValue(b) - getCountValue(a));
+    }
+
+    if (activeTab === 'New') {
+      return list.sort((a, b) => getCreatedTime(b) - getCreatedTime(a));
+    }
+
+    if (activeTab === 'Premium') {
+      const premiumCategories = list.filter(isPremiumCategory);
+
+      return premiumCategories.length ? premiumCategories : list;
+    }
+
+    return list;
+  }, [activeTab, categories]);
+
   const loadData = async () => {
     try {
-      const response = await getCategories({
-        active: true,
-      });
+      const response = await getCategories();
 
       const apiCategories = Array.isArray(response.data) ? response.data : [];
 
@@ -289,7 +394,8 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
   const openCategory = (item: Category) =>
     navigation.navigate('CategoryDetail', {
       category: item,
-      slug: item.slug,
+      initialFilter: activeTab,
+      premiumOnly: activeTab === 'Premium',
     });
 
   if (loading) {
@@ -306,7 +412,7 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
 
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <FlatList
-          data={categories}
+          data={visibleCategories}
           keyExtractor={item => item.id}
           numColumns={2}
           showsVerticalScrollIndicator={false}
@@ -323,6 +429,8 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
                   Explore wallpapers by your favorite themes
                 </Text>
               </View>
+
+              <CategoryTabs activeTab={activeTab} onChange={setActiveTab} />
             </View>
           }
           ListEmptyComponent={
@@ -463,6 +571,63 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.semiBold,
     fontSize: 14,
     marginTop: 4,
+  },
+
+  tabsWrap: {
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.lg,
+  },
+
+  tabsGlass: {
+    height: 56,
+    borderRadius: radius.pill,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorderSoft,
+    backgroundColor: 'rgba(255,255,255,0.045)',
+  },
+
+  tabsRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 6,
+    gap: 6,
+  },
+
+  tabButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+
+  tabButtonActive: {
+    shadowColor: '#8B35FF',
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+
+  tabButtonPressed: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+
+  tabText: {
+    fontFamily: fontFamily.semiBold,
+    fontSize: 13,
+    zIndex: 1,
+  },
+
+  tabTextActive: {
+    color: colors.textPrimary,
+  },
+
+  tabTextInactive: {
+    color: colors.textSecondary,
   },
 
   listContent: {
