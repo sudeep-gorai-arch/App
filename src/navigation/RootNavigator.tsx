@@ -5,7 +5,6 @@ import BottomTabs from './BottomTabs';
 import { RootStackParamList } from './RootStackParamList';
 import { colors } from '../styles/colors';
 
-
 import PaymentScreen from '../screens/Payment/PaymentScreen';
 
 import CategoryDetailScreen from '../screens/CategoryDetail/CategoryDetailScreen';
@@ -44,7 +43,6 @@ const RootNavigator = () => {
     >
       <Stack.Screen name="MainTabs" component={BottomTabs} />
 
-
       <Stack.Screen name="Payment" component={PaymentScreen} />
 
       {/* BROWSE */}
@@ -61,6 +59,8 @@ const RootNavigator = () => {
       {/* PROFILE OPTIONS */}
 
       <Stack.Screen name="EditProfile" component={EditPersonalInfoScreen} />
+
+      <Stack.Screen name="ManagePremium" component={ManagePremiumScreen} />
 
       <Stack.Screen name="Subscription" component={ManagePremiumScreen} />
 

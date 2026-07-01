@@ -83,14 +83,37 @@ const getCategoryThumbnailUrl = (item: Category) => {
   );
 };
 
-const getCountValue = (item: Category) => {
-  const rawCount = (item as Category & Record<string, any>).count;
+const toNumber = (value: unknown) => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
 
-  if (typeof rawCount === 'number') return rawCount;
-
-  const parsed = Number(String(rawCount ?? '').replace(/[^\d]/g, ''));
+  const parsed = Number(String(value ?? '').replace(/[^\d]/g, ''));
 
   return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getCountValue = (item: Category) => {
+  const category = item as Category & Record<string, any>;
+
+  return Math.max(
+    toNumber(category.wallpaperCount),
+    toNumber(category.count),
+    toNumber(category.wallpapersCount),
+    toNumber(category.totalWallpapers),
+    toNumber(category.total_wallpapers),
+    toNumber(category._count?.wallpapers),
+  );
+};
+
+const getPremiumCountValue = (item: Category) => {
+  const category = item as Category & Record<string, any>;
+
+  return Math.max(
+    toNumber(category.premiumCount),
+    toNumber(category.premium_count),
+    toNumber(category.premiumWallpaperCount),
+    toNumber(category.premium_wallpaper_count),
+    toNumber(category._count?.premiumWallpapers),
+  );
 };
 
 const getCreatedTime = (item: Category) => {
@@ -110,9 +133,21 @@ const isPremiumCategory = (item: Category) => {
     category.isPremium ||
       category.premium ||
       category.premiumOnly ||
-      category.premiumCount ||
-      category.premium_count,
+      getPremiumCountValue(item) > 0,
   );
+};
+
+const normalizeCategory = (item: Category) => {
+  const category = item as Category & Record<string, any>;
+
+  return {
+    ...category,
+    id: String(category.id),
+    name: String(category.name ?? ''),
+    slug: String(category.slug ?? ''),
+    thumbnailUrl: getCategoryThumbnailUrl(item),
+    wallpaperCount: getCountValue(item),
+  } as Category;
 };
 
 const ShinyProIcon = () => {
@@ -313,7 +348,7 @@ const CategoryCard = ({
               {item.name}
             </Text>
 
-            <Text style={styles.cardCount}>{item.wallpaperCount ?? 0} Wallpapers</Text>
+            <Text style={styles.cardCount}>{getCountValue(item)} Wallpapers</Text>
           </View>
         </ImageBackground>
       ) : (
@@ -338,7 +373,7 @@ const CategoryCard = ({
               {item.name}
             </Text>
 
-            <Text style={styles.cardCount}>{item.wallpaperCount ?? 0} Wallpapers</Text>
+            <Text style={styles.cardCount}>{getCountValue(item)} Wallpapers</Text>
           </View>
         </View>
       )}
@@ -367,9 +402,7 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
     }
 
     if (activeTab === 'Premium') {
-      const premiumCategories = list.filter(isPremiumCategory);
-
-      return premiumCategories.length ? premiumCategories : list;
+      return list.filter(isPremiumCategory);
     }
 
     return list;
@@ -379,7 +412,9 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
     try {
       const response = await getCategories();
 
-      const apiCategories = Array.isArray(response.data) ? response.data : [];
+      const apiCategories = Array.isArray(response.data)
+        ? response.data.map(normalizeCategory)
+        : [];
 
       setCategories(apiCategories);
     } catch (error) {

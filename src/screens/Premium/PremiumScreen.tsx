@@ -10,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,10 +20,7 @@ import MeshBackground from '../../components/MeshBackground';
 import { colors } from '../../styles/colors';
 import { radius, SCREEN, spacing } from '../../utils/constants';
 
-import {
-  getSubscriptionPlans,
-  verifySubscription,
-} from '../../services/subscriptionService';
+import { getSubscriptionPlans } from '../../services/subscriptionService';
 
 type PremiumReturnRoute = 'Home' | 'Category' | 'Trending' | 'Favorites';
 
@@ -163,6 +161,120 @@ const BILLING_PLANS: BillingPlan[] = [
 ];
 
 const BENEFIT_GAP = spacing.md;
+
+const getBackendPlansArray = (response: any) => {
+  const payload = response?.data?.data ?? response?.data ?? response;
+
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.plans)) return payload.plans;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.subscriptions)) return payload.subscriptions;
+
+  return [];
+};
+
+const normalizePlanId = (plan: any): BillingPlanId | null => {
+  const value = String(
+    plan?.id ??
+      plan?.planId ??
+      plan?.plan_id ??
+      plan?.type ??
+      plan?.plan ??
+      plan?.name ??
+      plan?.title ??
+      plan?.interval ??
+      plan?.billingPeriod ??
+      '',
+  ).toLowerCase();
+
+  if (value.includes('life')) return 'lifetime';
+  if (value.includes('year') || value.includes('annual')) return 'yearly';
+  if (value.includes('month')) return 'monthly';
+
+  return null;
+};
+
+const getPlanAmount = (plan: any, fallback: BillingPlan) => {
+  const rawAmount =
+    plan?.amount ??
+    plan?.price ??
+    plan?.priceAmount ??
+    plan?.price_amount ??
+    plan?.amountInr ??
+    plan?.amount_inr;
+
+  const amount = Number(String(rawAmount ?? '').replace(/[^\d.]/g, ''));
+
+  return Number.isFinite(amount) && amount > 0 ? amount : fallback.amount;
+};
+
+const getPlanPrice = (plan: any, fallback: BillingPlan) => {
+  const displayPrice =
+    plan?.displayPrice ??
+    plan?.display_price ??
+    plan?.formattedPrice ??
+    plan?.formatted_price ??
+    plan?.priceText ??
+    plan?.price_text;
+
+  if (displayPrice) {
+    return String(displayPrice);
+  }
+
+  const amount = getPlanAmount(plan, fallback);
+
+  return `₹${amount.toFixed(2)}`;
+};
+
+const mergeBackendPlanWithDesign = (
+  backendPlan: any,
+  fallback: BillingPlan,
+): BillingPlan => {
+  return {
+    ...fallback,
+
+    title:
+      backendPlan?.title ??
+      backendPlan?.name ??
+      backendPlan?.label ??
+      fallback.title,
+
+    subtitle:
+      backendPlan?.subtitle ??
+      backendPlan?.description ??
+      fallback.subtitle,
+
+    price: getPlanPrice(backendPlan, fallback),
+
+    amount: getPlanAmount(backendPlan, fallback),
+
+    period: fallback.period,
+
+    badge: fallback.badge,
+
+    accent: fallback.accent,
+
+    badgeTone: fallback.badgeTone,
+  };
+};
+
+const normalizeBackendPlansForPremiumUI = (backendPlans: any[]) => {
+  if (!backendPlans.length) {
+    return BILLING_PLANS;
+  }
+
+  return BILLING_PLANS.map(defaultPlan => {
+    const backendMatch = backendPlans.find(
+      plan => normalizePlanId(plan) === defaultPlan.id,
+    );
+
+    if (!backendMatch) {
+      return defaultPlan;
+    }
+
+    return mergeBackendPlanWithDesign(backendMatch, defaultPlan);
+  });
+};
 
 const GlitterProIcon = () => {
   const glitterAnim = useRef(new Animated.Value(0)).current;
@@ -475,9 +587,6 @@ const BillingPlanCard = ({
 
 const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
   const [plans, setPlans] = useState<BillingPlan[]>(BILLING_PLANS);
-
-  const [loading, setLoading] = useState(false);
-
   const [selectedPlan, setSelectedPlan] = useState<BillingPlanId>('lifetime');
 
   const selectedPlanData = plans.find(plan => plan.id === selectedPlan);
@@ -490,11 +599,21 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
     try {
       const response = await getSubscriptionPlans();
 
-      if (response.data?.length) {
-        setPlans(response.data as any);
-      }
+      const backendPlans = getBackendPlansArray(response);
+      const normalizedPlans = normalizeBackendPlansForPremiumUI(backendPlans);
+
+      setPlans(normalizedPlans);
+
+      setSelectedPlan(currentPlan =>
+        normalizedPlans.some(plan => plan.id === currentPlan)
+          ? currentPlan
+          : 'lifetime',
+      );
     } catch (err) {
-      console.log(err);
+      console.log('PREMIUM PLANS LOAD ERROR', err);
+
+      setPlans(BILLING_PLANS);
+      setSelectedPlan('lifetime');
     }
   };
 
@@ -525,8 +644,8 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
 
   return (
     <View style={styles.root}>
-      {' '}
       <MeshBackground variant="category" />
+
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <ScrollView
           showsVerticalScrollIndicator={false}

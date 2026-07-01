@@ -42,6 +42,7 @@ import {
   applyWallpaperToAndroid,
   WallpaperApplyTarget,
 } from '../../services/applyWallpaperService';
+import { appEvents } from '../../utils/appEvents';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'WallpaperDetails'>;
 
@@ -180,10 +181,21 @@ const getDownloadUrlFromResponse = (
   );
 };
 
-const formatCount = (value?: number | string) => {
-  const count = Number(value ?? 0);
+const unwrapApiData = (response: any) =>
+  response?.data?.data ?? response?.data ?? response;
 
-  if (Number.isNaN(count)) return '0';
+const toNumber = (value: unknown) => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  const parsed = Number(String(value ?? '').replace(/[^\d.]/g, ''));
+
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatCount = (value?: number | string) => {
+  const count = toNumber(value);
 
   if (count >= 1000000) {
     return `${(count / 1000000).toFixed(1).replace('.0', '')}M`;
@@ -206,12 +218,36 @@ const getCategoryName = (wallpaper: any) => {
 };
 
 const getDownloads = (wallpaper: any) =>
-  wallpaper?.downloads ??
-  wallpaper?.downloadCount ??
-  wallpaper?.download_count ??
-  wallpaper?.downloadsThisWeek ??
-  wallpaper?.weeklyDownloads ??
-  0;
+  Math.max(
+    toNumber(wallpaper?.downloads),
+    toNumber(wallpaper?.downloadCount),
+    toNumber(wallpaper?.download_count),
+    toNumber(wallpaper?.downloadsThisWeek),
+    toNumber(wallpaper?.weeklyDownloads),
+    toNumber(wallpaper?._count?.downloads),
+  );
+
+const getFavoriteCountValue = (value: any) =>
+  Math.max(
+    toNumber(value?.favoriteCount),
+    toNumber(value?.favorite_count),
+    toNumber(value?.favoritesCount),
+    toNumber(value?._count?.favorites),
+    toNumber(value?.favorites),
+  );
+
+const hasFavoriteCountValue = (value: any) =>
+  value?.favoriteCount !== undefined ||
+  value?.favorite_count !== undefined ||
+  value?.favoritesCount !== undefined ||
+  value?._count?.favorites !== undefined ||
+  value?.favorites !== undefined;
+
+const getFavoriteCountFromPayload = (value: any, fallback: number) => {
+  if (!hasFavoriteCountValue(value)) return fallback;
+
+  return getFavoriteCountValue(value);
+};
 
 const getDimensions = (wallpaper: any) => {
   if (wallpaper?.dimensions) return String(wallpaper.dimensions);
@@ -274,7 +310,12 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
 
   const [status, setStatus] = useState<Status>('idle');
   const [favoriteLoading, setFavoriteLoading] = useState(false);
-  const [isFavorite, setIsFavorite] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(
+    Boolean(wallpaper?.isFavorite || wallpaper?.is_favorite),
+  );
+  const [favoriteCount, setFavoriteCount] = useState(
+    getFavoriteCountValue(wallpaper),
+  );
   const [imageFailed, setImageFailed] = useState(false);
   const [fullscreenVisible, setFullscreenVisible] = useState(false);
   const [fullscreenMenuVisible, setFullscreenMenuVisible] = useState(false);
@@ -288,24 +329,112 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
   );
 
   const loadWallpaper = async () => {
-    try {
-      const [details, favorite] = await Promise.all([
-        getWallpaperById(wallpaperId),
-        getFavoriteStatus(wallpaperId),
-        incrementView(wallpaperId),
-      ]);
+    if (!wallpaperId || isPlaceholder(wallpaperId)) return;
 
-      setWallpaper(details.data);
-      setIsFavorite(favorite.data.isFavorite);
-    } catch (error) {
-      console.log(error);
+    try {
+      const detailsResponse = await getWallpaperById(wallpaperId);
+      const details = unwrapApiData(detailsResponse);
+
+      if (details) {
+        setWallpaper((prev: any) => ({
+          ...prev,
+          ...details,
+        }));
+
+        if (hasFavoriteCountValue(details)) {
+          setFavoriteCount(getFavoriteCountValue(details));
+        }
+      }
+    } catch (error: any) {
+      console.log('Wallpaper details failed:', error?.response?.data || error);
+    }
+  };
+
+  const loadFavoriteStatus = async () => {
+    if (!wallpaperId || isPlaceholder(wallpaperId)) return;
+
+    try {
+      const response = await getFavoriteStatus(wallpaperId);
+      const data = unwrapApiData(response);
+
+      setIsFavorite(Boolean(data?.isFavorite ?? data?.favorite));
+      setFavoriteCount(getFavoriteCountValue(data));
+    } catch (error: any) {
+      console.log('Favorite status failed:', error?.response?.data || error);
+
+      if (error?.response?.status === 401) {
+        setIsFavorite(false);
+      }
+    }
+  };
+
+  const recordWallpaperView = async () => {
+    if (!wallpaperId || isPlaceholder(wallpaperId)) return;
+
+    try {
+      await incrementView(wallpaperId);
+    } catch (error: any) {
+      console.log('Increment view failed:', error?.response?.data || error);
     }
   };
 
   useEffect(() => {
     if (!wallpaperId) return;
 
+    const unsubscribeFavorite = appEvents.on('favoritesChanged', payload => {
+      if (String(payload.wallpaperId) !== wallpaperId) return;
+
+      setIsFavorite(Boolean(payload.isFavorite));
+
+      if (payload.favoriteCount !== undefined) {
+        setFavoriteCount(toNumber(payload.favoriteCount));
+      }
+
+      setWallpaper((prev: any) => ({
+        ...prev,
+        ...(payload.wallpaper || {}),
+        isFavorite: Boolean(payload.isFavorite),
+        is_favorite: Boolean(payload.isFavorite),
+        favoriteCount:
+          payload.favoriteCount !== undefined
+            ? toNumber(payload.favoriteCount)
+            : prev?.favoriteCount,
+        favoritesCount:
+          payload.favoriteCount !== undefined
+            ? toNumber(payload.favoriteCount)
+            : prev?.favoritesCount,
+      }));
+    });
+
+    const unsubscribeDownload = appEvents.on('downloadsChanged', payload => {
+      if (String(payload.wallpaperId) !== wallpaperId) return;
+
+      if (payload.downloadCount === undefined) return;
+
+      const nextDownloadCount = toNumber(payload.downloadCount);
+
+      setWallpaper((prev: any) => ({
+        ...prev,
+        ...(payload.wallpaper || {}),
+        downloadCount: nextDownloadCount,
+        download_count: nextDownloadCount,
+        downloads: nextDownloadCount,
+      }));
+    });
+
+    return () => {
+      unsubscribeFavorite();
+      unsubscribeDownload();
+    };
+  }, [wallpaperId]);
+
+  useEffect(() => {
+    if (!wallpaperId) return;
+
     loadWallpaper();
+    loadFavoriteStatus();
+    recordWallpaperView();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallpaperId]);
 
   const finalImage = imageFailed
@@ -366,8 +495,32 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
         return;
       }
 
+      const nextDownloadCount = getDownloads(wallpaper) + 1;
+      const downloadedAt = new Date().toISOString();
+      const updatedWallpaper = {
+        ...wallpaper,
+        downloadCount: nextDownloadCount,
+        download_count: nextDownloadCount,
+        downloads: nextDownloadCount,
+        downloadedAt,
+      };
+
+      setWallpaper(updatedWallpaper);
+
       if (shouldSaveLocalDownload) {
-        await saveGuestDownloadHistory(wallpaper, wallpaperId, downloadUrl);
+        await saveGuestDownloadHistory(
+          updatedWallpaper,
+          wallpaperId,
+          downloadUrl,
+        );
+      }
+
+      if (wallpaperId && !isPlaceholder(wallpaperId)) {
+        appEvents.emit('downloadsChanged', {
+          wallpaperId,
+          downloadCount: nextDownloadCount,
+          wallpaper: updatedWallpaper,
+        });
       }
 
       setStatus('done');
@@ -391,21 +544,88 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
       return;
     }
 
+    const previousIsFavorite = isFavorite;
+    const previousFavoriteCount = favoriteCount;
+    const nextOptimisticFavorite = !previousIsFavorite;
+    const nextOptimisticCount = Math.max(
+      0,
+      previousFavoriteCount + (nextOptimisticFavorite ? 1 : -1),
+    );
+
+    const optimisticWallpaper = {
+      ...wallpaper,
+      isFavorite: nextOptimisticFavorite,
+      is_favorite: nextOptimisticFavorite,
+      favoriteCount: nextOptimisticCount,
+      favorite_count: nextOptimisticCount,
+      favoritesCount: nextOptimisticCount,
+    };
+
     try {
       setFavoriteLoading(true);
+      setIsFavorite(nextOptimisticFavorite);
+      setFavoriteCount(nextOptimisticCount);
+      setWallpaper(optimisticWallpaper);
+
+      appEvents.emit('favoritesChanged', {
+        wallpaperId,
+        isFavorite: nextOptimisticFavorite,
+        favoriteCount: nextOptimisticCount,
+        wallpaper: optimisticWallpaper,
+      });
 
       const response = await toggleFavorite(wallpaperId);
+      const data = unwrapApiData(response);
 
-      setIsFavorite(response.data.isFavorite);
+      const nextIsFavorite = Boolean(
+        data?.isFavorite ?? data?.favorite ?? nextOptimisticFavorite,
+      );
+      const nextFavoriteCount = getFavoriteCountFromPayload(
+        data,
+        nextOptimisticCount,
+      );
 
-      setWallpaper((prev: any) => ({
-        ...prev,
-        isFavorite: response.data.isFavorite,
-      }));
+      const confirmedWallpaper = {
+        ...optimisticWallpaper,
+        isFavorite: nextIsFavorite,
+        is_favorite: nextIsFavorite,
+        favoriteCount: nextFavoriteCount,
+        favorite_count: nextFavoriteCount,
+        favoritesCount: nextFavoriteCount,
+      };
 
-      Alert.alert('Added', 'Wallpaper added to favorites.');
+      setIsFavorite(nextIsFavorite);
+      setFavoriteCount(nextFavoriteCount);
+      setWallpaper(confirmedWallpaper);
+
+      appEvents.emit('favoritesChanged', {
+        wallpaperId,
+        isFavorite: nextIsFavorite,
+        favoriteCount: nextFavoriteCount,
+        wallpaper: confirmedWallpaper,
+      });
     } catch (error: any) {
-      console.log('Add favorite failed:', error?.response?.data || error);
+      console.log('Favorite toggle failed:', error?.response?.data || error);
+
+      const rollbackWallpaper = {
+        ...wallpaper,
+        isFavorite: previousIsFavorite,
+        is_favorite: previousIsFavorite,
+        favoriteCount: previousFavoriteCount,
+        favorite_count: previousFavoriteCount,
+        favoritesCount: previousFavoriteCount,
+      };
+
+      setIsFavorite(previousIsFavorite);
+      setFavoriteCount(previousFavoriteCount);
+      setWallpaper(rollbackWallpaper);
+
+      appEvents.emit('favoritesChanged', {
+        wallpaperId,
+        isFavorite: previousIsFavorite,
+        favoriteCount: previousFavoriteCount,
+        wallpaper: rollbackWallpaper,
+      });
 
       if (error?.response?.status === 401) {
         Alert.alert(
@@ -415,7 +635,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
         return;
       }
 
-      Alert.alert('Failed', 'Could not add this wallpaper to favorites.');
+      Alert.alert('Failed', 'Could not update this wallpaper favorite.');
     } finally {
       setFavoriteLoading(false);
     }
@@ -665,6 +885,14 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
                       color={isFavorite ? colors.heart : colors.textPrimary}
                     />
                   )}
+
+                  {/* {favoriteCount > 0 ? (
+                    <View style={styles.favoriteCountBadge}>
+                      <Text style={styles.favoriteCountText}>
+                        {formatCount(favoriteCount)}
+                      </Text>
+                    </View>
+                  ) : null} */}
                 </BlurView>
               </Pressable>
             </View>
@@ -685,7 +913,11 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
             resizeMode="cover"
           >
             <LinearGradient
-              colors={['rgba(0,0,0,0.34)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.38)']}
+              colors={[
+                'rgba(0,0,0,0.34)',
+                'rgba(0,0,0,0)',
+                'rgba(0,0,0,0.38)',
+              ]}
               style={StyleSheet.absoluteFill}
             />
 
@@ -829,9 +1061,15 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
                           />
                         )}
 
-                        <Text style={styles.dropdownText}>
-                          {isFavorite ? 'Favorite' : 'Add to Favorite'}
-                        </Text>
+                        {/* <Text style={styles.dropdownText}>
+                          {isFavorite
+                            ? `Favorite${
+                                favoriteCount > 0
+                                  ? ` (${formatCount(favoriteCount)})`
+                                  : ''
+                              }`
+                            : 'Add to Favorite'}
+                        </Text> */}
                       </Pressable>
                     </BlurView>
                   ) : null}
@@ -1331,6 +1569,26 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.34)',
     backgroundColor: 'rgba(5, 8, 18, 0.18)',
   },
+  favoriteCountBadge: {
+    position: 'absolute',
+    right: 5,
+    bottom: 5,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(236,72,153,0.95)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.38)',
+  },
+  // favoriteCountText: {
+  //   color: colors.textPrimary,
+  //   fontFamily: fontFamily.semiBold,
+  //   fontSize: 9,
+  //   lineHeight: 11,
+  // },
 
   fullscreenRoot: {
     flex: 1,

@@ -1,22 +1,23 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  StyleSheet,
-  View,
-  Text,
-  ScrollView,
-  Image,
-  ImageBackground,
-  Pressable,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
   ActivityIndicator,
   Animated,
+  Image,
+  ImageBackground,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 
 import MeshBackground from '../../components/MeshBackground';
 
@@ -28,6 +29,7 @@ import {
 } from '../../services/wallpaperService';
 import { Category, Wallpaper } from '../../services/types';
 
+import { appEvents } from '../../utils/appEvents';
 import { colors } from '../../styles/colors';
 import { typography, fontFamily } from '../../styles/typography';
 import { spacing, radius, SCREEN } from '../../utils/constants';
@@ -46,47 +48,6 @@ const GRID_CARD_H = GRID_CARD_W * 1.52;
 
 const API_ORIGIN = String(API.defaults.baseURL || '').replace(/\/api\/?$/, '');
 
-const LEFT_STACK_VISUAL_POSITIONS = {
-  farRight: 270,
-  right: 190,
-  center: 0,
-  left: -80,
-  farLeft: -80,
-};
-
-const LEFT_STACK_STYLES = {
-  farRight: {
-    scale: 0.76,
-    opacity: 0.3,
-    blur: 0.72,
-    fade: 0.52,
-  },
-  right: {
-    scale: 0.88,
-    opacity: 0.72,
-    blur: 0.32,
-    fade: 0.2,
-  },
-  center: {
-    scale: 1,
-    opacity: 1,
-    blur: 0,
-    fade: 0,
-  },
-  left: {
-    scale: 0.88,
-    opacity: 0.7,
-    blur: 0.36,
-    fade: 0.24,
-  },
-  farLeft: {
-    scale: 0.78,
-    opacity: 0.5,
-    blur: 0.55,
-    fade: 0.36,
-  },
-};
-
 type CategoryOption = {
   id: string;
   name: string;
@@ -98,18 +59,6 @@ const ALL_CATEGORY: CategoryOption = {
   name: 'All',
   slug: 'all',
 };
-
-const FALLBACK_CATEGORIES: CategoryOption[] = [
-  { id: 'anime', name: 'Anime', slug: 'anime' },
-  { id: 'sports', name: 'Sports', slug: 'sports' },
-  { id: 'nature', name: 'Nature', slug: 'nature' },
-  { id: 'cars', name: 'Cars', slug: 'cars' },
-  { id: 'abstract', name: 'Abstract', slug: 'abstract' },
-  { id: 'city', name: 'City', slug: 'city' },
-  { id: 'space', name: 'Space', slug: 'space' },
-  { id: 'gaming', name: 'Gaming', slug: 'gaming' },
-  { id: 'animals', name: 'Animals', slug: 'animals' },
-];
 
 const slugify = (value?: string) =>
   String(value || '')
@@ -155,28 +104,142 @@ const toAbsoluteMediaUrl = (value?: string | null) => {
   return API_ORIGIN ? `${API_ORIGIN}/${url}` : url;
 };
 
-const getWallpaperId = (item: Wallpaper, index = 0) => {
+const getVariantUrl = (item: any, preferredTypes: string[]) => {
+  const variants = Array.isArray(item?.wallpaperVariants)
+    ? item.wallpaperVariants
+    : Array.isArray(item?.variants)
+      ? item.variants
+      : [];
+
+  for (const type of preferredTypes) {
+    const found = variants.find(
+      (variant: any) =>
+        String(variant?.type || '').toUpperCase() === type.toUpperCase(),
+    );
+
+    const url =
+      found?.url ||
+      found?.path ||
+      found?.imageUrl ||
+      found?.image_url ||
+      found?.thumbnailUrl ||
+      found?.thumbnail_url;
+
+    if (url) return url;
+  }
+
+  const defaultVariant = variants.find((variant: any) => variant?.isDefault);
+
+  return (
+    defaultVariant?.url ||
+    defaultVariant?.path ||
+    defaultVariant?.imageUrl ||
+    defaultVariant?.image_url
+  );
+};
+
+const getRawImageUrl = (item: any) =>
+  item?.imageUrl ||
+  item?.image_url ||
+  item?.displayPath ||
+  item?.display_path ||
+  getVariantUrl(item, ['DISPLAY', 'ORIGINAL', 'THUMBNAIL']) ||
+  item?.url ||
+  item?.image ||
+  item?.photoUrl ||
+  item?.photo_url ||
+  item?.mediaUrl ||
+  item?.media_url ||
+  item?.originalPath ||
+  item?.original_path;
+
+const getRawThumbnailUrl = (item: any) =>
+  item?.thumbnailUrl ||
+  item?.thumbnail_url ||
+  item?.thumbnailPath ||
+  item?.thumbnail_path ||
+  getVariantUrl(item, ['THUMBNAIL', 'DISPLAY', 'ORIGINAL']) ||
+  item?.thumbnail ||
+  item?.thumbUrl ||
+  item?.thumb_url ||
+  item?.displayPath ||
+  item?.display_path ||
+  item?.imageUrl ||
+  item?.image_url;
+
+const getWallpaperId = (item: Wallpaper | Record<string, any>, index = 0) => {
   const w = item as Wallpaper & Record<string, any>;
 
   return String(
     w.id ||
-      w._id ||
-      w.wallpaperId ||
-      w.wallpaper_id ||
-      w.uuid ||
-      `wallpaper-${index}`,
+    w._id ||
+    w.wallpaperId ||
+    w.wallpaper_id ||
+    w.uuid ||
+    `wallpaper-${index}`,
   );
+};
+
+const getWallpaperEventId = (item: Wallpaper | Record<string, any>) => {
+  const w = item as Wallpaper & Record<string, any>;
+
+  return String(
+    w?.id || w?._id || w?.wallpaperId || w?.wallpaper_id || w?.uuid || '',
+  );
+};
+
+const toNumber = (value: unknown) => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  const parsed = Number(String(value ?? '').replace(/[^\d]/g, ''));
+
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatCount = (value?: number | string) => {
+  const count = toNumber(value);
+
+  if (count >= 1000000) {
+    return `${(count / 1000000).toFixed(1).replace('.0', '')}M`;
+  }
+
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1).replace('.0', '')}K`;
+  }
+
+  return String(count);
 };
 
 const normalizeWallpaper = (item: Wallpaper, index: number): Wallpaper => {
   const w = item as Wallpaper & Record<string, any>;
+
+  const favoriteCount = Math.max(
+    toNumber(w.favoriteCount),
+    toNumber(w.favorite_count),
+    toNumber(w.favoritesCount),
+    toNumber(w.favorites_count),
+    toNumber(w._count?.favorites),
+    toNumber(w.favorites),
+  );
+
+  const downloadCount = Math.max(
+    toNumber(w.downloadsThisWeek),
+    toNumber(w.weeklyDownloads),
+    toNumber(w.downloads_this_week),
+    toNumber(w.week_downloads),
+    toNumber(w.downloadCount),
+    toNumber(w.download_count),
+    toNumber(w.downloads),
+  );
 
   return {
     ...item,
 
     id: getWallpaperId(item, index),
 
-    title: w.title || w.name || `Wallpaper ${index + 1}`,
+    title: w.title || w.name || '',
 
     subtitle: w.subtitle,
 
@@ -184,37 +247,17 @@ const normalizeWallpaper = (item: Wallpaper, index: number): Wallpaper => {
 
     slug: w.slug,
 
-    imageUrl:
-      w.imageUrl ||
-      w.image_url ||
-      w.url ||
-      w.image ||
-      w.photoUrl ||
-      w.photo_url ||
-      w.mediaUrl ||
-      w.media_url,
+    imageUrl: toAbsoluteMediaUrl(getRawImageUrl(w)) || '',
 
-    thumbnailUrl:
-      w.thumbnailUrl ||
-      w.thumbnail_url ||
-      w.thumbnail ||
-      w.thumbUrl ||
-      w.thumb_url,
+    thumbnailUrl: toAbsoluteMediaUrl(getRawThumbnailUrl(w)) || '',
 
-    quality: w.quality || '4K',
+    quality: w.quality || '',
 
     resolution: w.resolution,
 
     likes: Number(w.likes ?? w.likeCount ?? w.like_count ?? 0),
 
-    downloadCount: Number(
-      w.downloadCount ??
-        w.download_count ??
-        w.downloads ??
-        w.downloadsThisWeek ??
-        w.weeklyDownloads ??
-        0,
-    ),
+    downloadCount,
 
     isFeatured: Boolean(w.isFeatured),
 
@@ -222,21 +265,26 @@ const normalizeWallpaper = (item: Wallpaper, index: number): Wallpaper => {
 
     active: w.active === undefined ? true : Boolean(w.active),
 
-    createdAt: w.createdAt || w.created_at || new Date().toISOString(),
+    createdAt: w.createdAt || w.created_at || '',
 
-    updatedAt:
-      w.updatedAt || w.updated_at || w.createdAt || new Date().toISOString(),
+    updatedAt: w.updatedAt || w.updated_at || w.createdAt || w.created_at || '',
 
     category: w.category,
 
     categoryId: w.categoryId,
 
-    isFavorite: Boolean(w.isFavorite),
+    isFavorite: Boolean(w.isFavorite || w.is_favorite),
 
     isLiked: Boolean(w.isLiked),
 
     videoUrl: w.videoUrl,
-  };
+
+    favoriteCount,
+    favoritesCount: favoriteCount,
+
+    downloadsThisWeek: downloadCount,
+    weeklyDownloads: downloadCount,
+  } as Wallpaper;
 };
 
 const extractWallpapers = (payload: any): Wallpaper[] => {
@@ -246,6 +294,7 @@ const extractWallpapers = (payload: any): Wallpaper[] => {
   if (Array.isArray(payload?.data?.items)) return payload.data.items;
   if (Array.isArray(payload?.wallpapers)) return payload.wallpapers;
   if (Array.isArray(payload?.items)) return payload.items;
+
   return [];
 };
 
@@ -264,108 +313,75 @@ const uniqueWallpapers = (items: Wallpaper[]) => {
     });
 };
 
-const getWallpaperImage = (item: Wallpaper, fallbackSeed: string) => {
+const patchWallpaperList = (
+  items: Wallpaper[],
+  wallpaperId: string,
+  patch: Record<string, any>,
+) => {
+  if (!wallpaperId) return items;
+
+  let changed = false;
+
+  const nextItems = items.map((item, index) => {
+    if (getWallpaperEventId(item) !== wallpaperId) {
+      return item;
+    }
+
+    changed = true;
+
+    return normalizeWallpaper(
+      {
+        ...(item as Wallpaper & Record<string, any>),
+        ...patch,
+      } as Wallpaper,
+      index,
+    );
+  });
+
+  return changed ? nextItems : items;
+};
+
+const getWallpaperImage = (item: Wallpaper) => {
   const w = item as Wallpaper & Record<string, any>;
 
   return (
-    toAbsoluteMediaUrl(w.imageUrl) ||
-    toAbsoluteMediaUrl(w.thumbnailUrl) ||
-    toAbsoluteMediaUrl(w.image_url) ||
-    toAbsoluteMediaUrl(w.thumbnail_url) ||
-    toAbsoluteMediaUrl(w.url) ||
-    toAbsoluteMediaUrl(w.image) ||
-    toAbsoluteMediaUrl(w.thumbnail) ||
-    toAbsoluteMediaUrl(w.photoUrl) ||
-    toAbsoluteMediaUrl(w.photo_url) ||
-    toAbsoluteMediaUrl(w.mediaUrl) ||
-    toAbsoluteMediaUrl(w.media_url) ||
-    `https://picsum.photos/seed/${fallbackSeed}/800/1400`
+    toAbsoluteMediaUrl(getRawThumbnailUrl(w)) ||
+    toAbsoluteMediaUrl(getRawImageUrl(w)) ||
+    undefined
   );
 };
 
-const formatCount = (value?: number) => {
-  if (value === undefined || value === null) return '0';
-  if (value >= 1000) return `${(value / 1000).toFixed(1).replace('.0', '')}K`;
-  return String(value);
+const getFavoriteCount = (item: Wallpaper) => {
+  const w = item as Wallpaper & Record<string, any>;
+
+  return Math.max(
+    toNumber(w.favoriteCount),
+    toNumber(w.favorite_count),
+    toNumber(w.favoritesCount),
+    toNumber(w.favorites_count),
+    toNumber(w._count?.favorites),
+    toNumber(w.favorites),
+  );
 };
 
 const getDownloadCount = (item: Wallpaper) => {
   const w = item as Wallpaper & Record<string, any>;
 
-  return Number(
-    w.downloadsThisWeek ??
-      w.weeklyDownloads ??
-      w.downloads_this_week ??
-      w.week_downloads ??
-      w.downloadCount ??
-      w.download_count ??
-      w.downloads ??
-      0,
+  return Math.max(
+    toNumber(w.downloadsThisWeek),
+    toNumber(w.weeklyDownloads),
+    toNumber(w.downloads_this_week),
+    toNumber(w.week_downloads),
+    toNumber(w.downloadCount),
+    toNumber(w.download_count),
+    toNumber(w.downloads),
   );
 };
 
 const sortByDownloads = (items: Wallpaper[]) =>
   [...items].sort((a, b) => getDownloadCount(b) - getDownloadCount(a));
 
-const placeholderWallpapers = (
-  prefix: string,
-  count: number,
-  categoryName?: string,
-): Wallpaper[] =>
-  Array.from({ length: count }).map((_, index) => ({
-    id: `${prefix}-placeholder-${index}`,
-
-    title:
-      categoryName && categoryName !== 'All'
-        ? `${categoryName} Top Pick ${index + 1}`
-        : prefix === 'weekly'
-        ? `Top Pick ${index + 1}`
-        : `Trending Wallpaper ${index + 1}`,
-
-    subtitle: undefined,
-
-    description: undefined,
-
-    slug: undefined,
-
-    imageUrl: `https://picsum.photos/seed/${prefix}-${
-      categoryName || 'all'
-    }-${index}/800/1400`,
-
-    thumbnailUrl: `https://picsum.photos/seed/${prefix}-${
-      categoryName || 'all'
-    }-${index}/600/900`,
-
-    videoUrl: undefined,
-
-    quality: index % 2 === 0 ? '4K' : '8K',
-
-    resolution: '2160x3840',
-
-    isFeatured: false,
-
-    isPremium: false,
-
-    active: true,
-
-    likes: 1200 + index * 97,
-
-    downloadCount: 900 + index * 64,
-
-    createdAt: new Date(Date.now() - index * 1000 * 60 * 60).toISOString(),
-
-    updatedAt: new Date(Date.now() - index * 1000 * 60 * 60).toISOString(),
-
-    categoryId: undefined,
-
-    category: undefined,
-
-    isFavorite: false,
-
-    isLiked: false,
-  }));
-
-const fetchCategoryWallpapersFallback = async (category: CategoryOption) => {
+const fetchCategoryWallpapersFromApi = async (category: CategoryOption) => {
   try {
     if (category.slug === 'all') {
       const response = await API.get('/wallpapers', {
@@ -383,15 +399,16 @@ const fetchCategoryWallpapersFallback = async (category: CategoryOption) => {
       offset: 0,
       category: category.slug,
     });
+
     return uniqueWallpapers(extractWallpapers(response));
   } catch (error) {
-    console.log('CATEGORY WEEKLY FALLBACK ERROR', error);
+    console.log('CATEGORY WEEKLY API ERROR', error);
     return [];
   }
 };
 
 const fetchWeeklyTopWallpapers = async (
-  fallbackTrending: Wallpaper[],
+  trendingList: Wallpaper[],
   category: CategoryOption,
 ) => {
   try {
@@ -399,10 +416,10 @@ const fetchWeeklyTopWallpapers = async (
       category.slug === 'all'
         ? { limit: 10 }
         : {
-            limit: 10,
-            category: category.slug,
-            categorySlug: category.slug,
-          };
+          limit: 10,
+          category: category.slug,
+          categorySlug: category.slug,
+        };
 
     const response = await API.get('/wallpapers/top-week', {
       params,
@@ -414,26 +431,24 @@ const fetchWeeklyTopWallpapers = async (
       return sortByDownloads(weeklyList).slice(0, 10);
     }
   } catch (error) {
-    console.log('TOP WEEK WALLPAPERS API FALLBACK USED');
+    console.log('TOP WEEK WALLPAPERS API ERROR', error);
   }
 
-  const fallbackCategoryWallpapers = await fetchCategoryWallpapersFallback(
-    category,
-  );
+  const categoryWallpapers = await fetchCategoryWallpapersFromApi(category);
 
-  if (fallbackCategoryWallpapers.length) {
-    return sortByDownloads(fallbackCategoryWallpapers).slice(0, 10);
+  if (categoryWallpapers.length) {
+    return sortByDownloads(categoryWallpapers).slice(0, 10);
   }
 
   if (category.slug === 'all') {
-    const fallbackList = sortByDownloads(fallbackTrending).slice(0, 10);
+    const trendingTopList = sortByDownloads(trendingList).slice(0, 10);
 
-    if (fallbackList.length) {
-      return fallbackList;
+    if (trendingTopList.length) {
+      return trendingTopList;
     }
   }
 
-  return placeholderWallpapers('weekly', 10, category.name);
+  return [];
 };
 
 const ShinyProIcon = () => {
@@ -617,7 +632,6 @@ const CategorySelector = ({
 
 const TrendStackCard = ({
   item,
-  index,
   onPress,
 }: {
   item: Wallpaper;
@@ -625,10 +639,51 @@ const TrendStackCard = ({
   onPress: () => void;
 }) => {
   const [imageFailed, setImageFailed] = useState(false);
+  const image = imageFailed ? undefined : getWallpaperImage(item);
 
-  const image = imageFailed
-    ? `https://picsum.photos/seed/trending-page-fallback-${index}/600/1000`
-    : getWallpaperImage(item, `trending-page-${getWallpaperId(item, index)}`);
+  const content = image ? (
+    <ImageBackground
+      source={{ uri: image }}
+      style={styles.trendStackImage}
+      imageStyle={{ borderRadius: radius.lg }}
+      resizeMode="cover"
+      onError={() => setImageFailed(true)}
+    >
+      <LinearGradient
+        colors={[
+          'rgba(0,0,0,0.18)',
+          'rgba(0,0,0,0.02)',
+          'rgba(0,0,0,0.82)',
+        ]}
+        style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
+      />
+
+      <View style={styles.trendStackTop}>
+        <BlurView intensity={34} tint="dark" style={styles.trendingBadge}>
+          <Text style={styles.trendingBadgeText}>Trending</Text>
+        </BlurView>
+      </View>
+
+      <View style={styles.trendStackBottom}>
+        <View style={styles.trendLikePill}>
+          <Ionicons
+            name="heart-outline"
+            size={16}
+            color={colors.textPrimary}
+          />
+
+          <Text style={styles.trendLikes}>
+            {formatCount(getFavoriteCount(item))}
+          </Text>
+        </View>
+      </View>
+    </ImageBackground>
+  ) : (
+    <View style={styles.trendImagePlaceholder}>
+      <Ionicons name="image-outline" size={32} color={colors.textSecondary} />
+      <Text style={styles.trendPlaceholderText}>No image</Text>
+    </View>
+  );
 
   return (
     <Pressable
@@ -638,35 +693,7 @@ const TrendStackCard = ({
         pressed && styles.trendPressed,
       ]}
     >
-      <ImageBackground
-        source={{ uri: image }}
-        style={styles.trendStackImage}
-        imageStyle={{ borderRadius: radius.lg }}
-        resizeMode="cover"
-        onError={() => setImageFailed(true)}
-      >
-        <LinearGradient
-          colors={['rgba(0,0,0,0.18)', 'rgba(0,0,0,0.02)', 'rgba(0,0,0,0.82)']}
-          style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
-        />
-
-        <View style={styles.trendStackTop}>
-          <BlurView intensity={34} tint="dark" style={styles.trendingBadge}>
-            <Text style={styles.trendingBadgeText}>Trending</Text>
-          </BlurView>
-        </View>
-
-        <View style={styles.trendStackBottom}>
-          <View style={styles.trendLikePill}>
-            <Ionicons
-              name="heart-outline"
-              size={16}
-              color={colors.textPrimary}
-            />
-            <Text style={styles.trendLikes}>{formatCount(item.likes)}</Text>
-          </View>
-        </View>
-      </ImageBackground>
+      {content}
     </Pressable>
   );
 };
@@ -722,62 +749,38 @@ const TrendingStackSlider = ({
 
           const scale = scrollX.interpolate({
             inputRange,
-            outputRange: [
-              LEFT_STACK_STYLES.farRight.scale,
-              LEFT_STACK_STYLES.right.scale,
-              LEFT_STACK_STYLES.center.scale,
-              LEFT_STACK_STYLES.left.scale,
-              LEFT_STACK_STYLES.farLeft.scale,
-            ],
+            outputRange: [0.76, 0.88, 1, 0.88, 0.78],
+            extrapolate: 'clamp',
+          });
+
+          const opacity = scrollX.interpolate({
+            inputRange,
+            outputRange: [0.3, 0.72, 1, 0.7, 0.5],
             extrapolate: 'clamp',
           });
 
           const translateX = scrollX.interpolate({
             inputRange,
             outputRange: [
-              LEFT_STACK_VISUAL_POSITIONS.farRight - TREND_SNAP * 2,
-              LEFT_STACK_VISUAL_POSITIONS.right - TREND_SNAP,
-              LEFT_STACK_VISUAL_POSITIONS.center,
-              LEFT_STACK_VISUAL_POSITIONS.left + TREND_SNAP,
-              LEFT_STACK_VISUAL_POSITIONS.farLeft + TREND_SNAP * 2,
+              270 - TREND_SNAP * 2,
+              190 - TREND_SNAP,
+              0,
+              -80 + TREND_SNAP,
+              -80 + TREND_SNAP * 2,
             ],
             extrapolateLeft: 'clamp',
             extrapolateRight: 'extend',
           });
 
-          const opacity = scrollX.interpolate({
-            inputRange,
-            outputRange: [
-              LEFT_STACK_STYLES.farRight.opacity,
-              LEFT_STACK_STYLES.right.opacity,
-              LEFT_STACK_STYLES.center.opacity,
-              LEFT_STACK_STYLES.left.opacity,
-              LEFT_STACK_STYLES.farLeft.opacity,
-            ],
-            extrapolate: 'clamp',
-          });
-
           const blurOpacity = scrollX.interpolate({
             inputRange,
-            outputRange: [
-              LEFT_STACK_STYLES.farRight.blur,
-              LEFT_STACK_STYLES.right.blur,
-              LEFT_STACK_STYLES.center.blur,
-              LEFT_STACK_STYLES.left.blur,
-              LEFT_STACK_STYLES.farLeft.blur,
-            ],
+            outputRange: [0.72, 0.32, 0, 0.36, 0.55],
             extrapolate: 'clamp',
           });
 
           const fadeOpacity = scrollX.interpolate({
             inputRange,
-            outputRange: [
-              LEFT_STACK_STYLES.farRight.fade,
-              LEFT_STACK_STYLES.right.fade,
-              LEFT_STACK_STYLES.center.fade,
-              LEFT_STACK_STYLES.left.fade,
-              LEFT_STACK_STYLES.farLeft.fade,
-            ],
+            outputRange: [0.52, 0.2, 0, 0.24, 0.36],
             extrapolate: 'clamp',
           });
 
@@ -787,8 +790,8 @@ const TrendingStackSlider = ({
           const stackDepth = isRightSide
             ? 2000 + index
             : isCenter
-            ? 1000
-            : 300 + index;
+              ? 1000
+              : 300 + index;
 
           return (
             <View
@@ -849,10 +852,47 @@ const TopPickCard = ({
   onPress: () => void;
 }) => {
   const [imageFailed, setImageFailed] = useState(false);
+  const image = imageFailed ? undefined : getWallpaperImage(item);
 
-  const image = imageFailed
-    ? `https://picsum.photos/seed/top-pick-fallback-${index}/600/900`
-    : getWallpaperImage(item, `top-pick-${getWallpaperId(item, index)}`);
+  const cardContent = (
+    <>
+      <BlurView intensity={30} tint="dark" style={styles.rankBadge}>
+        <Text style={styles.rankText}>#{index + 1}</Text>
+      </BlurView>
+
+      <View style={styles.topPickBottom}>
+        <Text style={styles.topPickTitle} numberOfLines={2}>
+          {item.title || 'Untitled Wallpaper'}
+        </Text>
+
+        <View style={styles.topPickMetaRow}>
+          <View style={styles.downloadRow}>
+            <Ionicons
+              name="download-outline"
+              size={13}
+              color={colors.textPrimary}
+            />
+
+            <Text style={styles.downloadText}>
+              {formatCount(getDownloadCount(item))}
+            </Text>
+          </View>
+
+          <View style={styles.favoriteRow}>
+            <Ionicons
+              name="heart-outline"
+              size={13}
+              color={colors.textPrimary}
+            />
+
+            <Text style={styles.favoriteText}>
+              {formatCount(getFavoriteCount(item))}
+            </Text>
+          </View>
+        </View>
+      </View>
+    </>
+  );
 
   return (
     <Pressable
@@ -862,45 +902,38 @@ const TopPickCard = ({
         pressed && styles.topPickPressed,
       ]}
     >
-      <ImageBackground
-        source={{ uri: image }}
-        style={styles.topPickImage}
-        imageStyle={{ borderRadius: radius.lg }}
-        resizeMode="cover"
-        onError={() => setImageFailed(true)}
-      >
-        <LinearGradient
-          colors={['rgba(0,0,0,0.04)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.88)']}
-          style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
-        />
+      {image ? (
+        <ImageBackground
+          source={{ uri: image }}
+          style={styles.topPickImage}
+          imageStyle={{ borderRadius: radius.lg }}
+          resizeMode="cover"
+          onError={() => setImageFailed(true)}
+        >
+          <LinearGradient
+            colors={[
+              'rgba(0,0,0,0.04)',
+              'rgba(0,0,0,0)',
+              'rgba(0,0,0,0.88)',
+            ]}
+            style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
+          />
 
-        <BlurView intensity={30} tint="dark" style={styles.rankBadge}>
-          <Text style={styles.rankText}>#{index + 1}</Text>
-        </BlurView>
-
-        <View style={styles.topPickBottom}>
-          <Text style={styles.topPickTitle} numberOfLines={2}>
-            {item.title || `Top Pick ${index + 1}`}
-          </Text>
-
-          <View style={styles.downloadRow}>
-            <Ionicons
-              name="download-outline"
-              size={13}
-              color={colors.textPrimary}
-            />
-            <Text style={styles.downloadText}>
-              {formatCount(getDownloadCount(item))}
-            </Text>
-          </View>
+          {cardContent}
+        </ImageBackground>
+      ) : (
+        <View style={styles.topPickPlaceholder}>
+          <Ionicons name="image-outline" size={28} color={colors.textSecondary} />
+          {cardContent}
         </View>
-      </ImageBackground>
+      )}
     </Pressable>
   );
 };
 
 const TrendingScreen = ({ navigation }: { navigation: any }) => {
   const scrollX = useRef(new Animated.Value(0)).current;
+  const hasLoadedOnce = useRef(false);
 
   const [activeTrend, setActiveTrend] = useState(0);
   const [trending, setTrending] = useState<Wallpaper[]>([]);
@@ -912,14 +945,11 @@ const TrendingScreen = ({ navigation }: { navigation: any }) => {
   const [loading, setLoading] = useState(true);
   const [topPicksLoading, setTopPicksLoading] = useState(false);
 
-  useEffect(() => {
-    loadTrendingPage();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const loadTrendingPage = async () => {
+  const loadTrendingPage = async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (!isRefresh) {
+        setLoading(true);
+      }
 
       let trendList: Wallpaper[] = [];
       let categoryList: CategoryOption[] = [];
@@ -927,6 +957,18 @@ const TrendingScreen = ({ navigation }: { navigation: any }) => {
       try {
         const response = await getTrendingWallpapers();
         trendList = uniqueWallpapers(extractWallpapers(response));
+
+        if (!trendList.length) {
+          const fallbackResponse = await getWallpapers({
+            limit: 20,
+            offset: 0,
+            active: true,
+          });
+
+          trendList = sortByDownloads(
+            uniqueWallpapers(extractWallpapers(fallbackResponse)),
+          );
+        }
       } catch (error) {
         console.log('TRENDING PAGE API ERROR', error);
       }
@@ -937,16 +979,10 @@ const TrendingScreen = ({ navigation }: { navigation: any }) => {
           ? response.data.map(normalizeCategory)
           : [];
 
-        categoryList = backendCategories.length
-          ? backendCategories
-          : FALLBACK_CATEGORIES;
+        categoryList = backendCategories;
       } catch (error) {
         console.log('TRENDING CATEGORIES ERROR', error);
-        categoryList = FALLBACK_CATEGORIES;
-      }
-
-      if (!trendList.length) {
-        trendList = placeholderWallpapers('trending-page', 10);
+        categoryList = [];
       }
 
       const startIndex = Math.min(2, Math.max(0, trendList.length - 1));
@@ -956,19 +992,104 @@ const TrendingScreen = ({ navigation }: { navigation: any }) => {
       setActiveTrend(startIndex);
       scrollX.setValue(startIndex * TREND_SNAP);
 
-      const weeklyTop = await fetchWeeklyTopWallpapers(trendList, ALL_CATEGORY);
+      const weeklyTop = await fetchWeeklyTopWallpapers(
+        trendList,
+        selectedCategory.slug === 'all' ? ALL_CATEGORY : selectedCategory,
+      );
 
       setTopPicks(weeklyTop.slice(0, 10));
     } catch (error) {
       console.log('TRENDING PAGE LOAD ERROR', error);
 
-      setTrending(placeholderWallpapers('trending-page', 10));
-      setCategories(FALLBACK_CATEGORIES);
-      setTopPicks(placeholderWallpapers('weekly', 10));
+      setTrending([]);
+      setCategories([]);
+      setTopPicks([]);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const unsubscribeFavorites = appEvents.on('favoritesChanged', payload => {
+      const wallpaperId = String(payload.wallpaperId || '');
+
+      const patch = {
+        ...(payload.wallpaper || {}),
+        isFavorite: Boolean(payload.isFavorite),
+        is_favorite: Boolean(payload.isFavorite),
+        favoriteCount: payload.favoriteCount,
+        favorite_count: payload.favoriteCount,
+        favoritesCount: payload.favoriteCount,
+      };
+
+      setTrending(current => patchWallpaperList(current, wallpaperId, patch));
+      setTopPicks(current => patchWallpaperList(current, wallpaperId, patch));
+    });
+
+    const unsubscribeDownloads = appEvents.on('downloadsChanged', payload => {
+      const wallpaperId = String(payload.wallpaperId || '');
+
+      const patch = {
+        ...(payload.wallpaper || {}),
+        downloadCount: payload.downloadCount,
+        download_count: payload.downloadCount,
+        downloads: payload.downloadCount,
+        downloadsThisWeek: payload.downloadCount,
+        downloads_this_week: payload.downloadCount,
+        weeklyDownloads: payload.downloadCount,
+      };
+
+      setTrending(current => patchWallpaperList(current, wallpaperId, patch));
+      setTopPicks(current =>
+        sortByDownloads(patchWallpaperList(current, wallpaperId, patch)).slice(
+          0,
+          10,
+        ),
+      );
+    });
+
+    const unsubscribeWallpaper = appEvents.on('wallpaperChanged', payload => {
+      const wallpaperId = String(
+        payload.wallpaperId || payload.wallpaper?.id || '',
+      );
+
+      if (!wallpaperId || !payload.wallpaper) {
+        return;
+      }
+
+      setTrending(current =>
+        patchWallpaperList(current, wallpaperId, payload.wallpaper),
+      );
+      setTopPicks(current =>
+        patchWallpaperList(current, wallpaperId, payload.wallpaper),
+      );
+    });
+
+    const unsubscribeWallpapers = appEvents.on('wallpapersChanged', () => {
+      loadTrendingPage(true);
+    });
+
+    return () => {
+      unsubscribeFavorites();
+      unsubscribeDownloads();
+      unsubscribeWallpaper();
+      unsubscribeWallpapers();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (hasLoadedOnce.current) {
+        loadTrendingPage(true);
+        return;
+      }
+
+      hasLoadedOnce.current = true;
+      loadTrendingPage();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
 
   const loadTopPicksByCategory = async (category: CategoryOption) => {
     try {
@@ -979,7 +1100,7 @@ const TrendingScreen = ({ navigation }: { navigation: any }) => {
       setTopPicks(weeklyTop.slice(0, 10));
     } catch (error) {
       console.log('TOP PICKS CATEGORY LOAD ERROR', error);
-      setTopPicks(placeholderWallpapers('weekly', 10, category.name));
+      setTopPicks([]);
     } finally {
       setTopPicksLoading(false);
     }
@@ -1022,6 +1143,7 @@ const TrendingScreen = ({ navigation }: { navigation: any }) => {
 
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Trending Hub</Text>
+
             <Text style={styles.sectionSubtitle}>
               Swipe the stack to explore
             </Text>
@@ -1035,8 +1157,27 @@ const TrendingScreen = ({ navigation }: { navigation: any }) => {
             onPressItem={openWallpaper}
           />
 
+          {!trending.length ? (
+            <View style={styles.emptyStateBox}>
+              <Ionicons
+                name="trending-up-outline"
+                size={28}
+                color={colors.textSecondary}
+              />
+
+              <Text style={styles.emptyStateTitle}>
+                No trending wallpapers found.
+              </Text>
+
+              <Text style={styles.emptyStateText}>
+                Upload wallpapers or check the trending API response.
+              </Text>
+            </View>
+          ) : null}
+
           <View style={styles.weekHeader}>
             <Text style={styles.weekTitle}>Top Picks of this week</Text>
+
             <Text style={styles.weekSubtitle}>
               {selectedCategory.slug === 'all'
                 ? 'Top 10 most downloaded wallpapers this week'
@@ -1054,7 +1195,7 @@ const TrendingScreen = ({ navigation }: { navigation: any }) => {
             <View style={styles.topPicksLoading}>
               <ActivityIndicator size="small" color={colors.textPrimary} />
             </View>
-          ) : (
+          ) : topPicks.length ? (
             <View style={styles.topGrid}>
               {topPicks.map((item, index) => (
                 <TopPickCard
@@ -1064,6 +1205,20 @@ const TrendingScreen = ({ navigation }: { navigation: any }) => {
                   onPress={() => openWallpaper(item)}
                 />
               ))}
+            </View>
+          ) : (
+            <View style={styles.emptyStateBox}>
+              <Ionicons
+                name="download-outline"
+                size={28}
+                color={colors.textSecondary}
+              />
+
+              <Text style={styles.emptyStateTitle}>No top picks found.</Text>
+
+              <Text style={styles.emptyStateText}>
+                Weekly top wallpapers will appear here from the backend.
+              </Text>
             </View>
           )}
         </ScrollView>
@@ -1079,12 +1234,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.base,
   },
+
   loadingRoot: {
     flex: 1,
     backgroundColor: colors.base,
     justifyContent: 'center',
     alignItems: 'center',
   },
+
   scrollContent: {
     paddingBottom: 120,
   },
@@ -1094,6 +1251,7 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: 0,
   },
+
   trendingActionRow: {
     height: 72,
     flexDirection: 'row',
@@ -1102,18 +1260,21 @@ const styles = StyleSheet.create({
     overflow: 'visible',
     marginBottom: -8,
   },
+
   trendingLogoLeft: {
     width: 175,
     height: 120,
     marginLeft: -18,
     marginTop: 8,
   },
+
   trendingRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     zIndex: 5,
   },
+
   trendingPremiumButton: {
     width: 38,
     height: 38,
@@ -1123,6 +1284,7 @@ const styles = StyleSheet.create({
     overflow: 'visible',
     backgroundColor: 'transparent',
   },
+
   trendingProIconWrap: {
     width: 36,
     height: 36,
@@ -1131,10 +1293,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
+
   trendingProIcon: {
     width: 36,
     height: 36,
   },
+
   trendingProShine: {
     position: 'absolute',
     top: -12,
@@ -1142,9 +1306,11 @@ const styles = StyleSheet.create({
     width: 22,
     opacity: 0.95,
   },
+
   trendingProShineGradient: {
     flex: 1,
   },
+
   trendingRightButton: {
     width: 46,
     height: 46,
@@ -1152,6 +1318,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 5,
   },
+
   trendingRoundButton: {
     width: 46,
     height: 46,
@@ -1169,10 +1336,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
+
   sectionTitle: {
     color: colors.textPrimary,
     ...typography.sectionTitle,
   },
+
   sectionSubtitle: {
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
@@ -1184,14 +1353,17 @@ const styles = StyleSheet.create({
     height: TREND_CARD_H + 42,
     marginTop: 0,
   },
+
   trendStackList: {
     overflow: 'visible',
   },
+
   trendStackContent: {
     paddingHorizontal: TREND_SIDE_PADDING,
     paddingTop: spacing.sm,
     paddingBottom: spacing.md,
   },
+
   trendStackSlot: {
     width: TREND_SNAP,
     height: TREND_CARD_H + 34,
@@ -1200,6 +1372,7 @@ const styles = StyleSheet.create({
     overflow: 'visible',
     position: 'relative',
   },
+
   trendStackCardShell: {
     width: TREND_CARD_W,
     height: TREND_CARD_H,
@@ -1214,46 +1387,56 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 14 },
     elevation: 0,
   },
+
   trendSoftBlurLayer: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
+    ...StyleSheet.absoluteFill,
     borderRadius: radius.lg,
     overflow: 'hidden',
   },
+
   trendSoftBlur: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
+    ...StyleSheet.absoluteFill,
   },
+
   trendSoftFadeLayer: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
+    ...StyleSheet.absoluteFill,
     borderRadius: radius.lg,
     backgroundColor: 'rgba(8,8,18,0.48)',
   },
+
   trendPressable: {
     flex: 1,
   },
+
   trendPressed: {
     opacity: 0.86,
   },
+
   trendStackImage: {
     flex: 1,
     justifyContent: 'space-between',
     backgroundColor: colors.baseElevated,
   },
+
+  trendImagePlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.baseElevated,
+  },
+
+  trendPlaceholderText: {
+    color: colors.textSecondary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 12,
+  },
+
   trendStackTop: {
     alignItems: 'flex-start',
     padding: spacing.md,
   },
+
   trendingBadge: {
     borderRadius: radius.pill,
     overflow: 'hidden',
@@ -1262,15 +1445,18 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorderSoft,
   },
+
   trendingBadgeText: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 12,
   },
+
   trendStackBottom: {
     alignItems: 'center',
     paddingBottom: spacing.md,
   },
+
   trendLikePill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1280,6 +1466,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
+
   trendLikes: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
@@ -1291,12 +1478,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     marginBottom: spacing.md,
   },
+
   weekTitle: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 22,
     letterSpacing: -0.3,
   },
+
   weekSubtitle: {
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
@@ -1311,17 +1500,21 @@ const styles = StyleSheet.create({
     paddingRight: spacing.xl,
     marginBottom: spacing.md,
   },
+
   categorySlider: {
     flex: 1,
     marginLeft: spacing.sm,
   },
+
   categorySliderContent: {
     gap: spacing.sm,
     paddingRight: spacing.xl,
   },
+
   categoryChipPressable: {
     borderRadius: radius.pill,
   },
+
   categoryChip: {
     height: 38,
     paddingHorizontal: 17,
@@ -1333,17 +1526,48 @@ const styles = StyleSheet.create({
     borderColor: colors.glassBorderSoft,
     backgroundColor: colors.glassFill,
   },
+
   categoryChipActive: {
     borderColor: colors.glassBorder,
     backgroundColor: colors.glassFillStrong,
   },
+
   categoryChipText: {
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
     fontSize: 13,
   },
+
   categoryChipTextActive: {
     color: colors.textPrimary,
+  },
+
+  emptyStateBox: {
+    marginHorizontal: spacing.xl,
+    minHeight: 150,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: spacing.lg,
+    backgroundColor: colors.glassFill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorderSoft,
+  },
+
+  emptyStateTitle: {
+    color: colors.textPrimary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 14,
+    textAlign: 'center',
+  },
+
+  emptyStateText: {
+    color: colors.textSecondary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 17,
   },
 
   topPicksLoading: {
@@ -1351,12 +1575,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   topGrid: {
     paddingHorizontal: spacing.xl,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: GRID_GAP,
   },
+
   topPickCard: {
     width: GRID_CARD_W,
     height: GRID_CARD_H,
@@ -1366,14 +1592,24 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
   },
+
   topPickPressed: {
     opacity: 0.88,
     transform: [{ scale: 0.985 }],
   },
+
   topPickImage: {
     flex: 1,
     justifyContent: 'space-between',
   },
+
+  topPickPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.baseElevated,
+  },
+
   rankBadge: {
     position: 'absolute',
     top: 10,
@@ -1385,15 +1621,18 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorderSoft,
   },
+
   rankText: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 12,
   },
+
   topPickBottom: {
     marginTop: 'auto',
     padding: spacing.sm,
   },
+
   topPickTitle: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
@@ -1401,6 +1640,14 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginBottom: 7,
   },
+
+  topPickMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+
   downloadRow: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
@@ -1411,7 +1658,25 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
+
   downloadText: {
+    color: colors.textPrimary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 11,
+  },
+
+  favoriteRow: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+
+  favoriteText: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 11,

@@ -4,7 +4,7 @@ import React, {
   useMemo,
   useRef,
   useState,
-} from 'react';
+} from "react";
 
 import {
   ActivityIndicator,
@@ -18,23 +18,25 @@ import {
   StyleSheet,
   Text,
   View,
-} from 'react-native';
+} from "react-native";
 
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { SafeAreaView } from "react-native-safe-area-context";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import MeshBackground from '../../components/MeshBackground';
-import Card from '../../components/Card';
+import MeshBackground from "../../components/MeshBackground";
+import Card from "../../components/Card";
 
-import { colors, gradients } from '../../styles/colors';
-import { spacing } from '../../utils/constants';
+import { colors, gradients } from "../../styles/colors";
+import { spacing } from "../../utils/constants";
 
-import { useAuth } from '../../context/AuthContext';
-import { getDownloads } from '../../services/downloadService';
-import { Wallpaper } from '../../services/types';
+import { useAuth } from "../../context/AuthContext";
+import { getDownloads } from "../../services/downloadService";
+import { Wallpaper } from "../../services/types";
+import { appEvents } from "../../utils/appEvents";
 
 type Props = {
   navigation: any;
@@ -49,32 +51,45 @@ type MenuItemProps = {
   onPress?: () => void;
 };
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+type RecentDownloadItem = {
+  id: string;
+  image: string;
+  downloadedAt: string | Date | null;
+  wallpaper: Wallpaper & Record<string, any>;
+};
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const DOWNLOAD_THUMB_SIZE = Math.floor(
+  (SCREEN_WIDTH - spacing.xl * 2 - 32 - 32) / 5,
+);
+const DOWNLOAD_THUMB_GAP = 8;
+const DOWNLOAD_PREVIEW_HEIGHT = DOWNLOAD_THUMB_SIZE * 1.5 + DOWNLOAD_THUMB_GAP;
+const LOCAL_DOWNLOADS_KEY = "@flexiwalls:guestDownloads";
 
 const STAR_PARTICLES = [
-  { id: 's1', x: -130, y: -120, size: 20, color: '#FFD76A', rotate: '-18deg' },
-  { id: 's2', x: -78, y: -158, size: 15, color: '#FFFFFF', rotate: '18deg' },
-  { id: 's3', x: 0, y: -174, size: 22, color: '#FDE68A', rotate: '32deg' },
-  { id: 's4', x: 82, y: -150, size: 16, color: '#FFFFFF', rotate: '-28deg' },
-  { id: 's5', x: 134, y: -95, size: 20, color: '#FDBA74', rotate: '20deg' },
-  { id: 's6', x: 158, y: -8, size: 15, color: '#F9A8D4', rotate: '-10deg' },
-  { id: 's7', x: 126, y: 84, size: 21, color: '#FFFFFF', rotate: '34deg' },
-  { id: 's8', x: 60, y: 142, size: 16, color: '#C4B5FD', rotate: '-34deg' },
-  { id: 's9', x: -10, y: 158, size: 23, color: '#FFD76A', rotate: '16deg' },
-  { id: 's10', x: -88, y: 118, size: 16, color: '#FFFFFF', rotate: '-20deg' },
-  { id: 's11', x: -148, y: 52, size: 21, color: '#F0ABFC', rotate: '36deg' },
-  { id: 's12', x: -158, y: -36, size: 15, color: '#FDBA74', rotate: '-32deg' },
-  { id: 's13', x: 42, y: -92, size: 14, color: '#A7F3D0', rotate: '12deg' },
-  { id: 's14', x: -48, y: 90, size: 14, color: '#BAE6FD', rotate: '-14deg' },
-  { id: 's15', x: 102, y: 28, size: 13, color: '#FDE68A', rotate: '24deg' },
-  { id: 's16', x: -98, y: -18, size: 13, color: '#FFFFFF', rotate: '-24deg' },
+  { id: "s1", x: -130, y: -120, size: 20, color: "#FFD76A", rotate: "-18deg" },
+  { id: "s2", x: -78, y: -158, size: 15, color: "#FFFFFF", rotate: "18deg" },
+  { id: "s3", x: 0, y: -174, size: 22, color: "#FDE68A", rotate: "32deg" },
+  { id: "s4", x: 82, y: -150, size: 16, color: "#FFFFFF", rotate: "-28deg" },
+  { id: "s5", x: 134, y: -95, size: 20, color: "#FDBA74", rotate: "20deg" },
+  { id: "s6", x: 158, y: -8, size: 15, color: "#F9A8D4", rotate: "-10deg" },
+  { id: "s7", x: 126, y: 84, size: 21, color: "#FFFFFF", rotate: "34deg" },
+  { id: "s8", x: 60, y: 142, size: 16, color: "#C4B5FD", rotate: "-34deg" },
+  { id: "s9", x: -10, y: 158, size: 23, color: "#FFD76A", rotate: "16deg" },
+  { id: "s10", x: -88, y: 118, size: 16, color: "#FFFFFF", rotate: "-20deg" },
+  { id: "s11", x: -148, y: 52, size: 21, color: "#F0ABFC", rotate: "36deg" },
+  { id: "s12", x: -158, y: -36, size: 15, color: "#FDBA74", rotate: "-32deg" },
+  { id: "s13", x: 42, y: -92, size: 14, color: "#A7F3D0", rotate: "12deg" },
+  { id: "s14", x: -48, y: 90, size: 14, color: "#BAE6FD", rotate: "-14deg" },
+  { id: "s15", x: 102, y: 28, size: 13, color: "#FDE68A", rotate: "24deg" },
+  { id: "s16", x: -98, y: -18, size: 13, color: "#FFFFFF", rotate: "-24deg" },
 ];
 
-const flexiWallsLogo = require('../../assets/images/flexiwalls-logo.png');
-const proButtonIcon = require('../../assets/images/pro-button.png');
-const appIcon = require('../../assets/icons/profileicon.png');
+const flexiWallsLogo = require("../../assets/images/flexiwalls-logo.png");
+const proButtonIcon = require("../../assets/images/pro-button.png");
+const appIcon = require("../../assets/icons/profileicon.png");
 
-const getWallpaperImage = (item: Wallpaper) => {
+const getWallpaperImage = (item: Wallpaper | Record<string, any>) => {
   const wallpaper = item as Wallpaper & Record<string, any>;
 
   return (
@@ -82,6 +97,10 @@ const getWallpaperImage = (item: Wallpaper) => {
     wallpaper.thumbnailUrl ||
     wallpaper.image_url ||
     wallpaper.thumbnail_url ||
+    wallpaper.displayPath ||
+    wallpaper.display_path ||
+    wallpaper.thumbnailPath ||
+    wallpaper.thumbnail_path ||
     wallpaper.url ||
     wallpaper.image ||
     wallpaper.thumbnail ||
@@ -89,6 +108,165 @@ const getWallpaperImage = (item: Wallpaper) => {
     wallpaper.photo_url ||
     wallpaper.mediaUrl ||
     wallpaper.media_url
+  );
+};
+
+const getDownloadTime = (value?: string | Date | null) => {
+  if (!value) return 0;
+
+  const time =
+    value instanceof Date ? value.getTime() : new Date(value).getTime();
+
+  return Number.isFinite(time) ? time : 0;
+};
+
+const normalizeRecentDownload = (download: any, index: number) => {
+  const rawWallpaper = download?.wallpaper || download?.Wallpaper || download;
+  const image = getWallpaperImage(rawWallpaper || download);
+
+  if (!image) {
+    return null;
+  }
+
+  const wallpaperId = String(
+    rawWallpaper?.id ||
+      download?.wallpaperId ||
+      download?.wallpaper_id ||
+      download?.id ||
+      `${image}-${index}`,
+  );
+
+  const downloadedAt =
+    download?.downloadedAt ||
+    download?.downloaded_at ||
+    download?.createdAt ||
+    download?.created_at ||
+    rawWallpaper?.downloadedAt ||
+    rawWallpaper?.downloaded_at ||
+    rawWallpaper?.createdAt ||
+    rawWallpaper?.created_at ||
+    null;
+
+  const wallpaper = {
+    ...rawWallpaper,
+    id: wallpaperId,
+    imageUrl: rawWallpaper?.imageUrl || rawWallpaper?.image_url || image,
+    thumbnailUrl:
+      rawWallpaper?.thumbnailUrl ||
+      rawWallpaper?.thumbnail_url ||
+      rawWallpaper?.thumbnailPath ||
+      rawWallpaper?.thumbnail_path ||
+      image,
+    downloadedAt,
+    isDownloaded: true,
+  } as Wallpaper & Record<string, any>;
+
+  return {
+    id: String(
+      download?.id ||
+        download?.downloadId ||
+        download?.download_id ||
+        wallpaperId,
+    ),
+    image: String(image),
+    downloadedAt,
+    wallpaper,
+  } satisfies RecentDownloadItem;
+};
+
+const extractDownloadArray = (payload: any) => {
+  const data = payload?.data?.data ?? payload?.data ?? payload;
+
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.downloads)) return data.downloads;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.results)) return data.results;
+
+  return [];
+};
+
+const getRecentDownloadKey = (item: RecentDownloadItem) =>
+  String(item.wallpaper?.id || item.id || item.image || "");
+
+const uniqueRecentDownloads = (items: RecentDownloadItem[]) => {
+  const seen = new Set<string>();
+
+  return items.filter((item) => {
+    const key = getRecentDownloadKey(item);
+
+    if (!key || seen.has(key)) return false;
+
+    seen.add(key);
+    return true;
+  });
+};
+
+const createRecentDownloadFromEvent = (payload: {
+  wallpaperId: string;
+  wallpaper?: any;
+}) => {
+  const downloadedAt = new Date().toISOString();
+
+  return normalizeRecentDownload(
+    {
+      ...(payload.wallpaper || {}),
+      id: payload.wallpaperId || payload.wallpaper?.id,
+      wallpaperId: payload.wallpaperId,
+      downloadedAt,
+      createdAt: downloadedAt,
+    },
+    0,
+  );
+};
+
+const sortRecentDownloads = (items: RecentDownloadItem[]) =>
+  uniqueRecentDownloads(items).sort(
+    (a, b) => getDownloadTime(b.downloadedAt) - getDownloadTime(a.downloadedAt),
+  );
+
+const getLocalRecentDownloads = async () => {
+  try {
+    const raw = await AsyncStorage.getItem(LOCAL_DOWNLOADS_KEY);
+
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw);
+
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .map(normalizeRecentDownload)
+      .filter(Boolean) as RecentDownloadItem[];
+  } catch (error) {
+    console.log("PROFILE LOCAL DOWNLOADS ERROR", error);
+    return [];
+  }
+};
+
+const isPremiumActive = (user: any) => {
+  if (!user) return false;
+
+  const premiumUntilValue =
+    user.premiumUntil ||
+    user.premium_until ||
+    user.subscription?.premiumUntil ||
+    user.subscription?.premium_until;
+
+  const premiumUntilTime = premiumUntilValue
+    ? new Date(premiumUntilValue).getTime()
+    : 0;
+
+  const hasActivePremiumDate =
+    Number.isFinite(premiumUntilTime) && premiumUntilTime > Date.now();
+
+  return Boolean(
+    user.isPremium ||
+      user.is_premium ||
+      user.premium ||
+      user.premiumActive ||
+      user.subscription?.isPremium ||
+      user.subscription?.is_premium ||
+      hasActivePremiumDate,
   );
 };
 
@@ -132,17 +310,17 @@ const ShinyProIcon = () => {
         style={[
           styles.profileProShine,
           {
-            transform: [{ translateX: shineTranslate }, { rotate: '18deg' }],
+            transform: [{ translateX: shineTranslate }, { rotate: "18deg" }],
           },
         ]}
       >
         <LinearGradient
           colors={[
-            'rgba(255,255,255,0)',
-            'rgba(255,255,255,0.22)',
-            'rgba(255,255,255,0.9)',
-            'rgba(255,255,255,0.22)',
-            'rgba(255,255,255,0)',
+            "rgba(255,255,255,0)",
+            "rgba(255,255,255,0.22)",
+            "rgba(255,255,255,0.9)",
+            "rgba(255,255,255,0.22)",
+            "rgba(255,255,255,0)",
           ]}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
@@ -218,7 +396,7 @@ const StatPill = ({
 }) => (
   <View style={styles.statPill}>
     <LinearGradient
-      colors={['#FFFFFF', '#F3F4F6']}
+      colors={["#FFFFFF", "#F3F4F6"]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.statPillGradient}
@@ -246,7 +424,7 @@ const MenuItem = ({ icon, title, subtitle, onPress }: MenuItemProps) => (
       styles.menuItem,
       pressed && styles.menuItemPressed,
     ]}
-    android_ripple={{ color: 'rgba(255,255,255,.08)' }}
+    android_ripple={{ color: "rgba(255,255,255,.08)" }}
     onPress={onPress}
   >
     <View style={styles.menuIcon}>
@@ -262,10 +440,53 @@ const MenuItem = ({ icon, title, subtitle, onPress }: MenuItemProps) => (
   </Pressable>
 );
 
+const RecentDownloadsPreview = ({
+  downloads,
+  onOpenWallpaper,
+}: {
+  downloads: RecentDownloadItem[];
+  onOpenWallpaper: (download: RecentDownloadItem) => void;
+}) => {
+  const previewDownloads = downloads.slice(0, 10);
+
+  return (
+    <View style={styles.recentPreviewMask}>
+      <View style={styles.recentPreviewGrid}>
+        {previewDownloads.map((download, index) => (
+          <Pressable
+            key={`${download.id}-${index}`}
+            onPress={() => onOpenWallpaper(download)}
+            style={({ pressed }) => [
+              styles.recentPreviewThumbPress,
+              pressed && styles.recentPreviewThumbPressed,
+            ]}
+          >
+            <Image
+              source={{ uri: download.image }}
+              style={styles.recentPreviewImage}
+              resizeMode="cover"
+            />
+          </Pressable>
+        ))}
+      </View>
+
+      <LinearGradient
+        pointerEvents="none"
+        colors={[
+          "rgba(16,16,24,0)",
+          "rgba(16,16,24,0.68)",
+          "rgba(16,16,24,1)",
+        ]}
+        style={styles.recentPreviewFade}
+      />
+    </View>
+  );
+};
+
 export default function ProfileScreen({ navigation }: Props) {
   const { user, loading, authLoading, signInGoogle, logout } = useAuth();
 
-  const [downloads, setDownloads] = useState<string[]>([]);
+  const [downloads, setDownloads] = useState<RecentDownloadItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [easterEggActive, setEasterEggActive] = useState(false);
 
@@ -277,9 +498,10 @@ export default function ProfileScreen({ navigation }: Props) {
   const blastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isGuest = !user;
-  const displayName = user?.username || 'Guest User';
-  const displayEmail = user?.email || 'Sign in to sync your account';
-  const planLabel = user?.isPremium ? 'Premium' : 'Free';
+  const isPremiumUser = isPremiumActive(user);
+  const displayName = user?.username || "Guest User";
+  const displayEmail = user?.email || "Sign in to sync your account";
+  const planLabel = isPremiumUser ? "Premium" : "Free";
 
   const flyingTranslateY = flyingIconProgress.interpolate({
     inputRange: [0, 1],
@@ -298,7 +520,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
   const flyingRotate = flyingIconProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: ['0deg', '22deg'],
+    outputRange: ["0deg", "22deg"],
   });
 
   const particleOpacity = particleProgress.interpolate({
@@ -323,7 +545,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
   const firstName = useMemo(() => {
     const name = displayName.trim();
-    return name ? name.split(' ')[0] : 'Guest';
+    return name ? name.split(" ")[0] : "Guest";
   }, [displayName]);
 
   const avatarSource = useMemo(() => {
@@ -352,26 +574,57 @@ export default function ProfileScreen({ navigation }: Props) {
   }, []);
 
   const loadDownloads = useCallback(async () => {
-    if (!user) {
-      setDownloads([]);
-      return;
-    }
+    let localDownloads: RecentDownloadItem[] = [];
 
     try {
+      localDownloads = await getLocalRecentDownloads();
+
+      if (!user) {
+        setDownloads(sortRecentDownloads(localDownloads));
+        return;
+      }
+
       const res = await getDownloads();
 
-      const images = (res.data ?? [])
-        .map(download => getWallpaperImage(download.wallpaper))
-        .filter(Boolean) as string[];
+      const serverDownloads = extractDownloadArray(res)
+        .map(normalizeRecentDownload)
+        .filter(Boolean) as RecentDownloadItem[];
 
-      setDownloads(images);
+      setDownloads(
+        sortRecentDownloads([...serverDownloads, ...localDownloads]),
+      );
     } catch (err) {
-      console.log('PROFILE DOWNLOADS ERROR', err);
+      console.log("PROFILE DOWNLOADS ERROR", err);
+      setDownloads(sortRecentDownloads(localDownloads));
     }
   }, [user]);
 
   useEffect(() => {
     loadDownloads();
+  }, [loadDownloads]);
+
+  useEffect(() => {
+    const unsubscribeDownloads = appEvents.on("downloadsChanged", (payload) => {
+      const nextDownload = createRecentDownloadFromEvent(payload);
+
+      if (!nextDownload) {
+        loadDownloads();
+        return;
+      }
+
+      setDownloads((current) =>
+        sortRecentDownloads([nextDownload, ...current]),
+      );
+    });
+
+    const unsubscribeWallpapers = appEvents.on("wallpapersChanged", () => {
+      loadDownloads();
+    });
+
+    return () => {
+      unsubscribeDownloads();
+      unsubscribeWallpapers();
+    };
   }, [loadDownloads]);
 
   const onRefresh = useCallback(async () => {
@@ -476,30 +729,58 @@ export default function ProfileScreen({ navigation }: Props) {
     particleProgress,
   ]);
 
-  const openSettings = () => navigation.navigate('Settings');
+  const openSettings = () => navigation.navigate("Settings");
 
-  const openDownloads = () => navigation.navigate('Downloads');
+  const openDownloads = () => navigation.navigate("Downloads");
 
-  const openPremium = () => {
-    if (user?.isPremium) {
-      navigation.navigate('ManagePremium');
+  const openRecentDownloadWallpaper = (download: RecentDownloadItem) => {
+    const parentNavigation = navigation.getParent?.();
+
+    if (parentNavigation) {
+      parentNavigation.navigate("WallpaperDetails", {
+        wallpaper: download.wallpaper,
+      });
       return;
     }
 
-    navigation.navigate('Premium', {
-      returnTo: 'Profile',
+    navigation.navigate("WallpaperDetails", {
+      wallpaper: download.wallpaper,
     });
   };
 
-  const openManagePremium = () => {
-    if (user?.isPremium) {
-      navigation.navigate('ManagePremium');
+  const navigateToPremiumArea = useCallback(
+    (screenName: "Premium" | "ManagePremium") => {
+      const parentNavigation = navigation.getParent?.();
+      const params = {
+        returnTo: "Profile",
+      };
+
+      if (parentNavigation) {
+        parentNavigation.navigate(screenName, params);
+        return;
+      }
+
+      navigation.navigate(screenName, params);
+    },
+    [navigation],
+  );
+
+  const openPremium = () => {
+    if (isPremiumUser) {
+      navigateToPremiumArea("ManagePremium");
       return;
     }
 
-    navigation.navigate('Premium', {
-      returnTo: 'Profile',
-    });
+    navigateToPremiumArea("Premium");
+  };
+
+  const openManagePremium = () => {
+    if (isPremiumUser) {
+      navigateToPremiumArea("ManagePremium");
+      return;
+    }
+
+    navigateToPremiumArea("Premium");
   };
 
   const handleAuthAction = () => {
@@ -515,14 +796,14 @@ export default function ProfileScreen({ navigation }: Props) {
     logout();
   };
 
-  const openHelp = () => navigation.navigate('HelpSupport');
+  const openHelp = () => navigation.navigate("HelpSupport");
 
-  const openPrivacy = () => navigation.navigate('PrivacyPolicy');
+  const openPrivacy = () => navigation.navigate("PrivacyPolicy");
 
-  const openAbout = () => navigation.navigate('About');
+  const openAbout = () => navigation.navigate("About");
 
-  const downloadsSubtitle = `${downloads.length} Wallpaper${
-    downloads.length !== 1 ? 's' : ''
+  const totalDownloadsLabel = `${downloads.length} Download${
+    downloads.length !== 1 ? "s" : ""
   }`;
 
   if (loading) {
@@ -579,7 +860,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
                 <View style={styles.heroCopy}>
                   <Text style={styles.welcomeText}>
-                    {isGuest ? 'Welcome to FlexiWalls' : `Hello, ${firstName}`}
+                    {isGuest ? "Welcome to FlexiWalls" : `Hello, ${firstName}`}
                   </Text>
 
                   <Text style={styles.heroName} numberOfLines={1}>
@@ -601,13 +882,13 @@ export default function ProfileScreen({ navigation }: Props) {
                   onPress={openManagePremium}
                 >
                   <MaterialCommunityIcons
-                    name={user?.isPremium ? 'crown' : 'crown-outline'}
+                    name={isPremiumUser ? "crown" : "crown-outline"}
                     size={16}
-                    color={user?.isPremium ? '#FFD76A' : '#fff'}
+                    color={isPremiumUser ? "#FFD76A" : "#fff"}
                   />
 
                   <Text style={styles.middleButtonText} numberOfLines={1}>
-                    {user?.isPremium ? 'Manage Premium' : 'Get Premium'}
+                    {isPremiumUser ? "Manage Premium" : "Get Premium"}
                   </Text>
                 </Pressable>
 
@@ -625,13 +906,13 @@ export default function ProfileScreen({ navigation }: Props) {
                   ) : (
                     <>
                       <Ionicons
-                        name={user ? 'log-out-outline' : 'log-in-outline'}
+                        name={user ? "log-out-outline" : "log-in-outline"}
                         size={17}
                         color="#fff"
                       />
 
                       <Text style={styles.middleButtonText}>
-                        {user ? 'Logout' : 'Login'}
+                        {user ? "Logout" : "Login"}
                       </Text>
                     </>
                   )}
@@ -641,13 +922,13 @@ export default function ProfileScreen({ navigation }: Props) {
               <View style={styles.statsRow}>
                 <StatPill
                   icon="diamond-outline"
-                  value={isGuest ? 'Guest' : planLabel}
+                  value={isGuest ? "Guest" : planLabel}
                   label="Plan"
                 />
 
                 <StatPill
                   icon="cloud-done-outline"
-                  value={isGuest ? 'Off' : 'On'}
+                  value={isGuest ? "Off" : "On"}
                   label="Sync"
                 />
               </View>
@@ -659,11 +940,32 @@ export default function ProfileScreen({ navigation }: Props) {
               <View>
                 <Text style={styles.downloadTitle}>Recent Downloads</Text>
 
-                <Text style={styles.downloadCount}>{downloadsSubtitle}</Text>
+                <View style={styles.totalDownloadsPill}>
+                  <Ionicons
+                    name="download-outline"
+                    size={13}
+                    color={colors.textPrimary}
+                  />
+
+                  <Text style={styles.totalDownloadsText}>
+                    {totalDownloadsLabel}
+                  </Text>
+                </View>
               </View>
 
-              <Pressable onPress={openDownloads}>
+              <Pressable
+                onPress={openDownloads}
+                style={({ pressed }) => [
+                  styles.viewAllButton,
+                  pressed && styles.viewAllButtonPressed,
+                ]}
+              >
                 <Text style={styles.viewAll}>View All</Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={15}
+                  color={colors.accent}
+                />
               </Pressable>
             </View>
 
@@ -686,34 +988,16 @@ export default function ProfileScreen({ navigation }: Props) {
                     styles.browseButton,
                     pressed && styles.browseButtonPressed,
                   ]}
-                  onPress={() => navigation.navigate('Home')}
+                  onPress={() => navigation.navigate("Home")}
                 >
                   <Text style={styles.browseText}>Browse Wallpapers</Text>
                 </Pressable>
               </View>
             ) : (
-              <>
-                <View style={styles.compactDownloadStrip}>
-                  {downloads.slice(0, 3).map((image, index) => (
-                    <Image
-                      key={`${image}-${index}`}
-                      source={{ uri: image }}
-                      style={styles.compactWallpaper}
-                    />
-                  ))}
-                </View>
-
-                {downloads.length > 3 && (
-                  <Pressable
-                    style={styles.moreDownloads}
-                    onPress={openDownloads}
-                  >
-                    <Text style={styles.moreText}>
-                      +{downloads.length - 3} More Wallpapers
-                    </Text>
-                  </Pressable>
-                )}
-              </>
+              <RecentDownloadsPreview
+                downloads={downloads}
+                onOpenWallpaper={openRecentDownloadWallpaper}
+              />
             )}
           </Card>
 
@@ -798,7 +1082,7 @@ export default function ProfileScreen({ navigation }: Props) {
             resizeMode="contain"
           />
 
-          {STAR_PARTICLES.map(particle => {
+          {STAR_PARTICLES.map((particle) => {
             const translateX = particleProgress.interpolate({
               inputRange: [0, 1],
               outputRange: [0, particle.x],
@@ -848,8 +1132,8 @@ const styles = StyleSheet.create({
   loader: {
     flex: 1,
     backgroundColor: colors.base,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   scrollContent: {
@@ -864,10 +1148,10 @@ const styles = StyleSheet.create({
 
   profileActionRow: {
     height: 72,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    overflow: 'visible',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    overflow: "visible",
     marginBottom: -8,
   },
 
@@ -879,8 +1163,8 @@ const styles = StyleSheet.create({
   },
 
   profileRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
     zIndex: 5,
   },
@@ -889,19 +1173,19 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'visible',
-    backgroundColor: 'transparent',
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "visible",
+    backgroundColor: "transparent",
   },
 
   profileProIconWrap: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
   },
 
   profileProIcon: {
@@ -910,7 +1194,7 @@ const styles = StyleSheet.create({
   },
 
   profileProShine: {
-    position: 'absolute',
+    position: "absolute",
     top: -12,
     bottom: -12,
     width: 22,
@@ -924,8 +1208,8 @@ const styles = StyleSheet.create({
   profileRightButton: {
     width: 46,
     height: 46,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     zIndex: 5,
   },
 
@@ -933,9 +1217,9 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
     backgroundColor: colors.glassFill,
@@ -945,7 +1229,7 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.xl,
     marginTop: spacing.lg,
     borderRadius: 30,
-    shadowColor: '#EC4899',
+    shadowColor: "#EC4899",
     shadowOffset: { width: 0, height: 18 },
     shadowOpacity: 0.35,
     shadowRadius: 30,
@@ -954,50 +1238,50 @@ const styles = StyleSheet.create({
 
   heroGradient: {
     padding: 22,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderRadius: 30,
   },
 
   heroGlowOne: {
-    position: 'absolute',
+    position: "absolute",
     width: 210,
     height: 210,
     borderRadius: 105,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: "rgba(255,255,255,0.12)",
     top: -95,
     right: -80,
   },
 
   heroGlowTwo: {
-    position: 'absolute',
+    position: "absolute",
     width: 160,
     height: 160,
     borderRadius: 80,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: "rgba(255,255,255,0.08)",
     bottom: -70,
     left: -60,
   },
 
   heroShineLine: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 24,
     right: 24,
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.45)',
+    backgroundColor: "rgba(255,255,255,0.45)",
   },
 
   heroWatermark: {
-    position: 'absolute',
+    position: "absolute",
     right: 12,
     top: 16,
     opacity: 0.9,
-    transform: [{ rotate: '-14deg' }],
+    transform: [{ rotate: "-14deg" }],
   },
 
   heroTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
 
   avatarShell: {
@@ -1005,16 +1289,16 @@ const styles = StyleSheet.create({
     height: 88,
     borderRadius: 44,
     padding: 3,
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: "rgba(255,255,255,0.16)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
+    borderColor: "rgba(255,255,255,0.28)",
   },
 
   heroAvatar: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
     borderRadius: 41,
-    backgroundColor: '#202024',
+    backgroundColor: "#202024",
   },
 
   heroCopy: {
@@ -1023,57 +1307,57 @@ const styles = StyleSheet.create({
   },
 
   welcomeText: {
-    color: 'rgba(255,255,255,0.82)',
+    color: "rgba(255,255,255,0.82)",
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 
   heroName: {
     marginTop: 5,
-    color: '#fff',
+    color: "#fff",
     fontSize: 26,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: 0.2,
   },
 
   heroEmail: {
     marginTop: 5,
-    color: 'rgba(255,255,255,0.78)',
+    color: "rgba(255,255,255,0.78)",
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: "500",
   },
 
   badgeRow: {
     marginTop: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
 
   middleEditButton: {
-    width: '48%',
+    width: "48%",
     height: 42,
     paddingHorizontal: 12,
     borderRadius: 21,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: "rgba(255,255,255,0.18)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "rgba(255,255,255,0.22)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   middleLogoutButton: {
-    width: '48%',
+    width: "48%",
     height: 42,
     paddingHorizontal: 15,
     borderRadius: 21,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: "rgba(255,255,255,0.18)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "rgba(255,255,255,0.22)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   middleLogoutButtonDisabled: {
@@ -1087,23 +1371,23 @@ const styles = StyleSheet.create({
 
   middleButtonText: {
     marginLeft: 7,
-    color: '#fff',
+    color: "#fff",
     fontSize: 13,
-    fontWeight: '900',
+    fontWeight: "900",
   },
 
   statsRow: {
     marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
 
   statPill: {
-    width: '48%',
+    width: "48%",
     height: 58,
     borderRadius: 18,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
 
   statPillGradient: {
@@ -1111,22 +1395,22 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.55)',
-    backgroundColor: '#FFFFFF',
+    borderColor: "rgba(255,255,255,0.55)",
+    backgroundColor: "#FFFFFF",
   },
 
   statIconCircle: {
     width: 30,
     height: 30,
     borderRadius: 12,
-    backgroundColor: 'rgba(139,92,246,0.10)',
+    backgroundColor: "rgba(139,92,246,0.10)",
     borderWidth: 1,
-    borderColor: 'rgba(139,92,246,0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "rgba(139,92,246,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 9,
   },
 
@@ -1136,18 +1420,18 @@ const styles = StyleSheet.create({
   },
 
   statValue: {
-    color: '#111827',
+    color: "#111827",
     fontSize: 13,
     lineHeight: 16,
-    fontWeight: '900',
+    fontWeight: "900",
   },
 
   statLabel: {
     marginTop: 2,
-    color: '#6B7280',
+    color: "#6B7280",
     fontSize: 10,
     lineHeight: 13,
-    fontWeight: '800',
+    fontWeight: "800",
   },
 
   card: {
@@ -1162,70 +1446,117 @@ const styles = StyleSheet.create({
   },
 
   sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
 
   downloadTitle: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 19,
-    fontWeight: '900',
+    fontWeight: "900",
   },
 
-  downloadCount: {
-    color: colors.textSecondary,
-    marginTop: 4,
+  totalDownloadsPill: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorderSoft,
+  },
+
+  totalDownloadsText: {
+    color: colors.textPrimary,
+    fontWeight: "800",
     fontSize: 12,
+  },
+
+  viewAllButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
+
+  viewAllButtonPressed: {
+    opacity: 0.72,
+    transform: [{ scale: 0.98 }],
   },
 
   viewAll: {
     color: colors.accent,
-    fontWeight: '800',
+    fontWeight: "800",
     fontSize: 13,
   },
 
-  compactDownloadStrip: {
+  recentPreviewMask: {
+    height: DOWNLOAD_PREVIEW_HEIGHT,
     marginTop: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    overflow: "hidden",
+    borderRadius: 18,
   },
 
-  compactWallpaper: {
-    width: '31%',
-    aspectRatio: 0.72,
-    borderRadius: 16,
-    backgroundColor: '#1d1d1d',
+  recentPreviewGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: DOWNLOAD_THUMB_GAP,
   },
 
-  moreDownloads: {
-    marginTop: 10,
-    alignItems: 'center',
+  recentPreviewThumbPress: {
+    width: DOWNLOAD_THUMB_SIZE,
+    height: DOWNLOAD_THUMB_SIZE,
+    borderRadius: 14,
+    overflow: "hidden",
+    backgroundColor: "#1d1d1d",
   },
 
-  moreText: {
-    color: colors.accent,
-    fontWeight: '700',
-    fontSize: 12,
+  recentPreviewThumbPressed: {
+    opacity: 0.72,
+    transform: [{ scale: 0.96 }],
+  },
+
+  recentPreviewImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 14,
+    backgroundColor: "#1d1d1d",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorderSoft,
+  },
+
+  recentPreviewFade: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: DOWNLOAD_THUMB_SIZE,
   },
 
   emptyDownloads: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 10,
   },
 
   emptyTitle: {
     marginTop: 8,
-    color: '#fff',
-    fontWeight: '800',
+    color: "#fff",
+    fontWeight: "800",
     fontSize: 15,
   },
 
   emptySubtitle: {
     marginTop: 6,
     color: colors.textSecondary,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 19,
     marginBottom: 14,
     fontSize: 12,
@@ -1236,8 +1567,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     height: 40,
     borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   browseButtonPressed: {
@@ -1246,18 +1577,18 @@ const styles = StyleSheet.create({
   },
 
   browseText: {
-    color: '#fff',
-    fontWeight: '800',
+    color: "#fff",
+    fontWeight: "800",
     fontSize: 13,
   },
 
   menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingVertical: 18,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,.06)',
+    borderBottomColor: "rgba(255,255,255,.06)",
   },
 
   menuItemPressed: {
@@ -1269,16 +1600,16 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: 'rgba(255,255,255,.06)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,255,255,.06)",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 16,
   },
 
   menuTitle: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 
   menuSubtitle: {
@@ -1288,8 +1619,8 @@ const styles = StyleSheet.create({
   },
 
   footer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 45,
     paddingHorizontal: 30,
   },
@@ -1298,8 +1629,8 @@ const styles = StyleSheet.create({
     width: 82,
     height: 82,
     borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   footerLogo: {
@@ -1310,9 +1641,9 @@ const styles = StyleSheet.create({
   },
 
   footerTitle: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 22,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: 0.5,
   },
 
@@ -1330,7 +1661,7 @@ const styles = StyleSheet.create({
   },
 
   easterEggOverlay: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     right: 0,
     bottom: 0,
@@ -1340,7 +1671,7 @@ const styles = StyleSheet.create({
   },
 
   easterEggIcon: {
-    position: 'absolute',
+    position: "absolute",
     left: SCREEN_WIDTH / 2 - 40,
     top: SCREEN_HEIGHT / 2 - 40,
     width: 80,
@@ -1349,31 +1680,31 @@ const styles = StyleSheet.create({
   },
 
   blastGlow: {
-    position: 'absolute',
+    position: "absolute",
     left: SCREEN_WIDTH / 2 - 70,
     top: SCREEN_HEIGHT / 2 - 70,
     width: 140,
     height: 140,
     borderRadius: 70,
-    backgroundColor: 'rgba(255,255,255,0.24)',
+    backgroundColor: "rgba(255,255,255,0.24)",
   },
 
   blastRing: {
-    position: 'absolute',
+    position: "absolute",
     left: SCREEN_WIDTH / 2 - 78,
     top: SCREEN_HEIGHT / 2 - 78,
     width: 156,
     height: 156,
     borderRadius: 78,
     borderWidth: 2,
-    borderColor: 'rgba(255,215,106,0.65)',
+    borderColor: "rgba(255,215,106,0.65)",
   },
 
   starParticle: {
-    position: 'absolute',
+    position: "absolute",
     left: SCREEN_WIDTH / 2 - 10,
     top: SCREEN_HEIGHT / 2 - 10,
-    shadowColor: '#FFFFFF',
+    shadowColor: "#FFFFFF",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.9,
     shadowRadius: 10,

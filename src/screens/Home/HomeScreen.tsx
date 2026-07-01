@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   StyleSheet,
   View,
@@ -12,30 +12,31 @@ import {
   NativeScrollEvent,
   ActivityIndicator,
   Animated,
-} from 'react-native';
+} from "react-native";
 
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { SafeAreaView } from "react-native-safe-area-context";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 
-import MeshBackground from '../../components/MeshBackground';
-import Button from '../../components/Button';
+import MeshBackground from "../../components/MeshBackground";
+import Button from "../../components/Button";
 
-import { colors } from '../../styles/colors';
-import { spacing, radius, SCREEN } from '../../utils/constants';
+import { colors } from "../../styles/colors";
+import { spacing, radius, SCREEN } from "../../utils/constants";
 
-import API from '../../services/api';
+import API from "../../services/api";
 import {
   getFeaturedWallpapers,
   getWallpapers,
-} from '../../services/wallpaperService';
+} from "../../services/wallpaperService";
 
-import { Wallpaper } from '../../services/types';
+import { Wallpaper } from "../../services/types";
+import { appEvents } from "../../utils/appEvents";
 
-const flexiWallsLogo = require('../../assets/images/flexiwalls-logo.png');
-const proButtonIcon = require('../../assets/images/pro-button.png');
+const flexiWallsLogo = require("../../assets/images/flexiwalls-logo.png");
+const proButtonIcon = require("../../assets/images/pro-button.png");
 
 const HERO_W = SCREEN.width - spacing.xl * 2;
 const HERO_H = 480;
@@ -48,7 +49,7 @@ const GRID_GAP = spacing.md;
 const CARD_W = (SCREEN.width - spacing.xl * 2 - GRID_GAP) / 2;
 const CARD_H = CARD_W * 1.52;
 
-const API_ORIGIN = String(API.defaults.baseURL || '').replace(/\/api\/?$/, '');
+const API_ORIGIN = String(API.defaults.baseURL || "").replace(/\/api\/?$/, "");
 
 const toAbsoluteMediaUrl = (value?: string | null) => {
   if (!value) return undefined;
@@ -65,9 +66,9 @@ const toAbsoluteMediaUrl = (value?: string | null) => {
     );
   }
 
-  if (url.startsWith('//')) return `https:${url}`;
+  if (url.startsWith("//")) return `https:${url}`;
 
-  if (url.startsWith('/')) {
+  if (url.startsWith("/")) {
     return API_ORIGIN ? `${API_ORIGIN}${url}` : url;
   }
 
@@ -92,30 +93,61 @@ const getWallpaperImage = (item: Wallpaper) => {
   );
 };
 
-const formatLikes = (likes?: number) => {
-  if (likes === undefined || likes === null) return '0';
-  if (likes >= 1000) return `${(likes / 1000).toFixed(1).replace('.0', '')}K`;
-  return String(likes);
+const toNumber = (value: unknown) => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  const parsed = Number(String(value ?? "").replace(/[^\d]/g, ""));
+
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatCount = (value?: number | string) => {
+  const count = toNumber(value);
+
+  if (count >= 1000000) {
+    return `${(count / 1000000).toFixed(1).replace(".0", "")}M`;
+  }
+
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1).replace(".0", "")}K`;
+  }
+
+  return String(count);
+};
+
+const getFavoriteCount = (item: Wallpaper) => {
+  const wallpaper = item as Wallpaper & Record<string, any>;
+
+  return Math.max(
+    toNumber(wallpaper.favoriteCount),
+    toNumber(wallpaper.favorite_count),
+    toNumber(wallpaper.favoritesCount),
+    toNumber(wallpaper.favorites_count),
+    toNumber(wallpaper._count?.favorites),
+    toNumber(wallpaper.favorites),
+  );
 };
 
 const slugifyCategory = (value?: string) =>
-  String(value || '')
+  String(value || "")
     .trim()
     .toLowerCase()
-    .replace(/&/g, 'and')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
 
 const prettifyCategoryName = (value?: string) =>
-  String(value || 'Category')
-    .replace(/[-_]+/g, ' ')
-    .replace(/\b\w/g, char => char.toUpperCase());
+  String(value || "Category")
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 
 const getWallpaperCategoryForNavigation = (wallpaper: Wallpaper) => {
   const w = wallpaper as Wallpaper & Record<string, any>;
 
-  if (w.category && typeof w.category === 'object') {
-    const categoryName = w.category.name || w.category.slug || 'Category';
+  if (w.category && typeof w.category === "object") {
+    const categoryName = w.category.name || w.category.slug || "Category";
     const categorySlug = w.category.slug || slugifyCategory(categoryName);
 
     return {
@@ -132,9 +164,9 @@ const getWallpaperCategoryForNavigation = (wallpaper: Wallpaper) => {
     w.categoryName ||
     w.category_name ||
     w.category ||
-    '';
+    "";
 
-  if (!rawCategory || typeof rawCategory !== 'string') {
+  if (!rawCategory || typeof rawCategory !== "string") {
     return null;
   }
 
@@ -150,11 +182,48 @@ const getWallpaperCategoryForNavigation = (wallpaper: Wallpaper) => {
 const uniqueWallpapers = (items: Wallpaper[]) => {
   const seen = new Set<string>();
 
-  return items.filter(item => {
+  return items.filter((item) => {
     if (!item?.id || seen.has(item.id)) return false;
     seen.add(item.id);
     return true;
   });
+};
+
+const getWallpaperEventId = (item: Wallpaper | Record<string, any>) => {
+  const wallpaper = item as Wallpaper & Record<string, any>;
+
+  return String(
+    wallpaper?.id ||
+      wallpaper?._id ||
+      wallpaper?.wallpaperId ||
+      wallpaper?.wallpaper_id ||
+      "",
+  );
+};
+
+const patchWallpaperList = (
+  items: Wallpaper[],
+  wallpaperId: string,
+  patch: Record<string, any>,
+) => {
+  if (!wallpaperId) return items;
+
+  let changed = false;
+
+  const nextItems = items.map((item) => {
+    if (getWallpaperEventId(item) !== wallpaperId) {
+      return item;
+    }
+
+    changed = true;
+
+    return {
+      ...(item as Wallpaper & Record<string, any>),
+      ...patch,
+    } as Wallpaper;
+  });
+
+  return changed ? nextItems : items;
 };
 
 const ShinyProIcon = () => {
@@ -197,17 +266,17 @@ const ShinyProIcon = () => {
         style={[
           styles.homeProShine,
           {
-            transform: [{ translateX: shineTranslate }, { rotate: '18deg' }],
+            transform: [{ translateX: shineTranslate }, { rotate: "18deg" }],
           },
         ]}
       >
         <LinearGradient
           colors={[
-            'rgba(255,255,255,0)',
-            'rgba(255,255,255,0.22)',
-            'rgba(255,255,255,0.9)',
-            'rgba(255,255,255,0.22)',
-            'rgba(255,255,255,0)',
+            "rgba(255,255,255,0)",
+            "rgba(255,255,255,0.22)",
+            "rgba(255,255,255,0.9)",
+            "rgba(255,255,255,0.22)",
+            "rgba(255,255,255,0)",
           ]}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
@@ -231,8 +300,8 @@ const HomeTopHeader = ({ navigation }: { navigation: any }) => {
         <View style={styles.homeRightActions}>
           <Pressable
             onPress={() =>
-              navigation.navigate('Premium', {
-                returnTo: 'Home',
+              navigation.navigate("Premium", {
+                returnTo: "Home",
               })
             }
             hitSlop={8}
@@ -245,7 +314,7 @@ const HomeTopHeader = ({ navigation }: { navigation: any }) => {
           </Pressable>
 
           <Pressable
-            onPress={() => navigation.navigate('Search')}
+            onPress={() => navigation.navigate("Search")}
             hitSlop={8}
             style={({ pressed }) => [
               styles.homeRightButton,
@@ -286,19 +355,19 @@ const HeroCard = ({
         ]}
       >
         <BlurView intensity={24} tint="dark" style={styles.qualityBadge}>
-          <Text style={styles.qualityText}>{item.quality || '4K'}</Text>
+          <Text style={styles.qualityText}>{item.quality || "4K"}</Text>
           <Text style={styles.qualitySub}>ULTRA HD</Text>
         </BlurView>
 
         <View style={styles.heroContent}>
           <View style={styles.tagPill}>
             <Text style={styles.tagText}>
-              {item.category?.name || 'Featured'}
+              {item.category?.name || "Featured"}
             </Text>
           </View>
 
           <Text style={styles.heroTitle} numberOfLines={2}>
-            {item.title || 'Premium Wallpaper'}
+            {item.title || "Premium Wallpaper"}
           </Text>
 
           <Text style={styles.heroSubtitle} numberOfLines={2}>
@@ -326,30 +395,30 @@ const HeroCard = ({
         onError={() => setImageFailed(true)}
       >
         <LinearGradient
-          colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0)', 'rgba(10,8,25,0.85)']}
+          colors={["rgba(0,0,0,0.05)", "rgba(0,0,0,0)", "rgba(10,8,25,0.85)"]}
           style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
         />
 
         <BlurView intensity={30} tint="dark" style={styles.qualityBadge}>
-          <Text style={styles.qualityText}>{item.quality || '4K'}</Text>
+          <Text style={styles.qualityText}>{item.quality || "4K"}</Text>
           <Text style={styles.qualitySub}>ULTRA HD</Text>
         </BlurView>
 
         <View style={styles.heroContent}>
           <View style={styles.tagPill}>
             <Text style={styles.tagText}>
-              {item.category?.name || 'Featured'}
+              {item.category?.name || "Featured"}
             </Text>
           </View>
 
           <Text style={styles.heroTitle} numberOfLines={2}>
-            {item.title || 'Premium Wallpaper'}
+            {item.title || "Premium Wallpaper"}
           </Text>
 
           <Text style={styles.heroSubtitle} numberOfLines={2}>
             {item.subtitle ||
               (item as any).description ||
-              '4K Ultra HD Collection'}
+              "4K Ultra HD Collection"}
           </Text>
 
           <View style={styles.heroFooter}>
@@ -361,7 +430,9 @@ const HeroCard = ({
 
             <View style={styles.likeRow}>
               <Ionicons name="heart" size={18} color={colors.textPrimary} />
-              <Text style={styles.likeText}>{formatLikes(item.likes)}</Text>
+              <Text style={styles.likeText}>
+                {formatCount(getFavoriteCount(item))}
+              </Text>
             </View>
           </View>
         </View>
@@ -421,19 +492,19 @@ const HeroSmoothCarousel = ({
           const scale = scrollX.interpolate({
             inputRange,
             outputRange: [0.92, 1, 0.92],
-            extrapolate: 'clamp',
+            extrapolate: "clamp",
           });
 
           const opacity = scrollX.interpolate({
             inputRange,
             outputRange: [0.62, 1, 0.62],
-            extrapolate: 'clamp',
+            extrapolate: "clamp",
           });
 
           const translateY = scrollX.interpolate({
             inputRange,
             outputRange: [16, 0, 16],
-            extrapolate: 'clamp',
+            extrapolate: "clamp",
           });
 
           return (
@@ -512,19 +583,19 @@ const WallpaperCard = ({
         onError={() => setImageFailed(true)}
       >
         <LinearGradient
-          colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0)', 'rgba(5,4,14,0.82)']}
+          colors={["rgba(0,0,0,0.05)", "rgba(0,0,0,0)", "rgba(5,4,14,0.82)"]}
           style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
         />
 
         <View style={styles.wallpaperTop}>
           <BlurView intensity={28} tint="dark" style={styles.qualityChip}>
-            <Text style={styles.qualityChipText}>{item.quality || '4K'}</Text>
+            <Text style={styles.qualityChipText}>{item.quality || "4K"}</Text>
           </BlurView>
         </View>
 
         <View style={styles.wallpaperBottom}>
           <Text style={styles.wallpaperTitle} numberOfLines={1}>
-            {item.title || 'Wallpaper'}
+            {item.title || "Wallpaper"}
           </Text>
 
           <View style={styles.wallpaperMeta}>
@@ -534,7 +605,7 @@ const WallpaperCard = ({
               color={colors.textPrimary}
             />
             <Text style={styles.wallpaperMetaText}>
-              {formatLikes(item.likes)}
+              {formatCount(getFavoriteCount(item))}
             </Text>
           </View>
         </View>
@@ -558,14 +629,14 @@ const AllWallpapersPreview = ({
         <View>
           <Text style={styles.sectionTitle}>All Wallpapers</Text>
           <Text style={styles.sectionSubtitle}>
-            {data.length ? 'Showing latest 10 wallpapers' : 'Latest uploads'}
+            {data.length ? "Showing latest 10 wallpapers" : "Latest uploads"}
           </Text>
         </View>
       </View>
 
       {data.length ? (
         <View style={styles.grid}>
-          {data.map(item => (
+          {data.map((item) => (
             <WallpaperCard
               key={item.id}
               item={item}
@@ -601,6 +672,7 @@ const AllWallpapersPreview = ({
 const HomeScreen = () => {
   const navigation = useNavigation<any>();
   const heroScrollX = useRef(new Animated.Value(0)).current;
+  const hasLoadedOnce = useRef(false);
 
   const [activeHero, setActiveHero] = useState(0);
   const [featured, setFeatured] = useState<Wallpaper[]>([]);
@@ -613,11 +685,6 @@ const HomeScreen = () => {
 
     await loadHome(true);
   };
-
-  useEffect(() => {
-    loadHome();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const loadHome = async (isRefresh = false) => {
     try {
@@ -633,7 +700,7 @@ const HomeScreen = () => {
         heroData = hero?.data ?? [];
       } catch (error) {
         console.log(
-          'HOME FEATURED ERROR',
+          "HOME FEATURED ERROR",
           (error as any)?.response?.data || (error as any)?.message || error,
         );
       }
@@ -646,7 +713,7 @@ const HomeScreen = () => {
         latestData = latest?.data ?? [];
       } catch (error) {
         console.log(
-          'HOME WALLPAPERS ERROR',
+          "HOME WALLPAPERS ERROR",
           (error as any)?.response?.data || (error as any)?.message || error,
         );
       }
@@ -665,7 +732,7 @@ const HomeScreen = () => {
       heroScrollX.setValue(0);
     } catch (error) {
       console.log(
-        'HOME LOAD ERROR',
+        "HOME LOAD ERROR",
         (error as any)?.response?.data || (error as any)?.message || error,
       );
 
@@ -677,24 +744,102 @@ const HomeScreen = () => {
     }
   };
 
+  useEffect(() => {
+    const unsubscribeFavorites = appEvents.on("favoritesChanged", (payload) => {
+      const wallpaperId = String(payload.wallpaperId || "");
+
+      const patch = {
+        ...(payload.wallpaper || {}),
+        isFavorite: Boolean(payload.isFavorite),
+        is_favorite: Boolean(payload.isFavorite),
+        favoriteCount: payload.favoriteCount,
+        favorite_count: payload.favoriteCount,
+        favoritesCount: payload.favoriteCount,
+      };
+
+      setFeatured((current) => patchWallpaperList(current, wallpaperId, patch));
+      setHomeWallpapers((current) =>
+        patchWallpaperList(current, wallpaperId, patch),
+      );
+    });
+
+    const unsubscribeDownloads = appEvents.on("downloadsChanged", (payload) => {
+      const wallpaperId = String(payload.wallpaperId || "");
+
+      const patch = {
+        ...(payload.wallpaper || {}),
+        downloadCount: payload.downloadCount,
+        download_count: payload.downloadCount,
+        downloads: payload.downloadCount,
+      };
+
+      setFeatured((current) => patchWallpaperList(current, wallpaperId, patch));
+      setHomeWallpapers((current) =>
+        patchWallpaperList(current, wallpaperId, patch),
+      );
+    });
+
+    const unsubscribeWallpaper = appEvents.on("wallpaperChanged", (payload) => {
+      const wallpaperId = String(
+        payload.wallpaperId || payload.wallpaper?.id || "",
+      );
+
+      if (!wallpaperId || !payload.wallpaper) {
+        return;
+      }
+
+      setFeatured((current) =>
+        patchWallpaperList(current, wallpaperId, payload.wallpaper),
+      );
+      setHomeWallpapers((current) =>
+        patchWallpaperList(current, wallpaperId, payload.wallpaper),
+      );
+    });
+
+    const unsubscribeWallpapers = appEvents.on("wallpapersChanged", () => {
+      loadHome(true);
+    });
+
+    return () => {
+      unsubscribeFavorites();
+      unsubscribeDownloads();
+      unsubscribeWallpaper();
+      unsubscribeWallpapers();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (hasLoadedOnce.current) {
+        loadHome(true);
+        return;
+      }
+
+      hasLoadedOnce.current = true;
+      loadHome();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
+
   const onHeroScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const idx = Math.round(e.nativeEvent.contentOffset.x / HERO_SNAP);
     setActiveHero(Math.max(0, Math.min(idx, featured.length - 1)));
   };
 
   const openWallpaper = (wallpaper: Wallpaper) => {
-    navigation.navigate('WallpaperDetails', { wallpaper });
+    navigation.navigate("WallpaperDetails", { wallpaper });
   };
 
   const openWallpaperCategory = (wallpaper: Wallpaper) => {
     const category = getWallpaperCategoryForNavigation(wallpaper);
 
     if (!category?.slug) {
-      console.log('No category linked to this wallpaper');
+      console.log("No category linked to this wallpaper");
       return;
     }
 
-    navigation.navigate('CategoryDetail', { category });
+    navigation.navigate("CategoryDetail", { category });
   };
 
   if (loading) {
@@ -709,7 +854,7 @@ const HomeScreen = () => {
     <View style={styles.root}>
       <MeshBackground variant="home" />
 
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
@@ -735,7 +880,7 @@ const HomeScreen = () => {
           <AllWallpapersPreview
             data={homeWallpapers}
             onPressItem={openWallpaper}
-            onViewAll={() => navigation.navigate('AllWallpapers')}
+            onViewAll={() => navigation.navigate("AllWallpapers")}
           />
         </ScrollView>
       </SafeAreaView>
@@ -753,8 +898,8 @@ const styles = StyleSheet.create({
   loadingRoot: {
     flex: 1,
     backgroundColor: colors.base,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   scrollContent: {
     paddingBottom: 120,
@@ -766,10 +911,10 @@ const styles = StyleSheet.create({
   },
   homeActionRow: {
     height: 72,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    overflow: 'visible',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    overflow: "visible",
     marginBottom: -8,
   },
   homeLogoLeft: {
@@ -779,8 +924,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   homeRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
     zIndex: 5,
   },
@@ -788,25 +933,25 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'visible',
-    backgroundColor: 'transparent',
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "visible",
+    backgroundColor: "transparent",
   },
   homeProIconWrap: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
   },
   homeProIcon: {
     width: 36,
     height: 36,
   },
   homeProShine: {
-    position: 'absolute',
+    position: "absolute",
     top: -12,
     bottom: -12,
     width: 22,
@@ -818,17 +963,17 @@ const styles = StyleSheet.create({
   homeRightButton: {
     width: 46,
     height: 46,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     zIndex: 5,
   },
   homeRoundButton: {
     width: 46,
     height: 46,
     borderRadius: 23,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
     backgroundColor: colors.glassFill,
@@ -846,9 +991,9 @@ const styles = StyleSheet.create({
     height: HERO_H,
   },
   heroCarouselDots: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
     gap: 6,
     marginTop: spacing.xs,
   },
@@ -856,7 +1001,7 @@ const styles = StyleSheet.create({
     width: HERO_W,
     height: HERO_H,
     borderRadius: radius.lg,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
   },
@@ -865,22 +1010,22 @@ const styles = StyleSheet.create({
   },
   heroImage: {
     flex: 1,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
     backgroundColor: colors.baseElevated,
   },
   missingHeroCard: {
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
     backgroundColor: colors.baseElevated,
   },
   qualityBadge: {
-    position: 'absolute',
+    position: "absolute",
     top: 14,
     right: 14,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 12,
-    overflow: 'hidden',
-    alignItems: 'center',
+    overflow: "hidden",
+    alignItems: "center",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
     zIndex: 10,
@@ -888,13 +1033,13 @@ const styles = StyleSheet.create({
   },
   qualityText: {
     color: colors.textPrimary,
-    fontWeight: '800',
+    fontWeight: "800",
     fontSize: 14,
     lineHeight: 16,
   },
   qualitySub: {
     color: colors.textSecondary,
-    fontWeight: '700',
+    fontWeight: "700",
     fontSize: 8,
     letterSpacing: 1,
   },
@@ -902,8 +1047,8 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   tagPill: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(0,0,0,0.45)",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: radius.pill,
@@ -912,38 +1057,38 @@ const styles = StyleSheet.create({
   tagText: {
     color: colors.textPrimary,
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: 1.5,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   heroTitle: {
     color: colors.textPrimary,
     fontSize: 30,
     lineHeight: 36,
-    fontWeight: '800',
+    fontWeight: "800",
     letterSpacing: -0.5,
   },
   heroSubtitle: {
     color: colors.textSecondary,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: "600",
     marginTop: 4,
-    maxWidth: '78%',
+    maxWidth: "78%",
   },
   heroFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginTop: spacing.xl,
   },
   likeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   likeText: {
     color: colors.textPrimary,
-    fontWeight: '700',
+    fontWeight: "700",
     fontSize: 14,
   },
   dot: {
@@ -957,9 +1102,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.textPrimary,
   },
   sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
     paddingHorizontal: spacing.xl,
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
@@ -967,13 +1112,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: colors.textPrimary,
     fontSize: 24,
-    fontWeight: '800',
+    fontWeight: "800",
     letterSpacing: -0.3,
   },
   sectionSubtitle: {
     color: colors.textSecondary,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
     marginTop: 3,
   },
   allSection: {
@@ -981,15 +1126,15 @@ const styles = StyleSheet.create({
   },
   grid: {
     paddingHorizontal: spacing.xl,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: GRID_GAP,
   },
   wallpaperCard: {
     width: CARD_W,
     height: CARD_H,
     borderRadius: radius.lg,
-    overflow: 'hidden',
+    overflow: "hidden",
     backgroundColor: colors.baseElevated,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
@@ -1000,28 +1145,28 @@ const styles = StyleSheet.create({
   },
   wallpaperImage: {
     flex: 1,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
     backgroundColor: colors.baseElevated,
   },
   missingCard: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     padding: spacing.md,
     gap: 8,
   },
   missingImageText: {
     color: colors.textSecondary,
-    fontWeight: '700',
+    fontWeight: "700",
     fontSize: 12,
-    textAlign: 'center',
+    textAlign: "center",
   },
   wallpaperTop: {
-    alignItems: 'flex-start',
+    alignItems: "flex-start",
     padding: spacing.sm,
   },
   qualityChip: {
     borderRadius: radius.pill,
-    overflow: 'hidden',
+    overflow: "hidden",
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1029,7 +1174,7 @@ const styles = StyleSheet.create({
   },
   qualityChipText: {
     color: colors.textPrimary,
-    fontWeight: '700',
+    fontWeight: "700",
     fontSize: 11,
   },
   wallpaperBottom: {
@@ -1037,31 +1182,31 @@ const styles = StyleSheet.create({
   },
   wallpaperTitle: {
     color: colors.textPrimary,
-    fontWeight: '700',
+    fontWeight: "700",
     fontSize: 13,
     marginBottom: 6,
   },
   wallpaperMeta: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: "rgba(0,0,0,0.45)",
   },
   wallpaperMetaText: {
     color: colors.textPrimary,
-    fontWeight: '700',
+    fontWeight: "700",
     fontSize: 11,
   },
   emptyBox: {
     marginHorizontal: spacing.xl,
     height: 150,
     borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     backgroundColor: colors.glassFill,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1069,18 +1214,18 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     color: colors.textSecondary,
-    fontWeight: '700',
+    fontWeight: "700",
     fontSize: 14,
   },
   viewAllButton: {
-    alignSelf: 'center',
+    alignSelf: "center",
     marginTop: spacing.xl,
     marginBottom: spacing.md,
     paddingHorizontal: 22,
     paddingVertical: 13,
     borderRadius: radius.pill,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     backgroundColor: colors.glassFillStrong,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1092,7 +1237,7 @@ const styles = StyleSheet.create({
   },
   viewAllText: {
     color: colors.textPrimary,
-    fontWeight: '700',
+    fontWeight: "700",
     fontSize: 14,
   },
 });

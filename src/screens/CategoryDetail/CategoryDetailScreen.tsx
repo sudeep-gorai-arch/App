@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,6 +7,7 @@ import {
   Pressable,
   ImageBackground,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,71 +19,258 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import MeshBackground from '../../components/MeshBackground';
 import { RoundButton } from '../../components/Header';
 
+import API from '../../services/api';
+import { getCategoryWallpapers } from '../../services/wallpaperService';
+import { Wallpaper } from '../../services/types';
+
 import { colors } from '../../styles/colors';
 import { fontFamily } from '../../styles/typography';
 import { spacing, radius, SCREEN } from '../../utils/constants';
 
 import { RootStackParamList } from '../../navigation/RootStackParamList';
-import { getCategoryWallpapers } from '../../services/wallpaperService';
-import { Wallpaper } from '../../services/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CategoryDetail'>;
+
+type CategoryFilter = 'All' | 'Popular' | 'New' | 'Premium';
 
 const GAP = spacing.lg;
 const CARD_W = (SCREEN.width - spacing.xl * 2 - GAP) / 2;
 const CARD_H = CARD_W * 1.5;
 
-const placeholderFor = (category: any): Wallpaper[] =>
-  Array.from({ length: 6 }).map((_, i) => {
-    const seed = `${category?.slug ?? 'cat'}-${i}`;
+const API_ORIGIN = String(API.defaults.baseURL || '').replace(/\/api\/?$/, '');
 
-    return {
-      id: `ph-${seed}`,
+const toAbsoluteMediaUrl = (value?: string | null) => {
+  if (!value) return undefined;
 
-      title: `${category?.name ?? 'Wallpaper'} ${i + 1}`,
+  const url = String(value).trim();
 
-      subtitle: undefined,
+  if (!url) return undefined;
 
-      description: undefined,
+  if (/^https?:\/\//i.test(url)) {
+    if (!API_ORIGIN) return url;
 
-      slug: undefined,
+    return url.replace(
+      /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i,
+      API_ORIGIN,
+    );
+  }
 
-      imageUrl: `https://picsum.photos/seed/${seed}/600/900`,
+  if (url.startsWith('//')) {
+    return `https:${url}`;
+  }
 
-      thumbnailUrl: `https://picsum.photos/seed/${seed}/600/900`,
+  if (url.startsWith('/')) {
+    return API_ORIGIN ? `${API_ORIGIN}${url}` : url;
+  }
 
-      videoUrl: undefined,
+  return API_ORIGIN ? `${API_ORIGIN}/${url}` : url;
+};
 
-      quality: '4K',
+const getWallpaperId = (item: Wallpaper, index = 0) => {
+  const wallpaper = item as Wallpaper & Record<string, any>;
 
-      resolution: '2160x3840',
+  return String(
+    wallpaper.id ||
+    wallpaper._id ||
+    wallpaper.wallpaperId ||
+    wallpaper.wallpaper_id ||
+    wallpaper.uuid ||
+    `wallpaper-${index}`,
+  );
+};
 
-      isFeatured: false,
+const toNumber = (value: unknown) => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
 
-      isPremium: false,
+  const parsed = Number(String(value ?? '').replace(/[^\d]/g, ''));
 
-      active: true,
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
-      likes: 0,
+const getDownloadCount = (item: Wallpaper) => {
+  const wallpaper = item as Wallpaper & Record<string, any>;
 
-      downloadCount: 0,
+  return Math.max(
+    toNumber(wallpaper.downloadCount),
+    toNumber(wallpaper.download_count),
+    toNumber(wallpaper.downloads),
+    toNumber(wallpaper.downloadsThisWeek),
+    toNumber(wallpaper.weeklyDownloads),
+  );
+};
 
-      createdAt: new Date().toISOString(),
+const getCreatedTime = (item: Wallpaper) => {
+  const wallpaper = item as Wallpaper & Record<string, any>;
 
-      updatedAt: new Date().toISOString(),
+  const value =
+    wallpaper.createdAt ||
+    wallpaper.created_at ||
+    wallpaper.updatedAt ||
+    wallpaper.updated_at;
 
-      category,
+  if (!value) return 0;
 
-      categoryId: category?.id,
+  const time = new Date(value).getTime();
 
-      isFavorite: false,
+  return Number.isFinite(time) ? time : 0;
+};
 
-      isLiked: false,
-    };
-  });
+const isPremiumWallpaper = (item: Wallpaper) => {
+  const wallpaper = item as Wallpaper & Record<string, any>;
+
+  return Boolean(
+    wallpaper.isPremium ||
+    wallpaper.is_premium ||
+    wallpaper.premium ||
+    wallpaper.premiumOnly,
+  );
+};
+
+const normalizeWallpaper = (item: Wallpaper, index: number): Wallpaper => {
+  const wallpaper = item as Wallpaper & Record<string, any>;
+
+  return {
+    ...item,
+
+    id: getWallpaperId(item, index),
+
+    title: String(wallpaper.title || wallpaper.name || 'Wallpaper'),
+
+    subtitle: wallpaper.subtitle,
+
+    description: wallpaper.description,
+
+    slug: wallpaper.slug,
+
+    imageUrl:
+      toAbsoluteMediaUrl(wallpaper.imageUrl) ||
+      toAbsoluteMediaUrl(wallpaper.image_url) ||
+      toAbsoluteMediaUrl(wallpaper.url) ||
+      toAbsoluteMediaUrl(wallpaper.image) ||
+      toAbsoluteMediaUrl(wallpaper.photoUrl) ||
+      toAbsoluteMediaUrl(wallpaper.photo_url) ||
+      toAbsoluteMediaUrl(wallpaper.mediaUrl) ||
+      toAbsoluteMediaUrl(wallpaper.media_url) ||
+      '',
+
+    thumbnailUrl:
+      toAbsoluteMediaUrl(wallpaper.thumbnailUrl) ||
+      toAbsoluteMediaUrl(wallpaper.thumbnail_url) ||
+      toAbsoluteMediaUrl(wallpaper.thumbnail) ||
+      toAbsoluteMediaUrl(wallpaper.thumbUrl) ||
+      toAbsoluteMediaUrl(wallpaper.thumb_url) ||
+      '',
+
+    videoUrl: wallpaper.videoUrl || wallpaper.video_url,
+
+    quality: wallpaper.quality || '',
+
+    resolution: wallpaper.resolution,
+
+    isFeatured: Boolean(wallpaper.isFeatured || wallpaper.is_featured),
+
+    isPremium: isPremiumWallpaper(item),
+
+    active: wallpaper.active === undefined ? true : Boolean(wallpaper.active),
+
+    likes: toNumber(wallpaper.likes || wallpaper.likeCount || wallpaper.like_count),
+
+    downloadCount: getDownloadCount(item),
+
+    createdAt: wallpaper.createdAt || wallpaper.created_at || '',
+
+    updatedAt:
+      wallpaper.updatedAt ||
+      wallpaper.updated_at ||
+      wallpaper.createdAt ||
+      wallpaper.created_at ||
+      '',
+
+    category: wallpaper.category,
+
+    categoryId: wallpaper.categoryId || wallpaper.category_id,
+
+    isFavorite: Boolean(wallpaper.isFavorite || wallpaper.is_favorite),
+
+    isLiked: Boolean(wallpaper.isLiked || wallpaper.is_liked),
+  };
+};
+
+const extractWallpapers = (payload: any): Wallpaper[] => {
+  if (Array.isArray(payload)) return payload;
+
+  if (Array.isArray(payload?.data?.wallpapers)) {
+    return payload.data.wallpapers;
+  }
+
+  if (Array.isArray(payload?.data?.items)) {
+    return payload.data.items;
+  }
+
+  if (Array.isArray(payload?.data)) {
+    return payload.data;
+  }
+
+  if (Array.isArray(payload?.wallpapers)) {
+    return payload.wallpapers;
+  }
+
+  if (Array.isArray(payload?.items)) {
+    return payload.items;
+  }
+
+  return [];
+};
+
+const uniqueWallpapers = (items: Wallpaper[]) => {
+  const seen = new Set<string>();
+
+  return items
+    .map((item, index) => normalizeWallpaper(item, index))
+    .filter((item, index) => {
+      const id = getWallpaperId(item, index);
+
+      if (seen.has(id)) return false;
+
+      seen.add(id);
+      return true;
+    });
+};
 
 const getWallpaperImage = (item: Wallpaper) => {
-  return item.thumbnailUrl || item.imageUrl || undefined;
+  const wallpaper = item as Wallpaper & Record<string, any>;
+
+  return (
+    toAbsoluteMediaUrl(wallpaper.thumbnailUrl) ||
+    toAbsoluteMediaUrl(wallpaper.imageUrl) ||
+    toAbsoluteMediaUrl(wallpaper.thumbnail_url) ||
+    toAbsoluteMediaUrl(wallpaper.image_url) ||
+    toAbsoluteMediaUrl(wallpaper.url) ||
+    toAbsoluteMediaUrl(wallpaper.image) ||
+    toAbsoluteMediaUrl(wallpaper.thumbnail)
+  );
+};
+
+const getCategoryName = (category: any) => {
+  return String(category?.name || category?.title || 'Category');
+};
+
+const getCategorySlug = (category: any) => {
+  return String(category?.slug || category?.categorySlug || category?.category_slug || '');
+};
+
+const getCategoryCount = (category: any, fallback: number) => {
+  return Math.max(
+    toNumber(category?.wallpaperCount),
+    toNumber(category?.count),
+    toNumber(category?.wallpapersCount),
+    toNumber(category?.totalWallpapers),
+    toNumber(category?.total_wallpapers),
+    toNumber(category?._count?.wallpapers),
+    fallback,
+  );
 };
 
 const WallpaperTile = ({
@@ -92,64 +280,142 @@ const WallpaperTile = ({
   item: Wallpaper;
   onPress: () => void;
 }) => {
-  const image = getWallpaperImage(item);
+  const [imageFailed, setImageFailed] = useState(false);
+
+  const image = imageFailed ? undefined : getWallpaperImage(item);
 
   return (
     <Pressable
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
       onPress={onPress}
     >
-      <ImageBackground
-        source={{ uri: image }}
-        style={styles.cardImage}
-        imageStyle={{ borderRadius: radius.lg }}
-        resizeMode="cover"
-      >
-        <LinearGradient
-          colors={['rgba(0,0,0,0.02)', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0.88)']}
-          style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
-        />
+      {image ? (
+        <ImageBackground
+          source={{ uri: image }}
+          style={styles.cardImage}
+          imageStyle={{ borderRadius: radius.lg }}
+          resizeMode="cover"
+          onError={() => setImageFailed(true)}
+        >
+          <LinearGradient
+            colors={[
+              'rgba(0,0,0,0.02)',
+              'rgba(0,0,0,0.12)',
+              'rgba(0,0,0,0.88)',
+            ]}
+            style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
+          />
 
-        {(item as any).isPremium ? (
-          <BlurView intensity={26} tint="dark" style={styles.lockChip}>
-            <Ionicons name="lock-closed" size={14} color={colors.textPrimary} />
-          </BlurView>
-        ) : null}
+          {isPremiumWallpaper(item) ? (
+            <BlurView intensity={26} tint="dark" style={styles.lockChip}>
+              <Ionicons
+                name="lock-closed"
+                size={14}
+                color={colors.textPrimary}
+              />
+            </BlurView>
+          ) : null}
 
-        <View style={styles.wallpaperNameBox}>
-          <Text style={styles.wallpaperName} numberOfLines={2}>
-            {item.title || 'Wallpaper'}
-          </Text>
+          <View style={styles.wallpaperNameBox}>
+            <Text style={styles.wallpaperName} numberOfLines={2}>
+              {item.title || 'Wallpaper'}
+            </Text>
+          </View>
+        </ImageBackground>
+      ) : (
+        <View style={styles.cardPlaceholder}>
+          <Ionicons
+            name="image-outline"
+            size={30}
+            color={colors.textSecondary}
+          />
+
+          {isPremiumWallpaper(item) ? (
+            <BlurView intensity={26} tint="dark" style={styles.lockChip}>
+              <Ionicons
+                name="lock-closed"
+                size={14}
+                color={colors.textPrimary}
+              />
+            </BlurView>
+          ) : null}
+
+          <View style={styles.wallpaperNameBox}>
+            <Text style={styles.wallpaperName} numberOfLines={2}>
+              {item.title || 'Wallpaper'}
+            </Text>
+          </View>
         </View>
-      </ImageBackground>
+      )}
     </Pressable>
   );
 };
 
 const CategoryDetailScreen = ({ navigation, route }: Props) => {
-  const category = route.params?.category ?? {};
+  const params = route.params as any;
+  const category = params?.category ?? {};
+  const initialFilter = String(params?.initialFilter || 'All') as CategoryFilter;
+  const premiumOnly = Boolean(params?.premiumOnly);
 
   const [items, setItems] = useState<Wallpaper[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const categoryName = getCategoryName(category);
+  const categorySlug = getCategorySlug(category);
+
+  const visibleItems = useMemo(() => {
+    const list = [...items];
+
+    if (premiumOnly || initialFilter === 'Premium') {
+      return list.filter(isPremiumWallpaper);
+    }
+
+    if (initialFilter === 'Popular') {
+      return list.sort((a, b) => getDownloadCount(b) - getDownloadCount(a));
+    }
+
+    if (initialFilter === 'New') {
+      return list.sort((a, b) => getCreatedTime(b) - getCreatedTime(a));
+    }
+
+    return list;
+  }, [initialFilter, items, premiumOnly]);
 
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [categorySlug]);
 
-  const load = async () => {
+  const load = async (isRefresh = false) => {
     try {
-      const res = await getCategoryWallpapers(category.slug);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
 
-      const list = res.data ?? [];
+      if (!categorySlug) {
+        setItems([]);
+        return;
+      }
 
-      setItems(list.length ? list : placeholderFor(category));
+      const res = await getCategoryWallpapers(categorySlug, 100, 0);
+
+      const list = uniqueWallpapers(extractWallpapers(res));
+
+      setItems(list);
     } catch (error) {
       console.log('CATEGORY DETAIL ERROR', error);
-      setItems(placeholderFor(category));
+      setItems([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const openWallpaper = (wallpaper: Wallpaper) => {
+    navigation.navigate('WallpaperDetails', { wallpaper });
   };
 
   return (
@@ -158,18 +424,15 @@ const CategoryDetailScreen = ({ navigation, route }: Props) => {
 
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <View style={styles.header}>
-          <RoundButton
-            icon="chevron-back"
-            onPress={() => navigation.goBack()}
-          />
+          <RoundButton icon="chevron-back" onPress={() => navigation.goBack()} />
 
           <View style={styles.headerCenter}>
             <Text style={styles.headerTitle} numberOfLines={1}>
-              {category.name ?? 'Category'}
+              {categoryName}
             </Text>
 
             <Text style={styles.headerSub}>
-              {category.count ?? items.length} wallpapers
+              {getCategoryCount(category, visibleItems.length)} wallpapers
             </Text>
           </View>
 
@@ -182,19 +445,42 @@ const CategoryDetailScreen = ({ navigation, route }: Props) => {
           </View>
         ) : (
           <FlatList
-            data={items}
-            keyExtractor={item => item.id}
+            data={visibleItems}
+            keyExtractor={(item, index) => getWallpaperId(item, index)}
             numColumns={2}
             showsVerticalScrollIndicator={false}
-            columnWrapperStyle={styles.columnWrapper}
-            contentContainerStyle={styles.listContent}
-            renderItem={({ item }) => (
-              <WallpaperTile
-                item={item}
-                onPress={() =>
-                  navigation.navigate('WallpaperDetails', { wallpaper: item })
-                }
+            columnWrapperStyle={
+              visibleItems.length ? styles.columnWrapper : undefined
+            }
+            contentContainerStyle={[
+              styles.listContent,
+              !visibleItems.length && styles.emptyListContent,
+            ]}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => load(true)}
+                tintColor={colors.textPrimary}
               />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyBox}>
+                <Ionicons
+                  name="image-outline"
+                  size={32}
+                  color={colors.textSecondary}
+                />
+
+                <Text style={styles.emptyTitle}>No wallpapers found</Text>
+
+                <Text style={styles.emptyText}>
+                  Uploaded wallpapers for this category will appear here after
+                  the backend returns them.
+                </Text>
+              </View>
+            }
+            renderItem={({ item }) => (
+              <WallpaperTile item={item} onPress={() => openWallpaper(item)} />
             )}
           />
         )}
@@ -210,6 +496,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.base,
   },
+
   center: {
     flex: 1,
     justifyContent: 'center',
@@ -224,16 +511,19 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.md,
   },
+
   headerCenter: {
     flex: 1,
     alignItems: 'center',
     paddingHorizontal: spacing.sm,
   },
+
   headerTitle: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 22,
   },
+
   headerSub: {
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
@@ -246,6 +536,11 @@ const styles = StyleSheet.create({
     paddingBottom: 130,
     gap: GAP,
   },
+
+  emptyListContent: {
+    flexGrow: 1,
+  },
+
   columnWrapper: {
     paddingHorizontal: spacing.xl,
     gap: GAP,
@@ -260,12 +555,22 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
   },
+
   cardPressed: {
     opacity: 0.88,
     transform: [{ scale: 0.985 }],
   },
+
   cardImage: {
     flex: 1,
+  },
+
+  cardPlaceholder: {
+    flex: 1,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.glassFillSoft,
   },
 
   lockChip: {
@@ -288,10 +593,38 @@ const styles = StyleSheet.create({
     right: 10,
     bottom: 10,
   },
+
   wallpaperName: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 13,
+    lineHeight: 17,
+  },
+
+  emptyBox: {
+    marginHorizontal: spacing.xl,
+    minHeight: 180,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: spacing.lg,
+    backgroundColor: colors.glassFill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorderSoft,
+  },
+
+  emptyTitle: {
+    color: colors.textPrimary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 15,
+  },
+
+  emptyText: {
+    color: colors.textSecondary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 12,
+    textAlign: 'center',
     lineHeight: 17,
   },
 });

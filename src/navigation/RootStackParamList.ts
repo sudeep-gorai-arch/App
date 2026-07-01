@@ -6,22 +6,18 @@
  * only describes the parent stack.
  */
 export type RootStackParamList = {
-
   MainTabs: undefined;
-
 
   // Auth
   // Login: undefined;
   // Signup: undefined;
 
-
   Payment:
-  | {
-    planLabel?: string;
-    price?: number;
-  }
-  | undefined;
-
+    | {
+        planLabel?: string;
+        price?: number;
+      }
+    | undefined;
 
   // Browse
   AllWallpapers: undefined;
@@ -34,16 +30,24 @@ export type RootStackParamList = {
     wallpaper: any;
   };
 
-
   // Account/Profile
   // AccountSettings: undefined;
 
   EditProfile: undefined;
 
-  Subscription: undefined;
+  ManagePremium:
+    | {
+        returnTo?: string;
+      }
+    | undefined;
+
+  Subscription:
+    | {
+        returnTo?: string;
+      }
+    | undefined;
 
   Downloads: undefined;
-
 
   // Other Pages
   HelpSupport: undefined;
@@ -55,5 +59,4 @@ export type RootStackParamList = {
   About: undefined;
 
   Settings: undefined;
-
 };
