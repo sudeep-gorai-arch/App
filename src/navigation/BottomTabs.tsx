@@ -27,7 +27,9 @@ import TrendingScreen from '../screens/Trending/TrendingScreen';
 import { colors, gradients } from '../styles/colors';
 import { TAB_ITEMS } from '../utils/constants';
 
-const Tab = createBottomTabNavigator();
+import { BottomTabParamList } from './BottomTabParamList';
+
+const Tab = createBottomTabNavigator<BottomTabParamList>();
 
 const HIDDEN_TAB_ROUTES = ['Premium'];
 

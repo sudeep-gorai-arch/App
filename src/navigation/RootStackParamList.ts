@@ -1,3 +1,7 @@
+import { NavigatorScreenParams } from '@react-navigation/native';
+import { BottomTabParamList } from '../navigation/BottomTabParamList';
+
+
 /**
  * Route map for the root native-stack (see RootNavigator.tsx).
  *
@@ -6,18 +10,18 @@
  * only describes the parent stack.
  */
 export type RootStackParamList = {
-  MainTabs: undefined;
+  MainTabs: NavigatorScreenParams<BottomTabParamList>;
 
   // Auth
   // Login: undefined;
   // Signup: undefined;
 
   Payment:
-    | {
-        planLabel?: string;
-        price?: number;
-      }
-    | undefined;
+  | {
+    planLabel?: string;
+    price?: number;
+  }
+  | undefined;
 
   // Browse
   AllWallpapers: undefined;
@@ -36,16 +40,16 @@ export type RootStackParamList = {
   EditProfile: undefined;
 
   ManagePremium:
-    | {
-        returnTo?: string;
-      }
-    | undefined;
+  | {
+    returnTo?: string;
+  }
+  | undefined;
 
   Subscription:
-    | {
-        returnTo?: string;
-      }
-    | undefined;
+  | {
+    returnTo?: string;
+  }
+  | undefined;
 
   Downloads: undefined;
 

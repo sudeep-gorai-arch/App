@@ -627,11 +627,23 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
         wallpaper: rollbackWallpaper,
       });
 
-      if (error?.response?.status === 401) {
+      if (error?.status === 401) {
         Alert.alert(
           'Login required',
           'Please login to add wallpapers to favorites.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                navigation.navigate('MainTabs', {
+                  screen: 'Profile',
+                });
+              },
+            },
+          ],
+          { cancelable: false },
         );
+
         return;
       }
 
@@ -913,11 +925,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
             resizeMode="cover"
           >
             <LinearGradient
-              colors={[
-                'rgba(0,0,0,0.34)',
-                'rgba(0,0,0,0)',
-                'rgba(0,0,0,0.38)',
-              ]}
+              colors={['rgba(0,0,0,0.34)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.38)']}
               style={StyleSheet.absoluteFill}
             />
 
