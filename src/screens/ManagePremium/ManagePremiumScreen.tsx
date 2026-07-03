@@ -1,117 +1,379 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, Pressable, ScrollView } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+
+import {
+  StyleSheet,
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  ActivityIndicator,
+} from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
+
 import { LinearGradient } from 'expo-linear-gradient';
+
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import MeshBackground from '../../components/MeshBackground';
 import Card from '../../components/Card';
 import { RoundButton } from '../../components/Header';
+
 import { colors, gradients } from '../../styles/colors';
+
 import { spacing, radius } from '../../utils/constants';
 
-type Nav = { goBack?: () => void; navigate?: (r: string, p?: any) => void };
+import {
+  getSubscriptionStatus,
+  getSubscriptionPlans,
+  SubscriptionPlan,
+} from '../../services/subscriptionService';
+
+import { useToast } from '../../components/ui/toast/useToast';
+
+type Nav = {
+  goBack?: () => void;
+
+  navigate?: (screen: string, params?: any) => void;
+};
 
 const DANGER = '#FF5A6E';
 
-const DETAILS = [
-  { id: 'plan', icon: 'calendar-outline', title: 'Plan', value: 'Premium Annual', badge: 'Best Value' },
-  { id: 'billing', icon: 'card-outline', title: 'Billing', value: 'Billed annually', right: '$19.99 / year' },
-] as const;
+interface Props {
+  navigation?: Nav;
+}
 
-const MANAGE = [
-  { id: 'pay', icon: 'card-outline', title: 'Update Payment Method', sub: 'Visa •••• 4242' },
-  { id: 'change', icon: 'sync-outline', title: 'Change Plan', sub: 'Upgrade or downgrade your plan' },
-  { id: 'history', icon: 'time-outline', title: 'Billing History', sub: 'View your past invoices' },
-] as const;
+const ManagePremiumScreen = ({ navigation }: Props) => {
+  const toast = useToast();
 
-const ManagePremiumScreen = ({ navigation }: { navigation?: Nav }) => {
+  const [loading, setLoading] = useState(true);
+
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+
+  const [status, setStatus] = useState<any>(null);
+
   const [autoRenew, setAutoRenew] = useState(true);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+
+      const [planResponse, statusResponse] = await Promise.all([
+        getSubscriptionPlans(),
+        getSubscriptionStatus(),
+      ]);
+
+      setPlans(planResponse.data);
+
+      setStatus(statusResponse.data);
+    } catch (e) {
+      console.log(e);
+
+      toast.error('Unable to load subscription.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const currentPlan = useMemo(() => {
+    if (!status?.isPremium) return null;
+
+    return plans.find(p => p.plan === status.subscription?.plan) ?? null;
+  }, [plans, status]);
+
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.root,
+          {
+            justifyContent: 'center',
+            alignItems: 'center',
+          },
+        ]}
+      >
+        <ActivityIndicator size="large" color={colors.accent} />
+
+        <Text
+          style={{
+            color: colors.textSecondary,
+            marginTop: 16,
+          }}
+        >
+          Loading Subscription...
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.root}>
       <MeshBackground variant="profile" />
+
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xxl }}>
-          {/* Header */}
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingBottom: spacing.xxl,
+          }}
+        >
+          {/* ===========================
+              HEADER
+          =========================== */}
+
           <View style={styles.header}>
-            <RoundButton icon="chevron-back" onPress={() => navigation?.goBack?.()} />
+            <RoundButton
+              icon="chevron-back"
+              onPress={() => navigation?.goBack?.()}
+            />
+
             <View style={styles.headerCenter}>
               <Text style={styles.headerTitle}>Manage Premium</Text>
-              <Text style={styles.headerSub}>View and manage your Premium subscription.</Text>
+
+              <Text style={styles.headerSub}>
+                View and manage your Premium subscription.
+              </Text>
             </View>
+
             <View style={{ width: 46 }} />
           </View>
 
-          {/* Current plan */}
+          {/* ===========================
+              CURRENT PLAN
+          =========================== */}
+
           <Card style={styles.block} padding={spacing.lg} glowBorder strong>
             <View style={styles.planTop}>
-              <LinearGradient colors={gradients.violetMagenta} style={styles.crownChip}>
-                <MaterialCommunityIcons name="crown" size={34} color={colors.textPrimary} />
+              <LinearGradient
+                colors={gradients.violetMagenta}
+                style={styles.crownChip}
+              >
+                <MaterialCommunityIcons
+                  name="crown"
+                  size={34}
+                  color={colors.textPrimary}
+                />
               </LinearGradient>
-              <View style={{ flex: 1, marginLeft: spacing.lg }}>
+
+              <View
+                style={{
+                  flex: 1,
+                  marginLeft: spacing.lg,
+                }}
+              >
                 <Text style={styles.planLabel}>Current Plan</Text>
+
                 <View style={styles.planNameRow}>
-                  <Text style={styles.planName}>Premium</Text>
-                  <View style={styles.activeBadge}>
-                    <Text style={styles.activeText}>Active</Text>
+                  <Text style={styles.planName}>
+                    {currentPlan ? currentPlan.title : 'Free'}
+                  </Text>
+
+                  <View
+                    style={[
+                      styles.activeBadge,
+                      !status?.isPremium && {
+                        backgroundColor: 'rgba(255,255,255,0.08)',
+                      },
+                    ]}
+                  >
+                    <Text style={styles.activeText}>
+                      {status?.isPremium ? 'ACTIVE' : 'FREE'}
+                    </Text>
                   </View>
                 </View>
+
                 <View style={styles.enjoyRow}>
-                  <Text style={styles.enjoy}>Enjoying all Premium benefits</Text>
-                  <Ionicons name="shield-checkmark" size={14} color="#34D399" />
+                  <Text style={styles.enjoy}>
+                    {status?.isPremium
+                      ? 'Enjoying all Premium benefits'
+                      : 'Upgrade to unlock Premium'}
+                  </Text>
+
+                  {status?.isPremium && (
+                    <Ionicons
+                      name="shield-checkmark"
+                      size={14}
+                      color="#34D399"
+                    />
+                  )}
                 </View>
               </View>
             </View>
+
             <View style={styles.hr} />
+
             <View style={styles.metaRow}>
               <View style={styles.metaCol}>
                 <Text style={styles.metaLabel}>Member Since</Text>
-                <Text style={styles.metaValue}>May 12, 2024</Text>
+
+                <Text style={styles.metaValue}>
+                  {status?.subscription?.startDate
+                    ? new Date(
+                        status.subscription.startDate,
+                      ).toLocaleDateString()
+                    : '--'}
+                </Text>
               </View>
+
               <View style={styles.metaDivider} />
+
               <View style={styles.metaCol}>
-                <Text style={styles.metaLabel}>Next Billing Date</Text>
-                <Text style={styles.metaValue}>May 12, 2025</Text>
+                <Text style={styles.metaLabel}>Premium Until</Text>
+
+                <Text style={styles.metaValue}>
+                  {status?.premiumUntil
+                    ? new Date(status.premiumUntil).toLocaleDateString()
+                    : '--'}
+                </Text>
               </View>
             </View>
           </Card>
 
-          {/* Subscription details */}
+          {/* ===========================
+              SUBSCRIPTION DETAILS
+          =========================== */}
+
           <Card style={styles.block} padding={spacing.lg} strong>
             <Text style={styles.sectionTitle}>Subscription Details</Text>
-            {DETAILS.map(d => (
-              <View key={d.id} style={styles.detailRow}>
-                <View style={styles.detailIcon}>
-                  <Ionicons name={d.icon as any} size={20} color={colors.accent} />
-                </View>
-                <View style={{ flex: 1, marginLeft: spacing.md }}>
-                  <Text style={styles.detailTitle}>{d.title}</Text>
-                  <Text style={styles.detailValue}>{d.value}</Text>
-                </View>
-                {'badge' in d && d.badge ? (
-                  <View style={styles.bestValue}>
-                    <Text style={styles.bestValueText}>{d.badge}</Text>
-                  </View>
-                ) : null}
-                {'right' in d && d.right ? <Text style={styles.detailRight}>{d.right}</Text> : null}
+
+            {/* Plan */}
+
+            <View style={styles.detailRow}>
+              <View style={styles.detailIcon}>
+                <Ionicons
+                  name="diamond-outline"
+                  size={20}
+                  color={colors.accent}
+                />
               </View>
-            ))}
+
+              <View
+                style={{
+                  flex: 1,
+                  marginLeft: spacing.md,
+                }}
+              >
+                <Text style={styles.detailTitle}>Current Plan</Text>
+
+                <Text style={styles.detailValue}>
+                  {currentPlan?.title ?? 'Free'}
+                </Text>
+              </View>
+
+              {status?.isPremium && (
+                <View style={styles.bestValue}>
+                  <Text style={styles.bestValueText}>ACTIVE</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Billing */}
+
+            <View style={styles.detailRow}>
+              <View style={styles.detailIcon}>
+                <Ionicons name="card-outline" size={20} color={colors.accent} />
+              </View>
+
+              <View
+                style={{
+                  flex: 1,
+                  marginLeft: spacing.md,
+                }}
+              >
+                <Text style={styles.detailTitle}>Billing</Text>
+
+                <Text style={styles.detailValue}>
+                  {currentPlan
+                    ? `${currentPlan.amount} ${currentPlan.currency}`
+                    : '--'}
+                </Text>
+              </View>
+
+              <Text style={styles.detailRight}>{currentPlan?.plan ?? ''}</Text>
+            </View>
+
+            {/* Validity */}
+
+            <View style={styles.detailRow}>
+              <View style={styles.detailIcon}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={20}
+                  color={colors.accent}
+                />
+              </View>
+
+              <View
+                style={{
+                  flex: 1,
+                  marginLeft: spacing.md,
+                }}
+              >
+                <Text style={styles.detailTitle}>Validity</Text>
+
+                <Text style={styles.detailValue}>
+                  {currentPlan ? `${currentPlan.validityDays} Days` : '--'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Premium Until */}
+
+            <View style={styles.detailRow}>
+              <View style={styles.detailIcon}>
+                <Ionicons name="time-outline" size={20} color={colors.accent} />
+              </View>
+
+              <View
+                style={{
+                  flex: 1,
+                  marginLeft: spacing.md,
+                }}
+              >
+                <Text style={styles.detailTitle}>Premium Until</Text>
+
+                <Text style={styles.detailValue}>
+                  {status?.premiumUntil
+                    ? new Date(status.premiumUntil).toLocaleDateString()
+                    : '--'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Auto Renewal */}
+
             <View style={styles.detailRow}>
               <View style={styles.detailIcon}>
                 <Ionicons name="sync-outline" size={20} color={colors.accent} />
               </View>
-              <View style={{ flex: 1, marginLeft: spacing.md }}>
-                <Text style={styles.detailTitle}>Auto-Renewal</Text>
-                <Text style={styles.detailValue}>{autoRenew ? 'Enabled' : 'Disabled'}</Text>
+
+              <View
+                style={{
+                  flex: 1,
+                  marginLeft: spacing.md,
+                }}
+              >
+                <Text style={styles.detailTitle}>Auto Renewal</Text>
+
+                <Text style={styles.detailValue}>
+                  {autoRenew ? 'Enabled' : 'Disabled'}
+                </Text>
               </View>
-              <Pressable onPress={() => setAutoRenew(v => !v)} hitSlop={8}>
+
+              <Pressable onPress={() => setAutoRenew(!autoRenew)}>
                 {autoRenew ? (
                   <LinearGradient
                     colors={gradients.blueViolet}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={[styles.track, { alignItems: 'flex-end' }]}
+                    style={[
+                      styles.track,
+                      {
+                        alignItems: 'flex-end',
+                      },
+                    ]}
                   >
                     <View style={styles.knob} />
                   </LinearGradient>
@@ -124,56 +386,281 @@ const ManagePremiumScreen = ({ navigation }: { navigation?: Nav }) => {
             </View>
           </Card>
 
-          {/* Manage subscription */}
+          {/* ===========================
+              MANAGE SUBSCRIPTION
+          =========================== */}
+
           <Card style={styles.block} padding={spacing.lg} strong>
             <Text style={styles.sectionTitle}>Manage Subscription</Text>
-            {MANAGE.map(m => (
-              <Pressable key={m.id} style={({ pressed }) => [styles.manageRow, pressed && { opacity: 0.7 }]}>
-                <View style={styles.detailIcon}>
-                  <Ionicons name={m.icon as any} size={20} color={colors.accent} />
-                </View>
-                <View style={{ flex: 1, marginLeft: spacing.md }}>
-                  <Text style={styles.detailTitle}>{m.title}</Text>
-                  <Text style={styles.detailValue}>{m.sub}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-              </Pressable>
-            ))}
+
+            {/* Payment Method */}
+
             <Pressable
-              style={({ pressed }) => [styles.manageRow, pressed && { opacity: 0.7 }]}
-              onPress={() => navigation?.navigate?.('CancelPremium')}
+              style={({ pressed }) => [
+                styles.manageRow,
+                pressed && { opacity: 0.7 },
+              ]}
+              onPress={() => toast.info('Coming Soon')}
             >
-              <View style={[styles.detailIcon, { backgroundColor: 'rgba(255,90,110,0.16)' }]}>
-                <Ionicons name="close-circle-outline" size={20} color={DANGER} />
+              <View style={styles.detailIcon}>
+                <Ionicons name="card-outline" size={20} color={colors.accent} />
               </View>
-              <View style={{ flex: 1, marginLeft: spacing.md }}>
-                <Text style={[styles.detailTitle, { color: DANGER }]}>Cancel Subscription</Text>
-                <Text style={styles.detailValue}>You will lose access on May 12, 2025</Text>
+
+              <View
+                style={{
+                  flex: 1,
+                  marginLeft: spacing.md,
+                }}
+              >
+                <Text style={styles.detailTitle}>Payment Method</Text>
+
+                <Text style={styles.detailValue}>Razorpay Secure Payment</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={colors.textSecondary}
+              />
             </Pressable>
+
+            {/* Billing History */}
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.manageRow,
+                pressed && { opacity: 0.7 },
+              ]}
+              onPress={() => toast.info('Billing history coming soon.')}
+            >
+              <View style={styles.detailIcon}>
+                <Ionicons
+                  name="receipt-outline"
+                  size={20}
+                  color={colors.accent}
+                />
+              </View>
+
+              <View
+                style={{
+                  flex: 1,
+                  marginLeft: spacing.md,
+                }}
+              >
+                <Text style={styles.detailTitle}>Billing History</Text>
+
+                <Text style={styles.detailValue}>View all your payments</Text>
+              </View>
+
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={colors.textSecondary}
+              />
+            </Pressable>
+
+            {/* Upgrade */}
+
+            {!status?.isPremium && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.manageRow,
+                  pressed && {
+                    opacity: 0.7,
+                  },
+                ]}
+                onPress={() => navigation?.navigate?.('Premium')}
+              >
+                <View style={styles.detailIcon}>
+                  <Ionicons
+                    name="rocket-outline"
+                    size={20}
+                    color={colors.accent}
+                  />
+                </View>
+
+                <View
+                  style={{
+                    flex: 1,
+                    marginLeft: spacing.md,
+                  }}
+                >
+                  <Text style={styles.detailTitle}>Upgrade Plan</Text>
+
+                  <Text style={styles.detailValue}>
+                    Unlock Premium Wallpapers
+                  </Text>
+                </View>
+
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={colors.textSecondary}
+                />
+              </Pressable>
+            )}
+
+            {/* Restore Purchase */}
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.manageRow,
+                pressed && { opacity: 0.7 },
+              ]}
+              onPress={() =>
+                toast.info('Restore purchase is not required for Razorpay.')
+              }
+            >
+              <View style={styles.detailIcon}>
+                <Ionicons
+                  name="refresh-outline"
+                  size={20}
+                  color={colors.accent}
+                />
+              </View>
+
+              <View
+                style={{
+                  flex: 1,
+                  marginLeft: spacing.md,
+                }}
+              >
+                <Text style={styles.detailTitle}>Restore Purchase</Text>
+
+                <Text style={styles.detailValue}>Sync your subscription</Text>
+              </View>
+
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={colors.textSecondary}
+              />
+            </Pressable>
+
+            {/* Cancel */}
+
+            {status?.isPremium && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.manageRow,
+                  pressed && {
+                    opacity: 0.7,
+                  },
+                ]}
+                onPress={() => navigation?.navigate?.('CancelPremium')}
+              >
+                <View
+                  style={[
+                    styles.detailIcon,
+                    {
+                      backgroundColor: 'rgba(255,90,110,0.15)',
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="close-circle-outline"
+                    size={20}
+                    color={DANGER}
+                  />
+                </View>
+
+                <View
+                  style={{
+                    flex: 1,
+                    marginLeft: spacing.md,
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.detailTitle,
+                      {
+                        color: DANGER,
+                      },
+                    ]}
+                  >
+                    Cancel Subscription
+                  </Text>
+
+                  <Text style={styles.detailValue}>
+                    Premium remains active until expiry.
+                  </Text>
+                </View>
+
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={colors.textSecondary}
+                />
+              </Pressable>
+            )}
           </Card>
 
-          {/* Secure note */}
-          <Card style={styles.block} padding={spacing.lg}>
-            <View style={styles.noteRow}>
-              <View style={styles.noteIcon}>
-                <Ionicons name="shield-checkmark-outline" size={22} color={colors.accent} />
+          {/* ===========================
+              PREMIUM BENEFITS
+          =========================== */}
+
+          <Card style={styles.block} padding={spacing.lg} strong>
+            <Text style={styles.sectionTitle}>Premium Benefits</Text>
+
+            {[
+              'Unlimited 4K & 8K Downloads',
+              'Exclusive Premium Wallpapers',
+              'No Ads Experience',
+              'Early Access to New Collections',
+              'Faster Download Speeds',
+            ].map(benefit => (
+              <View key={benefit} style={styles.benefitRow}>
+                <View style={styles.benefitIcon}>
+                  <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                </View>
+
+                <Text style={styles.benefitText}>{benefit}</Text>
               </View>
-              <View style={{ flex: 1, marginLeft: spacing.md }}>
-                <Text style={styles.noteTitle}>Your Premium subscription is secure</Text>
-                <Text style={styles.noteText}>
-                  Payments are encrypted and your data is always protected.
+            ))}
+          </Card>
+
+          {/* ===========================
+              SECURITY
+          =========================== */}
+
+          <Card style={styles.block} padding={spacing.lg} strong>
+            <View style={styles.securityRow}>
+              <View style={styles.securityIcon}>
+                <Ionicons name="shield-checkmark" size={30} color="#34D399" />
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <Text style={styles.securityTitle}>Secure Payments</Text>
+
+                <Text style={styles.securityText}>
+                  Your subscription is processed securely through Razorpay using
+                  encrypted payment gateways.
                 </Text>
               </View>
             </View>
           </Card>
 
-          <Pressable style={styles.supportRow} hitSlop={6}>
-            <Ionicons name="headset-outline" size={16} color={colors.textSecondary} />
-            <Text style={styles.supportText}>
-              Need help? <Text style={styles.supportLink}>Contact Support</Text>
-            </Text>
+          {/* ===========================
+              SUPPORT
+          =========================== */}
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.supportButton,
+              pressed && {
+                opacity: 0.8,
+              },
+            ]}
+            onPress={() => toast.info('Support screen coming soon.')}
+          >
+            <LinearGradient
+              colors={gradients.blueViolet}
+              style={styles.supportGradient}
+            >
+              <Ionicons name="headset" size={22} color="#FFF" />
+
+              <Text style={styles.supportText}>Contact Support</Text>
+            </LinearGradient>
           </Pressable>
         </ScrollView>
       </SafeAreaView>
@@ -184,87 +671,326 @@ const ManagePremiumScreen = ({ navigation }: { navigation?: Nav }) => {
 export default ManagePremiumScreen;
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.base },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
-  headerCenter: { flex: 1, alignItems: 'center', paddingHorizontal: spacing.sm },
-  headerTitle: { color: colors.textPrimary, fontSize: 24, fontWeight: '800' },
-  headerSub: { color: colors.textSecondary, fontSize: 13, marginTop: 2, textAlign: 'center' },
-  block: { marginHorizontal: spacing.xl, marginTop: spacing.xl },
-  planTop: { flexDirection: 'row', alignItems: 'center' },
-  crownChip: { width: 78, height: 78, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
-  planLabel: { color: colors.textSecondary, fontSize: 14 },
-  planNameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: 2 },
-  planName: { color: colors.textPrimary, fontSize: 26, fontWeight: '800' },
-  activeBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-    backgroundColor: colors.chipViolet,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.glassBorder,
+  root: {
+    flex: 1,
+    backgroundColor: colors.base,
   },
-  activeText: { color: colors.accent, fontSize: 12, fontWeight: '700' },
-  enjoyRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
-  enjoy: { color: colors.textSecondary, fontSize: 14 },
-  hr: { height: StyleSheet.hairlineWidth, backgroundColor: colors.divider, marginVertical: spacing.lg },
-  metaRow: { flexDirection: 'row', alignItems: 'center' },
-  metaCol: { flex: 1, alignItems: 'center' },
-  metaDivider: { width: StyleSheet.hairlineWidth, height: 36, backgroundColor: colors.divider },
-  metaLabel: { color: colors.textSecondary, fontSize: 13 },
-  metaValue: { color: colors.textPrimary, fontSize: 16, fontWeight: '700', marginTop: 4 },
-  sectionTitle: { color: colors.textPrimary, fontSize: 18, fontWeight: '800', marginBottom: spacing.md },
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    marginBottom: spacing.lg,
+  },
+
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+  },
+
+  headerTitle: {
+    color: colors.textPrimary,
+    fontSize: 22,
+    fontWeight: '800',
+  },
+
+  headerSub: {
+    marginTop: 4,
+    color: colors.textSecondary,
+    fontSize: 13,
+    textAlign: 'center',
+  },
+
+  block: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+
+  sectionTitle: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: spacing.lg,
+  },
+
+  planTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  crownChip: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  planLabel: {
+    color: colors.textSecondary,
+    fontSize: 13,
+  },
+
+  planNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+
+  planName: {
+    color: colors.textPrimary,
+    fontSize: 26,
+    fontWeight: '900',
+    flex: 1,
+  },
+
+  activeBadge: {
+    backgroundColor: 'rgba(52,211,153,0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+
+  activeText: {
+    color: '#34D399',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+
+  enjoyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+
+  enjoy: {
+    color: colors.textSecondary,
+    marginRight: 6,
+    fontSize: 13,
+  },
+
+  hr: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginVertical: spacing.lg,
+  },
+
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  metaCol: {
+    flex: 1,
+  },
+
+  metaDivider: {
+    width: 1,
+    height: 42,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginHorizontal: spacing.md,
+  },
+
+  metaLabel: {
+    color: colors.textSecondary,
+    fontSize: 12,
+  },
+
+  metaValue: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 6,
+  },
+
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.sm,
-    backgroundColor: colors.glassFillSoft,
-    marginBottom: spacing.sm,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
+
   detailIcon: {
     width: 42,
     height: 42,
-    borderRadius: radius.sm,
-    alignItems: 'center',
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     justifyContent: 'center',
-    backgroundColor: colors.chipViolet,
+    alignItems: 'center',
   },
-  detailTitle: { color: colors.textPrimary, fontSize: 15, fontWeight: '700' },
-  detailValue: { color: colors.textSecondary, fontSize: 13, marginTop: 2 },
-  detailRight: { color: colors.textPrimary, fontSize: 15, fontWeight: '700' },
+
+  detailTitle: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+
+  detailValue: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    marginTop: 4,
+  },
+
+  detailRight: {
+    color: colors.accent,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+
   bestValue: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#E0A93B',
+    backgroundColor: 'rgba(168,85,247,0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
   },
-  bestValueText: { color: '#E0A93B', fontSize: 12, fontWeight: '700' },
+
+  bestValueText: {
+    color: '#A855F7',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  track: {
+    width: 52,
+    height: 30,
+    borderRadius: 999,
+    backgroundColor: colors.accent,
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+
+  trackOff: {
+    backgroundColor: '#3A3A42',
+    alignItems: 'flex-start',
+  },
+
+  knob: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FFF',
+  },
+
   manageRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.sm,
-    backgroundColor: colors.glassFillSoft,
-    marginBottom: spacing.sm,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
-  track: { width: 52, height: 30, borderRadius: 15, padding: 3, justifyContent: 'center' },
-  trackOff: { backgroundColor: colors.glassFillStrong, alignItems: 'flex-start' },
-  knob: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.textPrimary },
-  noteRow: { flexDirection: 'row', alignItems: 'center' },
-  noteIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+
+  benefitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+
+  benefitIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#22C55E',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.md,
+  },
+
+  benefitText: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+
+  securityRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+
+  securityIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(34,197,94,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.md,
+  },
+
+  securityTitle: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+
+  securityText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 22,
+  },
+
+  supportButton: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    marginBottom: spacing.xxxl,
+    borderRadius: radius.xl,
+    overflow: 'hidden',
+  },
+
+  supportGradient: {
+    height: 58,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.chipViolet,
+    gap: 10,
   },
-  noteTitle: { color: colors.textPrimary, fontSize: 15, fontWeight: '700' },
-  noteText: { color: colors.textSecondary, fontSize: 13, marginTop: 2, lineHeight: 18 },
-  supportRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: spacing.xl },
-  supportText: { color: colors.textSecondary, fontSize: 14 },
-  supportLink: { color: colors.accentBlue, fontWeight: '700' },
+
+  supportText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+
+  disabledButton: {
+    opacity: 0.45,
+  },
+
+  dangerText: {
+    color: '#FF5A6E',
+  },
+
+  successText: {
+    color: '#34D399',
+  },
+
+  warningText: {
+    color: '#FBBF24',
+  },
+
+  valueText: {
+    color: colors.textPrimary,
+    fontWeight: '700',
+  },
+
+  caption: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginVertical: spacing.lg,
+  },
+
+  footerSpace: {
+    height: spacing.xxxl,
+  },
 });
