@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // CHANGE THIS ONLY
 // ===============================
 const BASE_URL = __DEV__
-  ? 'http://192.168.1.6:5000/api' // Local backend
+  ? 'http://192.168.1.3:5000/api' // Local backend
   : 'https://backend-trail-6u5m.onrender.com/api'; // Production backend
 
 const API = axios.create({

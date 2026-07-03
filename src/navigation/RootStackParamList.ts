@@ -1,5 +1,6 @@
 import { NavigatorScreenParams } from '@react-navigation/native';
 import { BottomTabParamList } from '../navigation/BottomTabParamList';
+import { CreateOrderResponse } from "../services/subscriptionService";
 
 
 /**
@@ -18,8 +19,7 @@ export type RootStackParamList = {
 
   Payment:
   | {
-    planLabel?: string;
-    price?: number;
+    order: CreateOrderResponse;
   }
   | undefined;
 

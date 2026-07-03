@@ -10,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Alert } from 'react-native';
 
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -20,17 +21,35 @@ import MeshBackground from '../../components/MeshBackground';
 import { colors } from '../../styles/colors';
 import { radius, SCREEN, spacing } from '../../utils/constants';
 
-import { getSubscriptionPlans } from '../../services/subscriptionService';
+import {
+  getSubscriptionPlans,
+  createOrder,
+} from '../../services/subscriptionService';
 
 type PremiumReturnRoute = 'Home' | 'Category' | 'Trending' | 'Favorites';
 
+export interface RazorpayOrder {
+  keyId: string;
+
+  orderId: string;
+
+  amount: number;
+
+  currency: string;
+
+  receipt: string;
+
+  plan: 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | 'LIFETIME';
+
+  title: string;
+}
+
 type PaymentParams = {
-  planLabel: string;
-  price: number;
+  order: RazorpayOrder;
 };
 
 type ParentNavigation = {
-  navigate: (name: 'Payment', params: PaymentParams) => void;
+  navigate: (screen: 'Payment', params: PaymentParams) => void;
 };
 
 type Navigation = {
@@ -72,6 +91,13 @@ const premiumLogo = require('../../assets/images/premium-logo.png');
 const proButtonIcon = require('../../assets/images/pro-button.png');
 
 const CTA_GRADIENT = ['#EC4899', '#A855F7', '#3B82F6'] as const;
+
+const PLAN_MAP = {
+  monthly: 'MONTHLY',
+  quarterly: 'QUARTERLY',
+  yearly: 'YEARLY',
+  lifetime: 'LIFETIME',
+} as const;
 
 const HERO_AURA_GRADIENT = [
   'rgba(15, 15, 16, 0)',
@@ -240,9 +266,7 @@ const mergeBackendPlanWithDesign = (
       fallback.title,
 
     subtitle:
-      backendPlan?.subtitle ??
-      backendPlan?.description ??
-      fallback.subtitle,
+      backendPlan?.subtitle ?? backendPlan?.description ?? fallback.subtitle,
 
     price: getPlanPrice(backendPlan, fallback),
 
@@ -587,7 +611,10 @@ const BillingPlanCard = ({
 
 const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
   const [plans, setPlans] = useState<BillingPlan[]>(BILLING_PLANS);
+
   const [selectedPlan, setSelectedPlan] = useState<BillingPlanId>('lifetime');
+
+  const [loading, setLoading] = useState(false);
 
   const selectedPlanData = plans.find(plan => plan.id === selectedPlan);
 
@@ -600,46 +627,62 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
       const response = await getSubscriptionPlans();
 
       const backendPlans = getBackendPlansArray(response);
+
       const normalizedPlans = normalizeBackendPlansForPremiumUI(backendPlans);
 
       setPlans(normalizedPlans);
 
-      setSelectedPlan(currentPlan =>
-        normalizedPlans.some(plan => plan.id === currentPlan)
-          ? currentPlan
-          : 'lifetime',
+      setSelectedPlan(current =>
+        normalizedPlans.some(p => p.id === current) ? current : 'lifetime',
       );
     } catch (err) {
       console.log('PREMIUM PLANS LOAD ERROR', err);
 
       setPlans(BILLING_PLANS);
+
       setSelectedPlan('lifetime');
     }
   };
 
   const handleClose = () => {
     const returnTo = route?.params?.returnTo ?? 'Home';
+
     navigation?.navigate?.(returnTo);
   };
 
-  const handleContinue = () => {
-    if (!selectedPlanData) {
+  const handleContinue = async () => {
+    if (!selectedPlanData || loading) {
       return;
     }
 
-    const paymentParams: PaymentParams = {
-      planLabel: selectedPlanData.title,
-      price: selectedPlanData.amount,
-    };
+    try {
+      setLoading(true);
 
-    const parentNavigation = navigation?.getParent?.();
+      const order = await createOrder(PLAN_MAP[selectedPlanData.id]);
 
-    if (parentNavigation) {
-      parentNavigation.navigate('Payment', paymentParams);
-      return;
+      console.log('CREATE ORDER RESPONSE');
+      console.log(JSON.stringify(order, null, 2));
+
+      const parent = navigation?.getParent?.();
+
+      if (parent) {
+        parent.navigate('Payment', {
+          order,
+        });
+
+        return;
+      }
+
+      navigation?.navigate?.('Payment', {
+        order,
+      });
+    } catch (error) {
+      console.error(error);
+
+      Alert.alert('Payment', 'Unable to create payment order.');
+    } finally {
+      setLoading(false);
     }
-
-    navigation?.navigate?.('Payment', paymentParams);
   };
 
   return (

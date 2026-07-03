@@ -1,793 +1,623 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 
 import {
-Alert,
-KeyboardAvoidingView,
-Platform,
-Pressable,
-ScrollView,
-StyleSheet,
-Text,
-TextInput,
-View,
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
+
+import RazorpayCheckout from 'react-native-razorpay';
+
+import { useToast } from '../../components/ui/toast/useToast';
+
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+
 import { LinearGradient } from 'expo-linear-gradient';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import Card from '../../components/Card';
 import { RoundButton } from '../../components/Header';
 import MeshBackground from '../../components/MeshBackground';
+
 import { RootStackParamList } from '../../navigation/RootStackParamList';
+
 import { colors, gradients } from '../../styles/colors';
 import { radius, spacing } from '../../utils/constants';
 
+import { verifyPayment } from '../../services/subscriptionService';
+
+import { useAuth } from '../../context/AuthContext';
+
 type Props = NativeStackScreenProps<RootStackParamList, 'Payment'>;
-
-type MethodId = 'card' | 'upi' | 'google' | 'netbanking';
-
-type Method = {
-id: MethodId;
-title: string;
-subtitle: string;
-icon: keyof typeof Ionicons.glyphMap;
-};
 
 const PAY_GRADIENT = ['#EC4899', '#A855F7', '#3B82F6'] as const;
 
-const METHODS: Method[] = [
-{
-id: 'card',
-title: 'Credit / Debit Card',
-subtitle: 'Visa, Mastercard and RuPay',
-icon: 'card-outline',
-},
-{
-id: 'upi',
-title: 'UPI',
-subtitle: 'Pay using any UPI application',
-icon: 'phone-portrait-outline',
-},
-{
-id: 'google',
-title: 'Google Pay',
-subtitle: 'Pay using your Google Pay account',
-icon: 'logo-google',
-},
-{
-id: 'netbanking',
-title: 'Net Banking',
-subtitle: 'Pay directly from your bank account',
-icon: 'business-outline',
-},
-];
-
-const BRANDS = ['VISA', 'MC', 'RUPAY'];
-
 const formatCurrency = (amount: number) => `₹${amount.toFixed(2)}`;
 
-const getPlanDescription = (planLabel: string) => {
-switch (planLabel) {
-case 'Lifetime PRO':
-return 'One-time purchase';
+const getPlanDescription = (plan: string) => {
+  switch (plan) {
+    case 'MONTHLY':
+      return '1 Month Premium';
 
+    case 'QUARTERLY':
+      return '3 Months Premium';
 
-case 'Monthly':
-  return '1 Month Subscription';
+    case 'YEARLY':
+      return '1 Year Premium';
 
-case 'Yearly':
-  return '1 Year Subscription';
+    case 'LIFETIME':
+      return 'Lifetime Premium';
 
-default:
-  return 'FlexiWalls Premium';
-
-
-}
+    default:
+      return 'FlexiWalls Premium';
+  }
 };
 
 const PaymentScreen = ({ navigation, route }: Props) => {
-const planLabel = route.params?.planLabel ?? 'Lifetime PRO';
-const subtotal = route.params?.price ?? 799;
-const total = subtotal;
-const planDescription = getPlanDescription(planLabel);
+  const { refreshProfile } = useAuth();
 
-const [method, setMethod] = useState<MethodId>('card');
-const [saveCard, setSaveCard] = useState(true);
-const [card, setCard] = useState('');
-const [expiry, setExpiry] = useState('');
-const [cvv, setCvv] = useState('');
-const [holder, setHolder] = useState('');
+  const toast = useToast();
 
-const onPay = () => {
-if (
-method === 'card' &&
-(!card.trim() || !expiry.trim() || !cvv.trim() || !holder.trim())
-) {
-Alert.alert(
-'Card details required',
-'Please complete all card fields.',
-);
-return;
-}
+  const order = route.params?.order;
 
+  if (!order) {
+    return null;
+  }
 
-Alert.alert(
-  'Payment successful',
-  `Your ${planLabel} plan is now active.`,
-  [
-    {
-      text: 'Done',
-      onPress: () => navigation.popToTop(),
-    },
-  ],
-);
+  const [loading, setLoading] = useState(false);
 
+  const total = useMemo(() => order.amount / 100, [order.amount]);
 
-};
+  const planDescription = getPlanDescription(order.plan);
 
-return ( <View style={styles.root}> <MeshBackground variant="category" />
+  const handlePayment = async () => {
+    if (loading) {
+      return;
+    }
 
-```
-  <SafeAreaView style={styles.safeArea} edges={['top']}>
-    <View style={styles.header}>
-      <View style={styles.headerLeft}>
-        <RoundButton
-          icon="chevron-back"
-          onPress={() => navigation.goBack()}
-        />
-      </View>
+    try {
+      setLoading(true);
 
-      <View>
-        <Text style={styles.headerTitle}>Payment</Text>
+      const options = {
+        key: order.keyId,
 
-        <View style={styles.headerSubRow}>
-          <Ionicons
-            name="lock-closed"
-            size={12}
-            color={colors.textSecondary}
-          />
+        amount: order.amount,
 
-          <Text style={styles.headerSub}>
-            Secure and encrypted payment
-          </Text>
-        </View>
-      </View>
-    </View>
+        currency: order.currency,
 
-    <KeyboardAvoidingView
-      style={styles.keyboardView}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={80}
-    >
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.scrollContent}
-      >
-        <Card
-          style={styles.section}
-          padding={spacing.lg}
-          strong
-        >
-          <Text style={styles.cardHeading}>Order Summary</Text>
+        order_id: order.orderId,
 
-          <View style={styles.summaryTop}>
-            <LinearGradient
-              colors={gradients.violetMagenta}
-              style={styles.planIcon}
-            >
-              <MaterialCommunityIcons
-                name="crown"
-                size={24}
-                color={colors.textPrimary}
+        name: 'FlexiWalls',
+
+        description: order.title,
+
+        theme: {
+          color: '#A855F7',
+        },
+
+        notes: {
+          plan: order.plan,
+          receipt: order.receipt,
+        },
+
+        prefill: {},
+      };
+
+      console.log('========== RAZORPAY OPTIONS ==========');
+      console.log(JSON.stringify(options, null, 2));
+
+      const payment = await RazorpayCheckout.open({
+        key: order.keyId,
+
+        amount: order.amount,
+
+        currency: order.currency,
+
+        order_id: order.orderId,
+
+        name: 'FlexiWalls',
+
+        description: order.title,
+
+        theme: {
+          color: '#A855F7',
+        },
+
+        notes: {
+          plan: order.plan,
+          receipt: order.receipt,
+        },
+
+        prefill: {},
+      });
+
+      await verifyPayment({
+        plan: order.plan,
+
+        razorpay_order_id: payment.razorpay_order_id,
+
+        razorpay_payment_id: payment.razorpay_payment_id,
+
+        razorpay_signature: payment.razorpay_signature,
+      });
+
+      try {
+        await refreshProfile();
+      } catch {
+        // Premium is already activated on backend.
+      }
+      toast.success('Premium activated successfully.');
+
+      navigation.reset({
+        index: 0,
+        routes: [
+          {
+            name: 'MainTabs',
+          },
+        ],
+      });
+    } catch (error: any) {
+      console.log('RAZORPAY ERROR', error);
+
+      /**
+       * User closed Razorpay.
+       */
+      if (error?.code === 0 || error?.description === 'Payment Cancelled') {
+        toast.info('Payment cancelled.');
+
+        return;
+      }
+
+      /**
+       * Payment failed.
+       */
+      toast.error(error?.description ?? 'Payment failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <View style={styles.root}>
+      <MeshBackground variant="category" />
+
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        {/* =========================
+                HEADER
+            ========================== */}
+
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <RoundButton
+              icon="chevron-back"
+              onPress={() => {
+                if (loading) {
+                  return;
+                }
+
+                navigation.goBack();
+              }}
+            />
+          </View>
+
+          <View>
+            <Text style={styles.headerTitle}>Secure Payment</Text>
+
+            <View style={styles.headerSubRow}>
+              <Ionicons
+                name="shield-checkmark"
+                size={13}
+                color={colors.textSecondary}
               />
-            </LinearGradient>
 
-            <View style={styles.planTextWrap}>
-              <Text style={styles.planTitle} numberOfLines={1}>
-                FlexiWalls {planLabel}
-              </Text>
+              <Text style={styles.headerSub}>Powered by Razorpay</Text>
+            </View>
+          </View>
+        </View>
 
-              <Text style={styles.planSub}>
-                {planDescription}
-              </Text>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* =========================
+                    ORDER SUMMARY
+                ========================== */}
+
+          <Card style={styles.section} padding={spacing.lg} strong>
+            <Text style={styles.cardHeading}>Order Summary</Text>
+
+            <View style={styles.summaryTop}>
+              <LinearGradient
+                colors={gradients.violetMagenta}
+                style={styles.planIcon}
+              >
+                <MaterialCommunityIcons
+                  name="crown"
+                  size={26}
+                  color={colors.textPrimary}
+                />
+              </LinearGradient>
+
+              <View style={styles.planTextWrap}>
+                <Text style={styles.planTitle}>FlexiWalls Premium</Text>
+
+                <Text style={styles.planSub}>{planDescription}</Text>
+              </View>
+
+              <Text style={styles.planPrice}>{formatCurrency(total)}</Text>
             </View>
 
-            <Text style={styles.planPrice}>
-              {formatCurrency(subtotal)}
-            </Text>
-          </View>
+            <View style={styles.divider} />
 
-          <View style={styles.divider} />
+            <View style={styles.lineRow}>
+              <Text style={styles.lineLabel}>Subscription</Text>
 
-          <View style={styles.lineRow}>
-            <Text style={styles.lineLabel}>Plan price</Text>
+              <Text style={styles.lineValue}>{order.title}</Text>
+            </View>
 
-            <Text style={styles.lineValue}>
-              {formatCurrency(subtotal)}
-            </Text>
-          </View>
+            <View style={styles.lineRow}>
+              <Text style={styles.lineLabel}>Currency</Text>
 
-          <View style={styles.lineRow}>
-            <Text style={styles.lineLabel}>Taxes</Text>
+              <Text style={styles.lineValue}>{order.currency}</Text>
+            </View>
 
-            <Text style={styles.includedText}>Included</Text>
-          </View>
+            <View style={styles.lineRow}>
+              <Text style={styles.lineLabel}>Taxes</Text>
 
-          <View style={styles.divider} />
+              <Text style={styles.includedText}>Included</Text>
+            </View>
 
-          <View style={styles.lineRow}>
-            <Text style={styles.totalLabel}>Total</Text>
+            <View style={styles.divider} />
 
-            <Text style={styles.totalValue}>
-              {formatCurrency(total)}
-            </Text>
-          </View>
-        </Card>
+            <View style={styles.lineRow}>
+              <Text style={styles.totalLabel}>Total</Text>
 
-        <Text style={styles.sectionTitle}>
-          Choose Payment Method
-        </Text>
+              <Text style={styles.totalValue}>{formatCurrency(total)}</Text>
+            </View>
+          </Card>
 
-        <View style={styles.section}>
-          {METHODS.map(item => {
-            const active = item.id === method;
+          {/* =========================
+                    PAYMENT INFO
+                ========================== */}
 
-            return (
-              <Pressable
-                key={item.id}
-                onPress={() => setMethod(item.id)}
-                style={[
-                  styles.method,
-                  active && styles.methodActive,
-                ]}
-              >
-                <View style={styles.methodIcon}>
-                  <Ionicons
-                    name={item.icon}
-                    size={22}
-                    color={colors.textPrimary}
-                  />
-                </View>
+          <Card style={styles.section} padding={spacing.lg} strong>
+            <View style={styles.infoRow}>
+              <Ionicons name="lock-closed" size={22} color={colors.accent} />
 
-                <View style={styles.methodTextWrap}>
-                  <Text style={styles.methodTitle}>
-                    {item.title}
-                  </Text>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoTitle}>Secure Checkout</Text>
 
-                  <Text style={styles.methodSub}>
-                    {item.subtitle}
-                  </Text>
-                </View>
-
-                {active ? (
-                  <View style={styles.radioOn}>
-                    <View style={styles.radioDot} />
-                  </View>
-                ) : (
-                  <View style={styles.radioOff} />
-                )}
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {method === 'card' ? (
-          <>
-            <Text style={styles.sectionTitle}>
-              Card Details
-            </Text>
-
-            <Card
-              style={styles.section}
-              padding={spacing.lg}
-              strong
-            >
-              <View style={styles.fieldHeaderRow}>
-                <Text style={styles.fieldLabel}>
-                  Card Number
+                <Text style={styles.infoText}>
+                  Your payment will be processed securely using Razorpay. Card
+                  details, UPI, Wallets, Net Banking and more are handled
+                  entirely by Razorpay.
                 </Text>
-
-                <View style={styles.brandRow}>
-                  {BRANDS.map(brand => (
-                    <View key={brand} style={styles.brandChip}>
-                      <Text style={styles.brandText}>
-                        {brand}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
               </View>
+            </View>
+          </Card>
 
-              <TextInput
-                style={styles.input}
-                placeholder="1234 5678 9012 3456"
-                placeholderTextColor={colors.textTertiary}
-                keyboardType="number-pad"
-                value={card}
-                onChangeText={setCard}
-                selectionColor={colors.accent}
-                maxLength={19}
-              />
+          {/* =========================
+                    BENEFITS
+                ========================== */}
 
-              <View style={styles.twoCol}>
-                <View style={styles.flexOne}>
-                  <Text style={styles.fieldLabel}>
-                    Expiry Date
-                  </Text>
+          <Card style={styles.section} padding={spacing.lg} strong>
+            <Text style={styles.cardHeading}>Premium Benefits</Text>
 
-                  <TextInput
-                    style={styles.input}
-                    placeholder="MM / YY"
-                    placeholderTextColor={colors.textTertiary}
-                    keyboardType="number-pad"
-                    value={expiry}
-                    onChangeText={setExpiry}
-                    selectionColor={colors.accent}
-                    maxLength={7}
-                  />
-                </View>
+            {[
+              'Unlimited 4K & 8K Downloads',
+              'No Advertisements',
+              'Exclusive Premium Wallpapers',
+              'Priority Updates',
+              'Highest Download Speed',
+            ].map(item => (
+              <View key={item} style={styles.benefitRow}>
+                <Ionicons name="checkmark-circle" size={20} color="#4ADE80" />
 
-                <View style={styles.flexOne}>
-                  <Text style={styles.fieldLabel}>CVV</Text>
-
-                  <TextInput
-                    style={styles.input}
-                    placeholder="123"
-                    placeholderTextColor={colors.textTertiary}
-                    keyboardType="number-pad"
-                    secureTextEntry
-                    value={cvv}
-                    onChangeText={setCvv}
-                    selectionColor={colors.accent}
-                    maxLength={4}
-                  />
-                </View>
+                <Text style={styles.benefitText}>{item}</Text>
               </View>
+            ))}
+          </Card>
 
-              <Text style={styles.fieldLabel}>
-                Cardholder Name
-              </Text>
+          {/* =========================
+                    PAY BUTTON
+                ========================== */}
 
-              <TextInput
-                style={styles.input}
-                placeholder="Name on card"
-                placeholderTextColor={colors.textTertiary}
-                value={holder}
-                onChangeText={setHolder}
-                autoCapitalize="words"
-                selectionColor={colors.accent}
-              />
-            </Card>
-
-            <Pressable
-              style={styles.saveRow}
-              onPress={() => setSaveCard(current => !current)}
-              hitSlop={6}
+          <Pressable
+            disabled={loading}
+            onPress={handlePayment}
+            style={({ pressed }) => [
+              styles.payWrap,
+              {
+                opacity: loading ? 0.7 : 1,
+                transform: [
+                  {
+                    scale: pressed ? 0.98 : 1,
+                  },
+                ],
+              },
+            ]}
+          >
+            <LinearGradient
+              colors={PAY_GRADIENT}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.pay}
             >
-              {saveCard ? (
-                <LinearGradient
-                  colors={gradients.violetMagenta}
-                  style={styles.checkbox}
-                >
-                  <Ionicons
-                    name="checkmark"
-                    size={16}
-                    color={colors.textPrimary}
-                  />
-                </LinearGradient>
+              {loading ? (
+                <ActivityIndicator color="#FFF" />
               ) : (
-                <View
-                  style={[
-                    styles.checkbox,
-                    styles.checkboxOff,
-                  ]}
-                />
+                <Ionicons name="shield-checkmark" size={20} color="#FFF" />
               )}
 
-              <Text style={styles.saveText}>
-                Save card for faster payments
+              <Text style={styles.payText}>
+                {loading
+                  ? 'Verifying Payment...'
+                  : `Pay ${formatCurrency(total)}`}
               </Text>
-            </Pressable>
-          </>
-        ) : null}
+            </LinearGradient>
+          </Pressable>
 
-        <Pressable
-          onPress={onPay}
-          style={({ pressed }) => [
-            styles.payWrap,
-            {
-              transform: [
-                {
-                  scale: pressed ? 0.98 : 1,
-                },
-              ],
-            },
-          ]}
-        >
-          <LinearGradient
-            colors={PAY_GRADIENT}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.pay}
-          >
+          <View style={styles.secureRow}>
             <Ionicons
               name="lock-closed"
-              size={20}
-              color={colors.textPrimary}
+              size={15}
+              color={colors.textSecondary}
             />
 
-            <Text style={styles.payText}>
-              Pay {formatCurrency(total)}
+            <Text style={styles.secureText}>
+              Payments are securely processed by Razorpay. FlexiWalls never
+              stores your card details.
             </Text>
-          </LinearGradient>
-        </Pressable>
-
-        <View style={styles.secureRow}>
-          <Ionicons
-            name="shield-checkmark-outline"
-            size={14}
-            color={colors.textSecondary}
-          />
-
-          <Text style={styles.secureText}>
-            Your payment is secure and encrypted
-          </Text>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
-  </SafeAreaView>
-</View>
-
-
-);
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </View>
+  );
 };
 
 export default PaymentScreen;
 
 const styles = StyleSheet.create({
-root: {
-flex: 1,
-backgroundColor: colors.base,
-},
+  root: {
+    flex: 1,
+    backgroundColor: colors.base,
+  },
 
-safeArea: {
-flex: 1,
-},
+  safeArea: {
+    flex: 1,
+  },
 
-keyboardView: {
-flex: 1,
-},
+  scrollContent: {
+    paddingBottom: spacing.xxxl,
+  },
 
-scrollContent: {
-paddingBottom: spacing.xxxl,
-},
+  header: {
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+    marginTop: spacing.sm,
+  },
 
-flexOne: {
-flex: 1,
-},
+  headerLeft: {
+    position: 'absolute',
+    left: spacing.xl,
+    top: 4,
+  },
 
-header: {
-height: 56,
-justifyContent: 'center',
-alignItems: 'center',
-paddingHorizontal: spacing.xl,
-marginTop: spacing.sm,
-},
+  headerTitle: {
+    color: colors.textPrimary,
+    fontSize: 24,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
 
-headerLeft: {
-position: 'absolute',
-left: spacing.xl,
-top: 4,
-},
+  headerSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    marginTop: 2,
+  },
 
-headerTitle: {
-color: colors.textPrimary,
-fontSize: 24,
-fontWeight: '800',
-textAlign: 'center',
-},
+  headerSub: {
+    color: colors.textSecondary,
+    fontSize: 13,
+  },
 
-headerSubRow: {
-flexDirection: 'row',
-alignItems: 'center',
-justifyContent: 'center',
-gap: 5,
-marginTop: 2,
-},
+  section: {
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.lg,
+  },
 
-headerSub: {
-color: colors.textSecondary,
-fontSize: 13,
-},
+  cardHeading: {
+    color: colors.textPrimary,
+    fontSize: 19,
+    fontWeight: '800',
+    marginBottom: spacing.lg,
+  },
 
-section: {
-marginHorizontal: spacing.xl,
-marginTop: spacing.lg,
-},
+  summaryTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
 
-sectionTitle: {
-color: colors.textPrimary,
-fontSize: 18,
-fontWeight: '800',
-marginTop: spacing.xl,
-marginHorizontal: spacing.xl,
-},
+  planIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
-cardHeading: {
-color: colors.textPrimary,
-fontSize: 19,
-fontWeight: '800',
-marginBottom: spacing.lg,
-},
+  planTextWrap: {
+    flex: 1,
+    marginHorizontal: spacing.md,
+  },
 
-summaryTop: {
-flexDirection: 'row',
-alignItems: 'center',
-},
+  planTitle: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '700',
+  },
 
-planIcon: {
-width: 52,
-height: 52,
-borderRadius: 14,
-alignItems: 'center',
-justifyContent: 'center',
-},
+  planSub: {
+    color: colors.textSecondary,
+    marginTop: 3,
+    fontSize: 13,
+  },
 
-planTextWrap: {
-flex: 1,
-marginLeft: spacing.md,
-marginRight: spacing.sm,
-},
+  planPrice: {
+    color: colors.textPrimary,
+    fontWeight: '800',
+    fontSize: 22,
+  },
 
-planTitle: {
-color: colors.textPrimary,
-fontSize: 16,
-fontWeight: '700',
-},
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.divider,
+    marginVertical: spacing.md,
+  },
 
-planSub: {
-color: colors.textSecondary,
-fontSize: 13,
-marginTop: 2,
-},
+  lineRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
 
-planPrice: {
-color: colors.textPrimary,
-fontSize: 18,
-fontWeight: '800',
-},
+  lineLabel: {
+    color: colors.textSecondary,
+    fontSize: 15,
+  },
 
-divider: {
-height: StyleSheet.hairlineWidth,
-backgroundColor: colors.divider,
-marginVertical: spacing.md,
-},
+  lineValue: {
+    color: colors.textPrimary,
+    fontWeight: '600',
+    fontSize: 15,
+  },
 
-lineRow: {
-flexDirection: 'row',
-justifyContent: 'space-between',
-alignItems: 'center',
-paddingVertical: 3,
-},
+  includedText: {
+    color: '#4ADE80',
+    fontWeight: '700',
+    fontSize: 15,
+  },
 
-lineLabel: {
-color: colors.textSecondary,
-fontSize: 15,
-},
+  totalLabel: {
+    color: colors.textPrimary,
+    fontWeight: '800',
+    fontSize: 19,
+  },
 
-lineValue: {
-color: colors.textPrimary,
-fontSize: 15,
-fontWeight: '600',
-},
+  totalValue: {
+    color: colors.accent,
+    fontWeight: '800',
+    fontSize: 24,
+  },
 
-includedText: {
-color: '#4ADE80',
-fontSize: 14,
-fontWeight: '700',
-},
+  /* ===================================
+       PAYMENT INFO
+    =================================== */
 
-totalLabel: {
-color: colors.textPrimary,
-fontSize: 19,
-fontWeight: '800',
-},
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
 
-totalValue: {
-color: colors.accent,
-fontSize: 22,
-fontWeight: '800',
-},
+  infoContent: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
 
-method: {
-flexDirection: 'row',
-alignItems: 'center',
-padding: spacing.lg,
-borderRadius: radius.md,
-marginBottom: spacing.md,
-borderWidth: StyleSheet.hairlineWidth,
-borderColor: colors.glassBorderSoft,
-backgroundColor: colors.glassFillSoft,
-},
+  infoTitle: {
+    color: colors.textPrimary,
+    fontWeight: '700',
+    fontSize: 17,
+    marginBottom: 6,
+  },
 
-methodActive: {
-borderColor: colors.accentStrong,
-borderWidth: 1.5,
-backgroundColor: 'rgba(139,92,246,0.12)',
-},
+  infoText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 22,
+  },
 
-methodIcon: {
-width: 44,
-height: 44,
-borderRadius: 12,
-alignItems: 'center',
-justifyContent: 'center',
-backgroundColor: colors.glassFill,
-borderWidth: StyleSheet.hairlineWidth,
-borderColor: colors.glassBorderSoft,
-},
+  /* ===================================
+       BENEFITS
+    =================================== */
 
-methodTextWrap: {
-flex: 1,
-marginLeft: spacing.md,
-},
+  benefitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
 
-methodTitle: {
-color: colors.textPrimary,
-fontSize: 16,
-fontWeight: '700',
-},
+  benefitText: {
+    marginLeft: spacing.md,
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '600',
+    flex: 1,
+  },
 
-methodSub: {
-color: colors.textSecondary,
-fontSize: 13,
-marginTop: 2,
-},
+  /* ===================================
+       PAY BUTTON
+    =================================== */
 
-radioOn: {
-width: 22,
-height: 22,
-borderRadius: 11,
-backgroundColor: colors.accentStrong,
-alignItems: 'center',
-justifyContent: 'center',
-},
+  payWrap: {
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.xxl,
+    borderRadius: radius.pill,
+    shadowColor: colors.accentPink,
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.45,
+    shadowRadius: 20,
+    elevation: 14,
+  },
 
-radioDot: {
-width: 8,
-height: 8,
-borderRadius: 4,
-backgroundColor: colors.textPrimary,
-},
+  pay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    paddingVertical: 18,
+    borderRadius: radius.pill,
+  },
 
-radioOff: {
-width: 22,
-height: 22,
-borderRadius: 11,
-borderWidth: 2,
-borderColor: colors.glassBorder,
-},
+  payText: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '800',
+  },
 
-fieldHeaderRow: {
-flexDirection: 'row',
-justifyContent: 'space-between',
-alignItems: 'center',
-},
+  /* ===================================
+       FOOTER
+    =================================== */
 
-fieldLabel: {
-color: colors.textSecondary,
-fontSize: 13,
-marginTop: spacing.md,
-marginBottom: 6,
-},
+  secureRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: spacing.lg,
+    marginHorizontal: spacing.xl,
+    gap: 6,
+  },
 
-brandRow: {
-flexDirection: 'row',
-gap: 6,
-marginTop: spacing.md,
-},
-
-brandChip: {
-paddingHorizontal: 8,
-paddingVertical: 4,
-borderRadius: 6,
-backgroundColor: colors.glassFill,
-borderWidth: StyleSheet.hairlineWidth,
-borderColor: colors.glassBorderSoft,
-},
-
-brandText: {
-color: colors.textPrimary,
-fontSize: 10,
-fontWeight: '800',
-},
-
-input: {
-color: colors.textPrimary,
-fontSize: 16,
-fontWeight: '600',
-paddingVertical: 12,
-paddingHorizontal: spacing.md,
-borderRadius: radius.sm,
-backgroundColor: colors.glassFillSoft,
-borderWidth: StyleSheet.hairlineWidth,
-borderColor: colors.glassBorderSoft,
-},
-
-twoCol: {
-flexDirection: 'row',
-gap: spacing.md,
-},
-
-saveRow: {
-flexDirection: 'row',
-alignItems: 'center',
-gap: spacing.md,
-marginHorizontal: spacing.xl,
-marginTop: spacing.lg,
-},
-
-checkbox: {
-width: 26,
-height: 26,
-borderRadius: 8,
-alignItems: 'center',
-justifyContent: 'center',
-},
-
-checkboxOff: {
-borderWidth: 1.5,
-borderColor: colors.glassBorder,
-backgroundColor: 'transparent',
-},
-
-saveText: {
-color: colors.textPrimary,
-fontSize: 15,
-fontWeight: '600',
-},
-
-payWrap: {
-marginHorizontal: spacing.xl,
-marginTop: spacing.xxl,
-borderRadius: radius.pill,
-shadowColor: colors.accentPink,
-shadowOffset: {
-width: 0,
-height: 8,
-},
-shadowOpacity: 0.55,
-shadowRadius: 20,
-elevation: 14,
-},
-
-pay: {
-flexDirection: 'row',
-alignItems: 'center',
-justifyContent: 'center',
-gap: spacing.md,
-paddingVertical: 18,
-borderRadius: radius.pill,
-},
-
-payText: {
-color: colors.textPrimary,
-fontSize: 18,
-fontWeight: '800',
-},
-
-secureRow: {
-flexDirection: 'row',
-alignItems: 'center',
-justifyContent: 'center',
-gap: 6,
-marginTop: spacing.lg,
-},
-
-secureText: {
-color: colors.textSecondary,
-fontSize: 13,
-},
+  secureText: {
+    flex: 1,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    fontSize: 13,
+    lineHeight: 20,
+  },
 });
