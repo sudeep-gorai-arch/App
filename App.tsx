@@ -1,3 +1,5 @@
+// import 'react-native-get-random-values';
+
 import React, { useEffect } from 'react';
 import { Text, TextInput } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';

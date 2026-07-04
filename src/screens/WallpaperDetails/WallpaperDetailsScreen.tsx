@@ -25,10 +25,7 @@ import { RootStackParamList } from '../../navigation/RootStackParamList';
 
 import API from '../../services/api';
 import { downloadWallpaper } from '../../utils/downloadHelper';
-import {
-  recordDownload,
-  recordPublicDownload,
-} from '../../services/downloadService';
+import { addDownload } from '../../services/downloadService';
 import {
   toggleFavorite,
   getFavoriteStatus,
@@ -43,6 +40,8 @@ import {
   WallpaperApplyTarget,
 } from '../../services/applyWallpaperService';
 import { appEvents } from '../../utils/appEvents';
+
+import { useToast } from '../../components/ui/toast/useToast';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'WallpaperDetails'>;
 
@@ -328,6 +327,8 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
     null,
   );
 
+  const toast = useToast();
+
   const loadWallpaper = async () => {
     if (!wallpaperId || isPlaceholder(wallpaperId)) return;
 
@@ -462,28 +463,109 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
 
     try {
       const token = await SecureStore.getItemAsync('token');
-      let shouldSaveLocalDownload = !token;
 
-      let downloadUrl: string = finalImage;
+      const loggedIn = !!token;
+
+      const shouldSaveLocalDownload = !loggedIn;
+
+      let downloadUrl = finalImage;
+
+      /*
+    ----------------------------------------
+    RECORD DOWNLOAD
+    ----------------------------------------
+    */
 
       if (!isPlaceholder(wallpaperId)) {
         try {
-          const response = token
-            ? await recordDownload(wallpaperId)
-            : await recordPublicDownload(wallpaperId);
+          const response = await addDownload(wallpaperId, loggedIn);
 
           downloadUrl = getDownloadUrlFromResponse(response, finalImage);
         } catch (error: any) {
-          console.log('addDownload skipped:', error?.response?.data || error);
+          console.log(
+            'Download record failed:',
+            error?.response?.data || error,
+          );
 
           if (error?.response?.status === 401) {
             await SecureStore.deleteItemAsync('token');
-            shouldSaveLocalDownload = true;
+
+            toast.info('Please sign in to continue downloading wallpapers.');
+
+            setStatus('idle');
+
+            navigation.navigate('MainTabs', {
+              screen: 'Profile',
+            });
+
+            return;
           }
 
-          downloadUrl = finalImage;
+          if (error?.response?.status === 403) {
+            const message = error?.response?.data?.message ?? '';
+
+            if (message.includes('Daily free download limit')) {
+              toast.warning(
+                'Daily limit reached! Upgrade to Premium for unlimited downloads.',
+              );
+
+              setStatus('idle');
+
+              setTimeout(() => {
+                navigation.navigate('ManagePremium');
+              }, 1200);
+
+              return;
+            }
+
+            if (
+              message.includes('Premium subscription required') ||
+              message.includes('premium wallpapers')
+            ) {
+              toast.warning(
+                'This is a Premium wallpaper. Upgrade to unlock it.',
+              );
+
+              setStatus('idle');
+
+              setTimeout(() => {
+                navigation.navigate('ManagePremium');
+              }, 1200);
+
+              return;
+            }
+
+            toast.warning(message || 'Download not allowed.');
+
+            setStatus('idle');
+
+            return;
+          }
+
+          if (error?.message === 'Network Error' || !error?.response) {
+            toast.error('No internet connection. Please try again.');
+
+            setStatus('idle');
+
+            return;
+          }
+
+          toast.error(
+            error?.response?.data?.message ||
+              'Something went wrong while downloading.',
+          );
+
+          setStatus('idle');
+
+          return;
         }
       }
+
+      /*
+    ----------------------------------------
+    DOWNLOAD IMAGE
+    ----------------------------------------
+    */
 
       const ok = await downloadWallpaper(
         downloadUrl,
@@ -495,17 +577,35 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
         return;
       }
 
+      /*
+    ----------------------------------------
+    UPDATE UI
+    ----------------------------------------
+    */
+
       const nextDownloadCount = getDownloads(wallpaper) + 1;
+
       const downloadedAt = new Date().toISOString();
+
       const updatedWallpaper = {
         ...wallpaper,
+
         downloadCount: nextDownloadCount,
+
         download_count: nextDownloadCount,
+
         downloads: nextDownloadCount,
+
         downloadedAt,
       };
 
       setWallpaper(updatedWallpaper);
+
+      /*
+    ----------------------------------------
+    SAVE GUEST HISTORY
+    ----------------------------------------
+    */
 
       if (shouldSaveLocalDownload) {
         await saveGuestDownloadHistory(
@@ -514,6 +614,12 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
           downloadUrl,
         );
       }
+
+      /*
+    ----------------------------------------
+    NOTIFY APP
+    ----------------------------------------
+    */
 
       if (wallpaperId && !isPlaceholder(wallpaperId)) {
         appEvents.emit('downloadsChanged', {
@@ -524,11 +630,13 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
       }
 
       setStatus('done');
+
       setSavedPopupVisible(true);
     } catch (error: any) {
       console.log('Download failed:', error?.response?.data || error);
 
       setStatus('idle');
+
       Alert.alert('Download failed', 'Something went wrong while downloading.');
     }
   };
