@@ -22,6 +22,7 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 
 import MeshBackground from "../../components/MeshBackground";
 import Button from "../../components/Button";
+import PremiumActionButton from "../../components/PremiumActionButton";
 
 import { colors } from "../../styles/colors";
 import { spacing, radius, SCREEN } from "../../utils/constants";
@@ -36,7 +37,6 @@ import { Wallpaper } from "../../services/types";
 import { appEvents } from "../../utils/appEvents";
 
 const flexiWallsLogo = require("../../assets/images/flexiwalls-logo.png");
-const proButtonIcon = require("../../assets/images/pro-button.png");
 
 const HERO_W = SCREEN.width - spacing.xl * 2;
 const HERO_H = 480;
@@ -226,68 +226,9 @@ const patchWallpaperList = (
   return changed ? nextItems : items;
 };
 
-const ShinyProIcon = () => {
-  const shineTranslate = useRef(new Animated.Value(-46)).current;
+const HomeTopHeader = () => {
+  const navigation = useNavigation<any>();
 
-  useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.delay(1400),
-        Animated.timing(shineTranslate, {
-          toValue: 46,
-          duration: 950,
-          useNativeDriver: true,
-        }),
-        Animated.timing(shineTranslate, {
-          toValue: -46,
-          duration: 0,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-
-    animation.start();
-
-    return () => {
-      animation.stop();
-    };
-  }, [shineTranslate]);
-
-  return (
-    <View style={styles.homeProIconWrap}>
-      <Image
-        source={proButtonIcon}
-        style={styles.homeProIcon}
-        resizeMode="contain"
-      />
-
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.homeProShine,
-          {
-            transform: [{ translateX: shineTranslate }, { rotate: "18deg" }],
-          },
-        ]}
-      >
-        <LinearGradient
-          colors={[
-            "rgba(255,255,255,0)",
-            "rgba(255,255,255,0.22)",
-            "rgba(255,255,255,0.9)",
-            "rgba(255,255,255,0.22)",
-            "rgba(255,255,255,0)",
-          ]}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={styles.homeProShineGradient}
-        />
-      </Animated.View>
-    </View>
-  );
-};
-
-const HomeTopHeader = ({ navigation }: { navigation: any }) => {
   return (
     <View style={styles.homeHeader}>
       <View style={styles.homeActionRow}>
@@ -298,20 +239,7 @@ const HomeTopHeader = ({ navigation }: { navigation: any }) => {
         />
 
         <View style={styles.homeRightActions}>
-          <Pressable
-            onPress={() =>
-              navigation.navigate("Premium", {
-                returnTo: "Home",
-              })
-            }
-            hitSlop={8}
-            style={({ pressed }) => [
-              styles.homePremiumButton,
-              { opacity: pressed ? 0.7 : 1 },
-            ]}
-          >
-            <ShinyProIcon />
-          </Pressable>
+          <PremiumActionButton returnTo="Home" style={styles.homePremiumButton} />
 
           <Pressable
             onPress={() => navigation.navigate("Search")}
@@ -866,7 +794,7 @@ const HomeScreen = () => {
             />
           }
         >
-          <HomeTopHeader navigation={navigation} />
+          <HomeTopHeader />
 
           <HeroSmoothCarousel
             data={featured}
@@ -895,20 +823,24 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.base,
   },
+
   loadingRoot: {
     flex: 1,
     backgroundColor: colors.base,
     justifyContent: "center",
     alignItems: "center",
   },
+
   scrollContent: {
     paddingBottom: 120,
   },
+
   homeHeader: {
     paddingHorizontal: spacing.xl,
     paddingTop: 0,
     paddingBottom: 0,
   },
+
   homeActionRow: {
     height: 72,
     flexDirection: "row",
@@ -917,49 +849,27 @@ const styles = StyleSheet.create({
     overflow: "visible",
     marginBottom: -8,
   },
+
   homeLogoLeft: {
     width: 175,
     height: 120,
     marginLeft: -18,
     marginTop: 8,
   },
+
   homeRightActions: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     zIndex: 5,
   },
+
   homePremiumButton: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "visible",
-    backgroundColor: "transparent",
   },
-  homeProIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  homeProIcon: {
-    width: 36,
-    height: 36,
-  },
-  homeProShine: {
-    position: "absolute",
-    top: -12,
-    bottom: -12,
-    width: 22,
-    opacity: 0.95,
-  },
-  homeProShineGradient: {
-    flex: 1,
-  },
+
   homeRightButton: {
     width: 46,
     height: 46,
@@ -967,6 +877,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     zIndex: 5,
   },
+
   homeRoundButton: {
     width: 46,
     height: 46,
@@ -978,18 +889,22 @@ const styles = StyleSheet.create({
     borderColor: colors.glassBorder,
     backgroundColor: colors.glassFill,
   },
+
   heroCarouselWrap: {
     marginTop: spacing.xs,
   },
+
   heroCarouselContent: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xs,
     paddingBottom: 0,
   },
+
   heroCarouselCard: {
     width: HERO_W,
     height: HERO_H,
   },
+
   heroCarouselDots: {
     flexDirection: "row",
     justifyContent: "center",
@@ -997,6 +912,7 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: spacing.xs,
   },
+
   heroCard: {
     width: HERO_W,
     height: HERO_H,
@@ -1005,18 +921,22 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
   },
+
   heroPressed: {
     opacity: 0.92,
   },
+
   heroImage: {
     flex: 1,
     justifyContent: "space-between",
     backgroundColor: colors.baseElevated,
   },
+
   missingHeroCard: {
     justifyContent: "flex-end",
     backgroundColor: colors.baseElevated,
   },
+
   qualityBadge: {
     position: "absolute",
     top: 14,
@@ -1031,21 +951,25 @@ const styles = StyleSheet.create({
     zIndex: 10,
     elevation: 10,
   },
+
   qualityText: {
     color: colors.textPrimary,
     fontWeight: "800",
     fontSize: 14,
     lineHeight: 16,
   },
+
   qualitySub: {
     color: colors.textSecondary,
     fontWeight: "700",
     fontSize: 8,
     letterSpacing: 1,
   },
+
   heroContent: {
     padding: spacing.xl,
   },
+
   tagPill: {
     alignSelf: "flex-start",
     backgroundColor: "rgba(0,0,0,0.45)",
@@ -1054,6 +978,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     marginBottom: spacing.md,
   },
+
   tagText: {
     color: colors.textPrimary,
     fontSize: 11,
@@ -1061,6 +986,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     textTransform: "uppercase",
   },
+
   heroTitle: {
     color: colors.textPrimary,
     fontSize: 30,
@@ -1068,6 +994,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: -0.5,
   },
+
   heroSubtitle: {
     color: colors.textSecondary,
     fontSize: 15,
@@ -1075,32 +1002,38 @@ const styles = StyleSheet.create({
     marginTop: 4,
     maxWidth: "78%",
   },
+
   heroFooter: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginTop: spacing.xl,
   },
+
   likeRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
   },
+
   likeText: {
     color: colors.textPrimary,
     fontWeight: "700",
     fontSize: 14,
   },
+
   dot: {
     width: 6,
     height: 6,
     borderRadius: 3,
     backgroundColor: colors.textTertiary,
   },
+
   dotActive: {
     width: 18,
     backgroundColor: colors.textPrimary,
   },
+
   sectionHeader: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -1109,27 +1042,32 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
+
   sectionTitle: {
     color: colors.textPrimary,
     fontSize: 24,
     fontWeight: "800",
     letterSpacing: -0.3,
   },
+
   sectionSubtitle: {
     color: colors.textSecondary,
     fontSize: 13,
     fontWeight: "600",
     marginTop: 3,
   },
+
   allSection: {
     marginTop: spacing.md,
   },
+
   grid: {
     paddingHorizontal: spacing.xl,
     flexDirection: "row",
     flexWrap: "wrap",
     gap: GRID_GAP,
   },
+
   wallpaperCard: {
     width: CARD_W,
     height: CARD_H,
@@ -1139,31 +1077,37 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
   },
+
   wallpaperPressed: {
     opacity: 0.88,
     transform: [{ scale: 0.98 }],
   },
+
   wallpaperImage: {
     flex: 1,
     justifyContent: "space-between",
     backgroundColor: colors.baseElevated,
   },
+
   missingCard: {
     alignItems: "center",
     justifyContent: "center",
     padding: spacing.md,
     gap: 8,
   },
+
   missingImageText: {
     color: colors.textSecondary,
     fontWeight: "700",
     fontSize: 12,
     textAlign: "center",
   },
+
   wallpaperTop: {
     alignItems: "flex-start",
     padding: spacing.sm,
   },
+
   qualityChip: {
     borderRadius: radius.pill,
     overflow: "hidden",
@@ -1172,20 +1116,24 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorderSoft,
   },
+
   qualityChipText: {
     color: colors.textPrimary,
     fontWeight: "700",
     fontSize: 11,
   },
+
   wallpaperBottom: {
     padding: spacing.sm,
   },
+
   wallpaperTitle: {
     color: colors.textPrimary,
     fontWeight: "700",
     fontSize: 13,
     marginBottom: 6,
   },
+
   wallpaperMeta: {
     alignSelf: "flex-start",
     flexDirection: "row",
@@ -1196,11 +1144,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: "rgba(0,0,0,0.45)",
   },
+
   wallpaperMetaText: {
     color: colors.textPrimary,
     fontWeight: "700",
     fontSize: 11,
   },
+
   emptyBox: {
     marginHorizontal: spacing.xl,
     height: 150,
@@ -1212,11 +1162,13 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorderSoft,
   },
+
   emptyText: {
     color: colors.textSecondary,
     fontWeight: "700",
     fontSize: 14,
   },
+
   viewAllButton: {
     alignSelf: "center",
     marginTop: spacing.xl,
@@ -1231,10 +1183,12 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
   },
+
   viewAllButtonPressed: {
     opacity: 0.78,
     transform: [{ scale: 0.98 }],
   },
+
   viewAllText: {
     color: colors.textPrimary,
     fontWeight: "700",

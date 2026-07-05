@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 import {
+  ActivityIndicator,
   Animated,
   Easing,
   Image,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -28,6 +30,8 @@ import {
 
 type PremiumReturnRoute = 'Home' | 'Category' | 'Trending' | 'Favorites';
 
+type PurchasePlan = 'MONTHLY' | 'YEARLY' | 'LIFETIME';
+
 export interface RazorpayOrder {
   keyId: string;
 
@@ -39,7 +43,7 @@ export interface RazorpayOrder {
 
   receipt: string;
 
-  plan: 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | 'LIFETIME';
+  plan: PurchasePlan;
 
   title: string;
 }
@@ -84,7 +88,7 @@ type BillingPlan = {
   period?: string;
   badge?: string;
   accent: string;
-  badgeTone?: 'gold' | 'green' | 'purple';
+  badgeTone?: 'gold' | 'green' | 'purple' | 'blue';
 };
 
 const premiumLogo = require('../../assets/images/premium-logo.png');
@@ -92,12 +96,11 @@ const proButtonIcon = require('../../assets/images/pro-button.png');
 
 const CTA_GRADIENT = ['#EC4899', '#A855F7', '#3B82F6'] as const;
 
-const PLAN_MAP = {
+const PLAN_MAP: Record<BillingPlanId, PurchasePlan> = {
   monthly: 'MONTHLY',
-  quarterly: 'QUARTERLY',
   yearly: 'YEARLY',
   lifetime: 'LIFETIME',
-} as const;
+};
 
 const HERO_AURA_GRADIENT = [
   'rgba(15, 15, 16, 0)',
@@ -589,6 +592,7 @@ const BillingPlanCard = ({
                   plan.badgeTone === 'green' && styles.planBadgeGreen,
                   plan.badgeTone === 'gold' && styles.planBadgeGold,
                   plan.badgeTone === 'purple' && styles.planBadgePurple,
+                  plan.badgeTone === 'blue' && styles.planBadgeBlue,
                 ]}
               >
                 <Text
@@ -616,14 +620,20 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
 
   const [loading, setLoading] = useState(false);
 
+  const [refreshing, setRefreshing] = useState(false);
+
   const selectedPlanData = plans.find(plan => plan.id === selectedPlan);
 
   useEffect(() => {
     loadPlans();
   }, []);
 
-  const loadPlans = async () => {
+  const loadPlans = async (isRefresh = false) => {
     try {
+      if (isRefresh) {
+        setRefreshing(true);
+      }
+
       const response = await getSubscriptionPlans();
 
       const backendPlans = getBackendPlansArray(response);
@@ -641,7 +651,13 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
       setPlans(BILLING_PLANS);
 
       setSelectedPlan('lifetime');
+    } finally {
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = async () => {
+    await loadPlans(true);
   };
 
   const handleClose = () => {
@@ -667,19 +683,26 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
 
       if (parent) {
         parent.navigate('Payment', {
-          order,
+          order: order as RazorpayOrder,
         });
 
         return;
       }
 
       navigation?.navigate?.('Payment', {
-        order,
+        order: order as RazorpayOrder,
       });
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
+      console.error('CREATE RAZORPAY ORDER ERROR', error);
 
-      Alert.alert('Payment', 'Unable to create payment order.');
+      const message =
+        error?.response?.status === 401
+          ? 'Please login to continue with premium.'
+          : error?.response?.data?.message ??
+            error?.message ??
+            'Unable to create payment order.';
+
+      Alert.alert('Payment', message);
     } finally {
       setLoading(false);
     }
@@ -692,8 +715,15 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <ScrollView
           showsVerticalScrollIndicator={false}
-          bounces={false}
+          bounces
           contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.textPrimary}
+            />
+          }
         >
           <View style={styles.homeHeader}>
             <View style={styles.homeActionRow}>
@@ -796,10 +826,14 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
           </View>
 
           <Pressable
+            disabled={loading}
             onPress={handleContinue}
             style={({ pressed }) => [
               styles.ctaWrap,
-              { transform: [{ scale: pressed ? 0.98 : 1 }] },
+              {
+                opacity: loading ? 0.72 : 1,
+                transform: [{ scale: pressed && !loading ? 0.98 : 1 }],
+              },
             ]}
           >
             <LinearGradient
@@ -809,13 +843,19 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
               style={styles.cta}
             >
               <View style={styles.ctaCenter}>
-                <MaterialCommunityIcons
-                  name="crown"
-                  size={19}
-                  color={colors.textPrimary}
-                />
+                {loading ? (
+                  <ActivityIndicator color={colors.textPrimary} size="small" />
+                ) : (
+                  <MaterialCommunityIcons
+                    name="crown"
+                    size={19}
+                    color={colors.textPrimary}
+                  />
+                )}
 
-                <Text style={styles.ctaText}>Continue</Text>
+                <Text style={styles.ctaText}>
+                  {loading ? 'Creating Order...' : 'Continue'}
+                </Text>
               </View>
 
               <Ionicons
@@ -837,7 +877,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
               <Text style={styles.paymentInfoText}>
                 {selectedPlanData?.id === 'lifetime'
                   ? 'One-time payment, no recurring fees'
-                  : 'Auto-renewable plan'}
+                  : 'Manual renewal, no hidden auto-renewal'}
               </Text>
             </View>
 
@@ -849,7 +889,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
               />
 
               <Text style={styles.paymentInfoText}>
-                Secured with Google Play Billing
+                Secured with Razorpay Checkout
               </Text>
             </View>
           </View>
@@ -1247,6 +1287,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(168, 85, 247, 0.34)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(216, 180, 254,0.45)',
+  },
+
+  planBadgeBlue: {
+    backgroundColor: 'rgba(59, 130, 246, 0.34)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(147, 197, 253,0.45)',
   },
 
   planBadgeText: {

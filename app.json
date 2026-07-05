@@ -23,14 +23,22 @@
     "android": {
       "package": "com.flexiwalls.app",
       "permissions": [
-        "SET_WALLPAPER"
+        "SET_WALLPAPER",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.READ_MEDIA_IMAGES"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#0B0819"
       }
     },
     "extra": {
-      "appName": "FlexiWalls"
+      "appName": "FlexiWalls",
+      "eas": {
+        "projectId": "06448efd-a8b5-4248-9695-13dd5b6428a9"
+      }
     }
   }
 }

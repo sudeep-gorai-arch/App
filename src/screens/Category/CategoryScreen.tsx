@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -8,7 +8,7 @@ import {
   Image,
   ImageBackground,
   ActivityIndicator,
-  Animated,
+  RefreshControl,
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
 import MeshBackground from '../../components/MeshBackground';
+import PremiumActionButton from '../../components/PremiumActionButton';
 
 import API from '../../services/api';
 import { getCategories } from '../../services/categoryService';
@@ -32,7 +33,6 @@ import {
 } from '../../utils/constants';
 
 const flexiWallsLogo = require('../../assets/images/flexiwalls-logo.png');
-const proButtonIcon = require('../../assets/images/pro-button.png');
 
 type Nav = { navigate: (name: string, params?: any) => void };
 
@@ -150,67 +150,6 @@ const normalizeCategory = (item: Category) => {
   } as Category;
 };
 
-const ShinyProIcon = () => {
-  const shineTranslate = useRef(new Animated.Value(-46)).current;
-
-  useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.delay(1400),
-        Animated.timing(shineTranslate, {
-          toValue: 46,
-          duration: 950,
-          useNativeDriver: true,
-        }),
-        Animated.timing(shineTranslate, {
-          toValue: -46,
-          duration: 0,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-
-    animation.start();
-
-    return () => {
-      animation.stop();
-    };
-  }, [shineTranslate]);
-
-  return (
-    <View style={styles.categoryProIconWrap}>
-      <Image
-        source={proButtonIcon}
-        style={styles.categoryProIcon}
-        resizeMode="contain"
-      />
-
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.categoryProShine,
-          {
-            transform: [{ translateX: shineTranslate }, { rotate: '18deg' }],
-          },
-        ]}
-      >
-        <LinearGradient
-          colors={[
-            'rgba(255,255,255,0)',
-            'rgba(255,255,255,0.22)',
-            'rgba(255,255,255,0.9)',
-            'rgba(255,255,255,0.22)',
-            'rgba(255,255,255,0)',
-          ]}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={styles.categoryProShineGradient}
-        />
-      </Animated.View>
-    </View>
-  );
-};
-
 const CategoryTopHeader = ({ navigation }: { navigation: Nav }) => {
   return (
     <View style={styles.categoryHeader}>
@@ -222,20 +161,10 @@ const CategoryTopHeader = ({ navigation }: { navigation: Nav }) => {
         />
 
         <View style={styles.categoryRightActions}>
-          <Pressable
-            onPress={() =>
-              navigation.navigate('Premium', {
-                returnTo: 'Category',
-              })
-            }
-            hitSlop={8}
-            style={({ pressed }) => [
-              styles.categoryPremiumButton,
-              { opacity: pressed ? 0.7 : 1 },
-            ]}
-          >
-            <ShinyProIcon />
-          </Pressable>
+          <PremiumActionButton
+            returnTo="Category"
+            style={styles.categoryPremiumButton}
+          />
 
           <Pressable
             onPress={() => navigation.navigate('Search')}
@@ -385,6 +314,7 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeTab, setActiveTab] = useState<CategoryTab>('All');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -408,8 +338,12 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
     return list;
   }, [activeTab, categories]);
 
-  const loadData = async () => {
+  const loadData = async (isRefresh = false) => {
     try {
+      if (!isRefresh) {
+        setLoading(true);
+      }
+
       const response = await getCategories();
 
       const apiCategories = Array.isArray(response.data)
@@ -423,7 +357,14 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
       setCategories([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+
+    await loadData(true);
   };
 
   const openCategory = (item: Category) =>
@@ -453,6 +394,13 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
           showsVerticalScrollIndicator={false}
           columnWrapperStyle={styles.columnWrapper}
           contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.textPrimary}
+            />
+          }
           ListHeaderComponent={
             <View>
               <CategoryTopHeader navigation={navigation} />
@@ -540,32 +488,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'visible',
     backgroundColor: 'transparent',
-  },
-
-  categoryProIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-
-  categoryProIcon: {
-    width: 36,
-    height: 36,
-  },
-
-  categoryProShine: {
-    position: 'absolute',
-    top: -12,
-    bottom: -12,
-    width: 22,
-    opacity: 0.95,
-  },
-
-  categoryProShineGradient: {
-    flex: 1,
   },
 
   categoryRightButton: {

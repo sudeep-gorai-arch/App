@@ -1,12 +1,13 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
-  StyleSheet,
-  View,
-  Text,
-  Pressable,
-  ScrollView,
   ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,7 +22,7 @@ import { RoundButton } from '../../components/Header';
 
 import { colors, gradients } from '../../styles/colors';
 
-import { spacing, radius } from '../../utils/constants';
+import { spacing } from '../../utils/constants';
 
 import {
   getSubscriptionStatus,
@@ -33,79 +34,289 @@ import { useToast } from '../../components/ui/toast/useToast';
 
 type Nav = {
   goBack?: () => void;
-
   navigate?: (screen: string, params?: any) => void;
 };
 
-const DANGER = '#FF5A6E';
-
-interface Props {
+type Props = {
   navigation?: Nav;
-}
+};
+
+type PlanLike = SubscriptionPlan & {
+  id?: string;
+  plan?: string;
+  name?: string;
+  title?: string;
+  amount?: number;
+  price?: number;
+  currency?: string;
+  validityDays?: number;
+  validity_days?: number;
+  durationDays?: number;
+  duration_days?: number;
+};
+
+type SubscriptionLike = {
+  id?: string;
+  plan?: string;
+  platform?: string;
+  purchaseToken?: string;
+  startDate?: string;
+  endDate?: string;
+  active?: boolean;
+  status?: string;
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
+  razorpaySignature?: string;
+  amount?: number;
+  currency?: string;
+  createdAt?: string;
+};
+
+type PaymentLike = {
+  id?: string;
+  status?: string;
+  amount?: number;
+  currency?: string;
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
+  orderId?: string;
+  paymentId?: string;
+  createdAt?: string;
+  paidAt?: string;
+};
+
+type SubscriptionStatus = {
+  isPremium?: boolean;
+  premiumUntil?: string | null;
+  currentPlan?: string;
+  plan?: string;
+  subscription?: SubscriptionLike | null;
+  activeSubscription?: SubscriptionLike | null;
+  latestSubscription?: SubscriptionLike | null;
+  payment?: PaymentLike | null;
+  latestPayment?: PaymentLike | null;
+  payments?: PaymentLike[];
+  user?: {
+    isPremium?: boolean;
+    premiumUntil?: string | null;
+  };
+};
+
+const SUCCESS = '#34D399';
+const WARNING = '#FBBF24';
+const MUTED = 'rgba(255,255,255,0.56)';
+
+const unwrapData = <T,>(payload: any): T => {
+  if (payload?.data?.data !== undefined) return payload.data.data as T;
+  if (payload?.data !== undefined) return payload.data as T;
+  return payload as T;
+};
+
+const normalizePlanKey = (value?: string | null) =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase();
+
+const getPlanKey = (plan?: PlanLike | null) =>
+  plan?.plan ?? plan?.id ?? plan?.name ?? plan?.title ?? '';
+
+const getPlanTitle = (plan?: PlanLike | null, fallback = 'Free') =>
+  plan?.title ?? plan?.name ?? plan?.plan ?? plan?.id ?? fallback;
+
+const getPlanAmount = (plan?: PlanLike | null) => {
+  const value = plan?.amount ?? plan?.price;
+  return typeof value === 'number' && !Number.isNaN(value) ? value : null;
+};
+
+const getPlanCurrency = (plan?: PlanLike | null, fallback = 'INR') =>
+  String(plan?.currency ?? fallback).toUpperCase();
+
+const getPlanValidityDays = (plan?: PlanLike | null) => {
+  const value =
+    plan?.validityDays ??
+    plan?.validity_days ??
+    plan?.durationDays ??
+    plan?.duration_days;
+
+  return typeof value === 'number' && !Number.isNaN(value) ? value : null;
+};
+
+const formatDate = (date?: string | null) => {
+  if (!date) return '--';
+
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return '--';
+
+  return parsed.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
+const getDaysLeft = (date?: string | null) => {
+  if (!date) return null;
+
+  const expiry = new Date(date).getTime();
+  if (Number.isNaN(expiry)) return null;
+
+  const diff = expiry - Date.now();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+};
+
+const formatMoney = (amount?: number | null, currency = 'INR') => {
+  if (typeof amount !== 'number' || Number.isNaN(amount)) return '--';
+
+  if (currency.toUpperCase() === 'INR') {
+    return `₹${amount.toLocaleString('en-IN')}`;
+  }
+
+  return `${amount.toLocaleString('en-IN')} ${currency.toUpperCase()}`;
+};
+
+const shortId = (value?: string | null) => {
+  if (!value) return '--';
+  if (value.length <= 12) return value;
+  return `${value.slice(0, 8)}...${value.slice(-4)}`;
+};
+
+const getLatestPayment = (status?: SubscriptionStatus | null) => {
+  if (!status) return null;
+
+  if (status.latestPayment) return status.latestPayment;
+  if (status.payment) return status.payment;
+  if (Array.isArray(status.payments) && status.payments.length > 0) {
+    return status.payments[0];
+  }
+
+  return null;
+};
 
 const ManagePremiumScreen = ({ navigation }: Props) => {
   const toast = useToast();
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [plans, setPlans] = useState<PlanLike[]>([]);
+  const [status, setStatus] = useState<SubscriptionStatus | null>(null);
 
-  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const loadData = useCallback(
+    async (showLoader = true) => {
+      try {
+        if (showLoader) setLoading(true);
 
-  const [status, setStatus] = useState<any>(null);
+        const [planResponse, statusResponse] = await Promise.all([
+          getSubscriptionPlans(),
+          getSubscriptionStatus(),
+        ]);
 
-  const [autoRenew, setAutoRenew] = useState(true);
+        const planData = unwrapData<PlanLike[]>(planResponse);
+        const statusData = unwrapData<SubscriptionStatus>(statusResponse);
+
+        setPlans(Array.isArray(planData) ? planData : []);
+        setStatus(statusData ?? null);
+      } catch (e) {
+        console.log(e);
+        toast.error('Unable to load premium details.');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [toast],
+  );
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
+  const activeSubscription = useMemo(() => {
+    return (
+      status?.activeSubscription ??
+      status?.subscription ??
+      status?.latestSubscription ??
+      null
+    );
+  }, [status]);
 
-      const [planResponse, statusResponse] = await Promise.all([
-        getSubscriptionPlans(),
-        getSubscriptionStatus(),
-      ]);
+  const latestPayment = useMemo(() => getLatestPayment(status), [status]);
 
-      setPlans(planResponse.data);
+  const isPremium = Boolean(
+    status?.isPremium ?? status?.user?.isPremium ?? activeSubscription?.active,
+  );
 
-      setStatus(statusResponse.data);
-    } catch (e) {
-      console.log(e);
-
-      toast.error('Unable to load subscription.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const premiumUntil =
+    status?.premiumUntil ?? status?.user?.premiumUntil ?? activeSubscription?.endDate;
 
   const currentPlan = useMemo(() => {
-    if (!status?.isPremium) return null;
+    const statusPlan = normalizePlanKey(
+      activeSubscription?.plan ?? status?.currentPlan ?? status?.plan,
+    );
 
-    return plans.find(p => p.plan === status.subscription?.plan) ?? null;
-  }, [plans, status]);
+    if (!statusPlan) return null;
+
+    return (
+      plans.find(plan => normalizePlanKey(getPlanKey(plan)) === statusPlan) ?? null
+    );
+  }, [activeSubscription?.plan, plans, status?.currentPlan, status?.plan]);
+
+  const planAmount =
+    getPlanAmount(currentPlan) ?? activeSubscription?.amount ?? latestPayment?.amount;
+
+  const planCurrency =
+    getPlanCurrency(currentPlan, activeSubscription?.currency ?? latestPayment?.currency ?? 'INR');
+
+  const validityDays = getPlanValidityDays(currentPlan);
+
+  const daysLeft = getDaysLeft(premiumUntil);
+
+  const activeStatusText = isPremium ? 'ACTIVE' : 'FREE';
+  const planTitle = isPremium
+    ? getPlanTitle(currentPlan, activeSubscription?.plan ?? 'Premium')
+    : 'Free';
+
+  const expiryText = isPremium
+    ? daysLeft !== null && daysLeft > 0
+      ? `${daysLeft} day${daysLeft === 1 ? '' : 's'} left`
+      : 'Expired'
+    : 'Upgrade anytime';
+
+  const paymentId =
+    latestPayment?.razorpayPaymentId ??
+    latestPayment?.paymentId ??
+    activeSubscription?.razorpayPaymentId ??
+    activeSubscription?.purchaseToken;
+
+  const orderId =
+    latestPayment?.razorpayOrderId ??
+    latestPayment?.orderId ??
+    activeSubscription?.razorpayOrderId;
+
+  const paymentStatus =
+    latestPayment?.status ?? activeSubscription?.status ?? (isPremium ? 'PAID' : '--');
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadData(false);
+  };
+
+  const goToPremium = () => {
+    navigation?.navigate?.('MainTabs', {
+      screen: 'Premium',
+      params: { returnTo: 'Profile' },
+    });
+  };
+
+  const goToSupport = () => {
+    navigation?.navigate?.('HelpSupport');
+  };
 
   if (loading) {
     return (
-      <View
-        style={[
-          styles.root,
-          {
-            justifyContent: 'center',
-            alignItems: 'center',
-          },
-        ]}
-      >
+      <View style={[styles.root, styles.centered]}>
+        <MeshBackground variant="profile" />
         <ActivityIndicator size="large" color={colors.accent} />
-
-        <Text
-          style={{
-            color: colors.textSecondary,
-            marginTop: 16,
-          }}
-        >
-          Loading Subscription...
-        </Text>
+        <Text style={styles.loadingText}>Loading premium details...</Text>
       </View>
     );
   }
@@ -114,17 +325,18 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
     <View style={styles.root}>
       <MeshBackground variant="profile" />
 
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingBottom: spacing.xxl,
-          }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.accent}
+            />
+          }
+          contentContainerStyle={styles.scrollContent}
         >
-          {/* ===========================
-              HEADER
-          =========================== */}
-
           <View style={styles.header}>
             <RoundButton
               icon="chevron-back"
@@ -133,73 +345,67 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
 
             <View style={styles.headerCenter}>
               <Text style={styles.headerTitle}>Manage Premium</Text>
-
               <Text style={styles.headerSub}>
-                View and manage your Premium subscription.
+                Your plan and Razorpay payment details
               </Text>
             </View>
 
-            <View style={{ width: 46 }} />
+            <Pressable
+              onPress={onRefresh}
+              style={({ pressed }) => [
+                styles.refreshButton,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Ionicons name="refresh" size={20} color={colors.textPrimary} />
+            </Pressable>
           </View>
-
-          {/* ===========================
-              CURRENT PLAN
-          =========================== */}
 
           <Card style={styles.block} padding={spacing.lg} glowBorder strong>
             <View style={styles.planTop}>
               <LinearGradient
-                colors={gradients.violetMagenta}
+                colors={isPremium ? gradients.violetMagenta : gradients.blueViolet}
                 style={styles.crownChip}
               >
                 <MaterialCommunityIcons
-                  name="crown"
-                  size={34}
+                  name={isPremium ? 'crown' : 'crown-outline'}
+                  size={32}
                   color={colors.textPrimary}
                 />
               </LinearGradient>
 
-              <View
-                style={{
-                  flex: 1,
-                  marginLeft: spacing.lg,
-                }}
-              >
+              <View style={styles.planInfo}>
                 <Text style={styles.planLabel}>Current Plan</Text>
 
                 <View style={styles.planNameRow}>
-                  <Text style={styles.planName}>
-                    {currentPlan ? currentPlan.title : 'Free'}
+                  <Text style={styles.planName} numberOfLines={1}>
+                    {planTitle}
                   </Text>
 
                   <View
                     style={[
                       styles.activeBadge,
-                      !status?.isPremium && {
-                        backgroundColor: 'rgba(255,255,255,0.08)',
-                      },
+                      isPremium ? styles.badgePremium : styles.badgeFree,
                     ]}
                   >
-                    <Text style={styles.activeText}>
-                      {status?.isPremium ? 'ACTIVE' : 'FREE'}
+                    <Text
+                      style={[
+                        styles.activeText,
+                        { color: isPremium ? SUCCESS : colors.textSecondary },
+                      ]}
+                    >
+                      {activeStatusText}
                     </Text>
                   </View>
                 </View>
 
                 <View style={styles.enjoyRow}>
-                  <Text style={styles.enjoy}>
-                    {status?.isPremium
-                      ? 'Enjoying all Premium benefits'
-                      : 'Upgrade to unlock Premium'}
-                  </Text>
-
-                  {status?.isPremium && (
-                    <Ionicons
-                      name="shield-checkmark"
-                      size={14}
-                      color="#34D399"
-                    />
-                  )}
+                  <Ionicons
+                    name={isPremium ? 'shield-checkmark' : 'lock-open-outline'}
+                    size={14}
+                    color={isPremium ? SUCCESS : colors.textSecondary}
+                  />
+                  <Text style={styles.enjoy}>{expiryText}</Text>
                 </View>
               </View>
             </View>
@@ -208,465 +414,211 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
 
             <View style={styles.metaRow}>
               <View style={styles.metaCol}>
-                <Text style={styles.metaLabel}>Member Since</Text>
-
+                <Text style={styles.metaLabel}>Started On</Text>
                 <Text style={styles.metaValue}>
-                  {status?.subscription?.startDate
-                    ? new Date(
-                        status.subscription.startDate,
-                      ).toLocaleDateString()
-                    : '--'}
+                  {formatDate(activeSubscription?.startDate)}
                 </Text>
               </View>
 
               <View style={styles.metaDivider} />
 
               <View style={styles.metaCol}>
-                <Text style={styles.metaLabel}>Premium Until</Text>
-
-                <Text style={styles.metaValue}>
-                  {status?.premiumUntil
-                    ? new Date(status.premiumUntil).toLocaleDateString()
-                    : '--'}
-                </Text>
+                <Text style={styles.metaLabel}>Valid Until</Text>
+                <Text style={styles.metaValue}>{formatDate(premiumUntil)}</Text>
               </View>
             </View>
           </Card>
 
-          {/* ===========================
-              SUBSCRIPTION DETAILS
-          =========================== */}
+          <Card style={styles.block} padding={spacing.lg} strong>
+            <Text style={styles.sectionTitle}>Plan Details</Text>
+
+            <InfoRow
+              icon="diamond-outline"
+              title="Plan"
+              value={planTitle}
+              rightText={isPremium ? 'Premium' : 'Free'}
+            />
+
+            <InfoRow
+              icon="wallet-outline"
+              title="Amount"
+              value={formatMoney(planAmount, planCurrency)}
+              rightText={planCurrency}
+            />
+
+            <InfoRow
+              icon="calendar-outline"
+              title="Validity"
+              value={validityDays ? `${validityDays} days` : formatDate(premiumUntil)}
+            />
+
+            <InfoRow
+              icon="shield-checkmark-outline"
+              title="Payment Gateway"
+              value="Razorpay Secure Checkout"
+              rightText="Verified"
+              rightTone="success"
+            />
+          </Card>
 
           <Card style={styles.block} padding={spacing.lg} strong>
-            <Text style={styles.sectionTitle}>Subscription Details</Text>
+            <Text style={styles.sectionTitle}>Latest Payment</Text>
 
-            {/* Plan */}
+            <InfoRow
+              icon="receipt-outline"
+              title="Payment Status"
+              value={String(paymentStatus).toUpperCase()}
+              rightText={isPremium ? 'Synced' : undefined}
+              rightTone={isPremium ? 'success' : 'muted'}
+            />
 
-            <View style={styles.detailRow}>
-              <View style={styles.detailIcon}>
-                <Ionicons
-                  name="diamond-outline"
-                  size={20}
-                  color={colors.accent}
-                />
-              </View>
+            <InfoRow
+              icon="card-outline"
+              title="Payment ID"
+              value={shortId(paymentId)}
+            />
 
-              <View
-                style={{
-                  flex: 1,
-                  marginLeft: spacing.md,
-                }}
-              >
-                <Text style={styles.detailTitle}>Current Plan</Text>
+            <InfoRow
+              icon="document-text-outline"
+              title="Order ID"
+              value={shortId(orderId)}
+            />
 
-                <Text style={styles.detailValue}>
-                  {currentPlan?.title ?? 'Free'}
-                </Text>
-              </View>
-
-              {status?.isPremium && (
-                <View style={styles.bestValue}>
-                  <Text style={styles.bestValueText}>ACTIVE</Text>
-                </View>
+            <InfoRow
+              icon="time-outline"
+              title="Payment Date"
+              value={formatDate(
+                latestPayment?.paidAt ??
+                  latestPayment?.createdAt ??
+                  activeSubscription?.createdAt,
               )}
-            </View>
-
-            {/* Billing */}
-
-            <View style={styles.detailRow}>
-              <View style={styles.detailIcon}>
-                <Ionicons name="card-outline" size={20} color={colors.accent} />
-              </View>
-
-              <View
-                style={{
-                  flex: 1,
-                  marginLeft: spacing.md,
-                }}
-              >
-                <Text style={styles.detailTitle}>Billing</Text>
-
-                <Text style={styles.detailValue}>
-                  {currentPlan
-                    ? `${currentPlan.amount} ${currentPlan.currency}`
-                    : '--'}
-                </Text>
-              </View>
-
-              <Text style={styles.detailRight}>{currentPlan?.plan ?? ''}</Text>
-            </View>
-
-            {/* Validity */}
-
-            <View style={styles.detailRow}>
-              <View style={styles.detailIcon}>
-                <Ionicons
-                  name="calendar-outline"
-                  size={20}
-                  color={colors.accent}
-                />
-              </View>
-
-              <View
-                style={{
-                  flex: 1,
-                  marginLeft: spacing.md,
-                }}
-              >
-                <Text style={styles.detailTitle}>Validity</Text>
-
-                <Text style={styles.detailValue}>
-                  {currentPlan ? `${currentPlan.validityDays} Days` : '--'}
-                </Text>
-              </View>
-            </View>
-
-            {/* Premium Until */}
-
-            <View style={styles.detailRow}>
-              <View style={styles.detailIcon}>
-                <Ionicons name="time-outline" size={20} color={colors.accent} />
-              </View>
-
-              <View
-                style={{
-                  flex: 1,
-                  marginLeft: spacing.md,
-                }}
-              >
-                <Text style={styles.detailTitle}>Premium Until</Text>
-
-                <Text style={styles.detailValue}>
-                  {status?.premiumUntil
-                    ? new Date(status.premiumUntil).toLocaleDateString()
-                    : '--'}
-                </Text>
-              </View>
-            </View>
-
-            {/* Auto Renewal */}
-
-            <View style={styles.detailRow}>
-              <View style={styles.detailIcon}>
-                <Ionicons name="sync-outline" size={20} color={colors.accent} />
-              </View>
-
-              <View
-                style={{
-                  flex: 1,
-                  marginLeft: spacing.md,
-                }}
-              >
-                <Text style={styles.detailTitle}>Auto Renewal</Text>
-
-                <Text style={styles.detailValue}>
-                  {autoRenew ? 'Enabled' : 'Disabled'}
-                </Text>
-              </View>
-
-              <Pressable onPress={() => setAutoRenew(!autoRenew)}>
-                {autoRenew ? (
-                  <LinearGradient
-                    colors={gradients.blueViolet}
-                    style={[
-                      styles.track,
-                      {
-                        alignItems: 'flex-end',
-                      },
-                    ]}
-                  >
-                    <View style={styles.knob} />
-                  </LinearGradient>
-                ) : (
-                  <View style={[styles.track, styles.trackOff]}>
-                    <View style={styles.knob} />
-                  </View>
-                )}
-              </Pressable>
-            </View>
+              isLast
+            />
           </Card>
 
-          {/* ===========================
-              MANAGE SUBSCRIPTION
-          =========================== */}
-
           <Card style={styles.block} padding={spacing.lg} strong>
-            <Text style={styles.sectionTitle}>Manage Subscription</Text>
+            <Text style={styles.sectionTitle}>Actions</Text>
 
-            {/* Payment Method */}
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.manageRow,
-                pressed && { opacity: 0.7 },
-              ]}
-              onPress={() => toast.info('Coming Soon')}
-            >
-              <View style={styles.detailIcon}>
-                <Ionicons name="card-outline" size={20} color={colors.accent} />
-              </View>
-
-              <View
-                style={{
-                  flex: 1,
-                  marginLeft: spacing.md,
-                }}
-              >
-                <Text style={styles.detailTitle}>Payment Method</Text>
-
-                <Text style={styles.detailValue}>Razorpay Secure Payment</Text>
-              </View>
-
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color={colors.textSecondary}
-              />
-            </Pressable>
-
-            {/* Billing History */}
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.manageRow,
-                pressed && { opacity: 0.7 },
-              ]}
-              onPress={() => toast.info('Billing history coming soon.')}
-            >
-              <View style={styles.detailIcon}>
-                <Ionicons
-                  name="receipt-outline"
-                  size={20}
-                  color={colors.accent}
-                />
-              </View>
-
-              <View
-                style={{
-                  flex: 1,
-                  marginLeft: spacing.md,
-                }}
-              >
-                <Text style={styles.detailTitle}>Billing History</Text>
-
-                <Text style={styles.detailValue}>View all your payments</Text>
-              </View>
-
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color={colors.textSecondary}
-              />
-            </Pressable>
-
-            {/* Upgrade */}
-
-            {!status?.isPremium && (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.manageRow,
-                  pressed && {
-                    opacity: 0.7,
-                  },
-                ]}
-                onPress={() => navigation?.navigate?.('Premium')}
-              >
-                <View style={styles.detailIcon}>
-                  <Ionicons
-                    name="rocket-outline"
-                    size={20}
-                    color={colors.accent}
-                  />
-                </View>
-
-                <View
-                  style={{
-                    flex: 1,
-                    marginLeft: spacing.md,
-                  }}
-                >
-                  <Text style={styles.detailTitle}>Upgrade Plan</Text>
-
-                  <Text style={styles.detailValue}>
-                    Unlock Premium Wallpapers
-                  </Text>
-                </View>
-
-                <Ionicons
-                  name="chevron-forward"
-                  size={20}
-                  color={colors.textSecondary}
-                />
-              </Pressable>
-            )}
-
-            {/* Restore Purchase */}
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.manageRow,
-                pressed && { opacity: 0.7 },
-              ]}
-              onPress={() =>
-                toast.info('Restore purchase is not required for Razorpay.')
+            <ActionRow
+              icon={isPremium ? 'refresh-circle-outline' : 'rocket-outline'}
+              title={isPremium ? 'Renew Premium' : 'Upgrade Premium'}
+              value={
+                isPremium
+                  ? 'Choose a plan and extend access'
+                  : 'Unlock premium wallpapers'
               }
-            >
-              <View style={styles.detailIcon}>
-                <Ionicons
-                  name="refresh-outline"
-                  size={20}
-                  color={colors.accent}
-                />
-              </View>
+              onPress={goToPremium}
+            />
 
-              <View
-                style={{
-                  flex: 1,
-                  marginLeft: spacing.md,
-                }}
-              >
-                <Text style={styles.detailTitle}>Restore Purchase</Text>
+            <ActionRow
+              icon="sync-outline"
+              title="Refresh Payment Status"
+              value="Sync latest details from backend"
+              onPress={onRefresh}
+            />
 
-                <Text style={styles.detailValue}>Sync your subscription</Text>
-              </View>
-
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color={colors.textSecondary}
-              />
-            </Pressable>
-
-            {/* Cancel */}
-
-            {status?.isPremium && (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.manageRow,
-                  pressed && {
-                    opacity: 0.7,
-                  },
-                ]}
-                onPress={() => navigation?.navigate?.('CancelPremium')}
-              >
-                <View
-                  style={[
-                    styles.detailIcon,
-                    {
-                      backgroundColor: 'rgba(255,90,110,0.15)',
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name="close-circle-outline"
-                    size={20}
-                    color={DANGER}
-                  />
-                </View>
-
-                <View
-                  style={{
-                    flex: 1,
-                    marginLeft: spacing.md,
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.detailTitle,
-                      {
-                        color: DANGER,
-                      },
-                    ]}
-                  >
-                    Cancel Subscription
-                  </Text>
-
-                  <Text style={styles.detailValue}>
-                    Premium remains active until expiry.
-                  </Text>
-                </View>
-
-                <Ionicons
-                  name="chevron-forward"
-                  size={20}
-                  color={colors.textSecondary}
-                />
-              </Pressable>
-            )}
+            <ActionRow
+              icon="headset-outline"
+              title="Need Help?"
+              value="Contact FlexiWalls support"
+              onPress={goToSupport}
+              isLast
+            />
           </Card>
 
-          {/* ===========================
-              PREMIUM BENEFITS
-          =========================== */}
-
-          <Card style={styles.block} padding={spacing.lg} strong>
-            <Text style={styles.sectionTitle}>Premium Benefits</Text>
-
-            {[
-              'Unlimited 4K & 8K Downloads',
-              'Exclusive Premium Wallpapers',
-              'No Ads Experience',
-              'Early Access to New Collections',
-              'Faster Download Speeds',
-            ].map(benefit => (
-              <View key={benefit} style={styles.benefitRow}>
-                <View style={styles.benefitIcon}>
-                  <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-                </View>
-
-                <Text style={styles.benefitText}>{benefit}</Text>
-              </View>
-            ))}
-          </Card>
-
-          {/* ===========================
-              SECURITY
-          =========================== */}
-
-          <Card style={styles.block} padding={spacing.lg} strong>
+          <Card style={[styles.block, styles.securityCard]} padding={spacing.lg} strong>
             <View style={styles.securityRow}>
               <View style={styles.securityIcon}>
-                <Ionicons name="shield-checkmark" size={30} color="#34D399" />
+                <Ionicons name="lock-closed" size={24} color={SUCCESS} />
               </View>
 
-              <View style={{ flex: 1 }}>
-                <Text style={styles.securityTitle}>Secure Payments</Text>
-
+              <View style={styles.securityTextWrap}>
+                <Text style={styles.securityTitle}>Secure Razorpay Payment</Text>
                 <Text style={styles.securityText}>
-                  Your subscription is processed securely through Razorpay using
-                  encrypted payment gateways.
+                  Your payment is handled by Razorpay. FlexiWalls only stores
+                  the verified order and payment status from our backend.
                 </Text>
               </View>
             </View>
           </Card>
-
-          {/* ===========================
-              SUPPORT
-          =========================== */}
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.supportButton,
-              pressed && {
-                opacity: 0.8,
-              },
-            ]}
-            onPress={() => toast.info('Support screen coming soon.')}
-          >
-            <LinearGradient
-              colors={gradients.blueViolet}
-              style={styles.supportGradient}
-            >
-              <Ionicons name="headset" size={22} color="#FFF" />
-
-              <Text style={styles.supportText}>Contact Support</Text>
-            </LinearGradient>
-          </Pressable>
         </ScrollView>
       </SafeAreaView>
     </View>
   );
 };
+
+type InfoRowProps = {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  value: string;
+  rightText?: string;
+  rightTone?: 'success' | 'warning' | 'muted';
+  isLast?: boolean;
+};
+
+const InfoRow = ({
+  icon,
+  title,
+  value,
+  rightText,
+  rightTone = 'muted',
+  isLast,
+}: InfoRowProps) => (
+  <View style={[styles.detailRow, isLast && styles.noBorder]}>
+    <View style={styles.detailIcon}>
+      <Ionicons name={icon} size={20} color={colors.accent} />
+    </View>
+
+    <View style={styles.detailTextWrap}>
+      <Text style={styles.detailTitle}>{title}</Text>
+      <Text style={styles.detailValue} numberOfLines={1}>
+        {value || '--'}
+      </Text>
+    </View>
+
+    {rightText ? (
+      <Text
+        style={[
+          styles.detailRight,
+          rightTone === 'success' && styles.successText,
+          rightTone === 'warning' && styles.warningText,
+        ]}
+      >
+        {rightText}
+      </Text>
+    ) : null}
+  </View>
+);
+
+type ActionRowProps = {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  value: string;
+  onPress: () => void;
+  isLast?: boolean;
+};
+
+const ActionRow = ({ icon, title, value, onPress, isLast }: ActionRowProps) => (
+  <Pressable
+    style={({ pressed }) => [
+      styles.manageRow,
+      isLast && styles.noBorder,
+      pressed && { opacity: 0.72 },
+    ]}
+    onPress={onPress}
+  >
+    <View style={styles.detailIcon}>
+      <Ionicons name={icon} size={20} color={colors.accent} />
+    </View>
+
+    <View style={styles.detailTextWrap}>
+      <Text style={styles.detailTitle}>{title}</Text>
+      <Text style={styles.detailValue}>{value}</Text>
+    </View>
+
+    <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+  </Pressable>
+);
 
 export default ManagePremiumScreen;
 
@@ -674,6 +626,25 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.base,
+  },
+
+  safeArea: {
+    flex: 1,
+  },
+
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  loadingText: {
+    color: colors.textSecondary,
+    marginTop: 16,
+    fontSize: 14,
+  },
+
+  scrollContent: {
+    paddingBottom: spacing.xxxl,
   },
 
   header: {
@@ -703,6 +674,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  refreshButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+
   block: {
     marginHorizontal: spacing.lg,
     marginBottom: spacing.lg,
@@ -712,7 +694,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 18,
     fontWeight: '800',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
 
   planTop: {
@@ -726,6 +708,11 @@ const styles = StyleSheet.create({
     borderRadius: 36,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+
+  planInfo: {
+    flex: 1,
+    marginLeft: spacing.lg,
   },
 
   planLabel: {
@@ -744,19 +731,26 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '900',
     flex: 1,
+    marginRight: spacing.sm,
   },
 
   activeBadge: {
-    backgroundColor: 'rgba(52,211,153,0.15)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
   },
 
+  badgePremium: {
+    backgroundColor: 'rgba(52,211,153,0.15)',
+  },
+
+  badgeFree: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+
   activeText: {
-    color: '#34D399',
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
     letterSpacing: 1,
   },
 
@@ -768,7 +762,7 @@ const styles = StyleSheet.create({
 
   enjoy: {
     color: colors.textSecondary,
-    marginRight: 6,
+    marginLeft: 6,
     fontSize: 13,
   },
 
@@ -814,6 +808,18 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.06)',
   },
 
+  manageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+
+  noBorder: {
+    borderBottomWidth: 0,
+  },
+
   detailIcon: {
     width: 42,
     height: 42,
@@ -821,6 +827,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.05)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+
+  detailTextWrap: {
+    flex: 1,
+    marginLeft: spacing.md,
+    marginRight: spacing.sm,
   },
 
   detailTitle: {
@@ -836,74 +848,21 @@ const styles = StyleSheet.create({
   },
 
   detailRight: {
-    color: colors.accent,
-    fontWeight: '700',
-    fontSize: 13,
+    color: MUTED,
+    fontWeight: '800',
+    fontSize: 12,
   },
 
-  bestValue: {
-    backgroundColor: 'rgba(168,85,247,0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
+  successText: {
+    color: SUCCESS,
   },
 
-  bestValueText: {
-    color: '#A855F7',
-    fontSize: 11,
-    fontWeight: '700',
+  warningText: {
+    color: WARNING,
   },
 
-  track: {
-    width: 52,
-    height: 30,
-    borderRadius: 999,
-    backgroundColor: colors.accent,
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-  },
-
-  trackOff: {
-    backgroundColor: '#3A3A42',
-    alignItems: 'flex-start',
-  },
-
-  knob: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#FFF',
-  },
-
-  manageRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
-  },
-
-  benefitRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-
-  benefitIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#22C55E',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.md,
-  },
-
-  benefitText: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 15,
-    lineHeight: 22,
+  securityCard: {
+    marginBottom: spacing.xxxl,
   },
 
   securityRow: {
@@ -912,13 +871,17 @@ const styles = StyleSheet.create({
   },
 
   securityIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(34,197,94,0.12)',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(52,211,153,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.md,
+  },
+
+  securityTextWrap: {
+    flex: 1,
   },
 
   securityTitle: {
@@ -932,65 +895,5 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 14,
     lineHeight: 22,
-  },
-
-  supportButton: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    marginBottom: spacing.xxxl,
-    borderRadius: radius.xl,
-    overflow: 'hidden',
-  },
-
-  supportGradient: {
-    height: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-  },
-
-  supportText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
-
-  disabledButton: {
-    opacity: 0.45,
-  },
-
-  dangerText: {
-    color: '#FF5A6E',
-  },
-
-  successText: {
-    color: '#34D399',
-  },
-
-  warningText: {
-    color: '#FBBF24',
-  },
-
-  valueText: {
-    color: colors.textPrimary,
-    fontWeight: '700',
-  },
-
-  caption: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-
-  divider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    marginVertical: spacing.lg,
-  },
-
-  footerSpace: {
-    height: spacing.xxxl,
   },
 });

@@ -2,7 +2,6 @@ import React, {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import {
@@ -11,10 +10,10 @@ import {
   Text,
   FlatList,
   Pressable,
+  RefreshControl,
   Image,
   ImageBackground,
   ActivityIndicator,
-  Animated,
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -25,6 +24,7 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 
 import MeshBackground from "../../components/MeshBackground";
 import Card from "../../components/Card";
+import PremiumActionButton from "../../components/PremiumActionButton";
 
 import API from "../../services/api";
 import { colors, gradients } from "../../styles/colors";
@@ -38,7 +38,6 @@ import { Wallpaper } from "../../services/types";
 import { appEvents } from "../../utils/appEvents";
 
 const flexiWallsLogo = require("../../assets/images/flexiwalls-logo.png");
-const proButtonIcon = require("../../assets/images/pro-button.png");
 
 const GAP = spacing.lg;
 const CARD_W = (SCREEN.width - spacing.xl * 2 - GAP) / 2;
@@ -415,67 +414,6 @@ const patchFavoriteWallpaper = (
   );
 };
 
-const ShinyProIcon = () => {
-  const shineTranslate = useRef(new Animated.Value(-46)).current;
-
-  useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.delay(1400),
-        Animated.timing(shineTranslate, {
-          toValue: 46,
-          duration: 950,
-          useNativeDriver: true,
-        }),
-        Animated.timing(shineTranslate, {
-          toValue: -46,
-          duration: 0,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-
-    animation.start();
-
-    return () => {
-      animation.stop();
-    };
-  }, [shineTranslate]);
-
-  return (
-    <View style={styles.favoritesProIconWrap}>
-      <Image
-        source={proButtonIcon}
-        style={styles.favoritesProIcon}
-        resizeMode="contain"
-      />
-
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.favoritesProShine,
-          {
-            transform: [{ translateX: shineTranslate }, { rotate: "18deg" }],
-          },
-        ]}
-      >
-        <LinearGradient
-          colors={[
-            "rgba(255,255,255,0)",
-            "rgba(255,255,255,0.22)",
-            "rgba(255,255,255,0.9)",
-            "rgba(255,255,255,0.22)",
-            "rgba(255,255,255,0)",
-          ]}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={styles.favoritesProShineGradient}
-        />
-      </Animated.View>
-    </View>
-  );
-};
-
 const FavoritesTopHeader = ({ navigation }: { navigation: any }) => {
   return (
     <View style={styles.favoritesHeader}>
@@ -487,20 +425,10 @@ const FavoritesTopHeader = ({ navigation }: { navigation: any }) => {
         />
 
         <View style={styles.favoritesRightActions}>
-          <Pressable
-            onPress={() =>
-              navigation.navigate("Premium", {
-                returnTo: "Favorites",
-              })
-            }
-            hitSlop={8}
-            style={({ pressed }) => [
-              styles.favoritesPremiumButton,
-              { opacity: pressed ? 0.7 : 1 },
-            ]}
-          >
-            <ShinyProIcon />
-          </Pressable>
+          <PremiumActionButton
+            returnTo="Favorites"
+            style={styles.favoritesPremiumButton}
+          />
 
           <Pressable
             onPress={() => navigation.navigate("Search")}
@@ -688,6 +616,7 @@ const FavoritesScreen = () => {
   const [items, setItems] = useState<FavoriteItem[]>([]);
   const [filter, setFilter] = useState<Filter>("All");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -696,9 +625,11 @@ const FavoritesScreen = () => {
     }, []),
   );
 
-  const loadFavorites = async () => {
+  const loadFavorites = async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (!isRefresh) {
+        setLoading(true);
+      }
 
       const response = await getFavorites();
 
@@ -708,7 +639,14 @@ const FavoritesScreen = () => {
       setItems([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+
+    await loadFavorites(true);
   };
 
   useEffect(() => {
@@ -967,6 +905,13 @@ const FavoritesScreen = () => {
             styles.listContent,
             !data.length && styles.emptyListContent,
           ]}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.textPrimary}
+            />
+          }
           ListHeaderComponent={
             <View>
               <FavoritesTopHeader navigation={navigation} />
@@ -1027,6 +972,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.base,
   },
+
   loadingRoot: {
     justifyContent: "center",
     alignItems: "center",
@@ -1037,6 +983,7 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: 0,
   },
+
   favoritesActionRow: {
     height: 72,
     flexDirection: "row",
@@ -1045,18 +992,21 @@ const styles = StyleSheet.create({
     overflow: "visible",
     marginBottom: -8,
   },
+
   favoritesLogoLeft: {
     width: 175,
     height: 120,
     marginLeft: -18,
     marginTop: 8,
   },
+
   favoritesRightActions: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     zIndex: 5,
   },
+
   favoritesPremiumButton: {
     width: 38,
     height: 38,
@@ -1066,28 +1016,7 @@ const styles = StyleSheet.create({
     overflow: "visible",
     backgroundColor: "transparent",
   },
-  favoritesProIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  favoritesProIcon: {
-    width: 36,
-    height: 36,
-  },
-  favoritesProShine: {
-    position: "absolute",
-    top: -12,
-    bottom: -12,
-    width: 22,
-    opacity: 0.95,
-  },
-  favoritesProShineGradient: {
-    flex: 1,
-  },
+
   favoritesRightButton: {
     width: 46,
     height: 46,
@@ -1095,6 +1024,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     zIndex: 5,
   },
+
   favoritesRoundButton: {
     width: 46,
     height: 46,
@@ -1112,12 +1042,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     marginBottom: spacing.md,
   },
+
   title: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 28,
     letterSpacing: -0.5,
   },
+
   subtitle: {
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
@@ -1129,9 +1061,11 @@ const styles = StyleSheet.create({
     paddingBottom: 130,
     gap: GAP,
   },
+
   emptyListContent: {
     flexGrow: 1,
   },
+
   columnWrapper: {
     paddingHorizontal: spacing.xl,
     gap: GAP,
@@ -1149,23 +1083,27 @@ const styles = StyleSheet.create({
     borderColor: colors.glassBorder,
     backgroundColor: colors.glassFillSoft,
   },
+
   filterItem: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
+
   filterActive: {
     width: "100%",
     paddingVertical: 10,
     borderRadius: radius.pill,
     alignItems: "center",
   },
+
   filterText: {
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
     fontSize: 15,
     paddingVertical: 10,
   },
+
   filterTextActive: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
@@ -1181,9 +1119,11 @@ const styles = StyleSheet.create({
     borderColor: colors.glassBorder,
     backgroundColor: colors.glassFillSoft,
   },
+
   cardImage: {
     flex: 1,
   },
+
   cardPlaceholder: {
     flex: 1,
     borderRadius: radius.lg,
@@ -1191,6 +1131,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: colors.glassFillSoft,
   },
+
   qualityChip: {
     position: "absolute",
     top: 10,
@@ -1200,16 +1141,19 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     overflow: "hidden",
   },
+
   qualityText: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 11,
   },
+
   heartWrap: {
     position: "absolute",
     top: 10,
     right: 10,
   },
+
   heartChip: {
     width: 34,
     height: 34,
@@ -1220,17 +1164,20 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorderSoft,
   },
+
   cardMeta: {
     position: "absolute",
     left: 12,
     right: 12,
     bottom: 12,
   },
+
   cardTitle: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 16,
   },
+
   cardMetaRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1238,17 +1185,20 @@ const styles = StyleSheet.create({
     marginTop: 3,
     gap: 8,
   },
+
   cardCategory: {
     flex: 1,
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
     fontSize: 12,
   },
+
   likeRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
   },
+
   likeText: {
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
@@ -1259,6 +1209,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     marginTop: spacing.xxl,
   },
+
   emptyIcon: {
     width: 64,
     height: 64,
@@ -1270,11 +1221,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.glassFillSoft,
     marginBottom: spacing.lg,
   },
+
   emptyTitle: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 20,
   },
+
   emptySubtitle: {
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,

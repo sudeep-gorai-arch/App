@@ -7,6 +7,7 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -20,6 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
 import MeshBackground from '../../components/MeshBackground';
+import PremiumActionButton from '../../components/PremiumActionButton';
 
 import API from '../../services/api';
 import { getCategories } from '../../services/categoryService';
@@ -35,12 +37,12 @@ import { typography, fontFamily } from '../../styles/typography';
 import { spacing, radius, SCREEN } from '../../utils/constants';
 
 const flexiWallsLogo = require('../../assets/images/flexiwalls-logo.png');
-const proButtonIcon = require('../../assets/images/pro-button.png');
 
 const TREND_CARD_W = 190;
 const TREND_CARD_H = 300;
 const TREND_SNAP = 110;
 const TREND_SIDE_PADDING = (SCREEN.width - TREND_SNAP) / 2;
+const TRENDING_HUB_LIMIT = 10;
 
 const GRID_GAP = spacing.md;
 const GRID_CARD_W = (SCREEN.width - spacing.xl * 2 - GRID_GAP) / 2;
@@ -172,11 +174,11 @@ const getWallpaperId = (item: Wallpaper | Record<string, any>, index = 0) => {
 
   return String(
     w.id ||
-    w._id ||
-    w.wallpaperId ||
-    w.wallpaper_id ||
-    w.uuid ||
-    `wallpaper-${index}`,
+      w._id ||
+      w.wallpaperId ||
+      w.wallpaper_id ||
+      w.uuid ||
+      `wallpaper-${index}`,
   );
 };
 
@@ -416,10 +418,10 @@ const fetchWeeklyTopWallpapers = async (
       category.slug === 'all'
         ? { limit: 10 }
         : {
-          limit: 10,
-          category: category.slug,
-          categorySlug: category.slug,
-        };
+            limit: 10,
+            category: category.slug,
+            categorySlug: category.slug,
+          };
 
     const response = await API.get('/wallpapers/top-week', {
       params,
@@ -451,67 +453,6 @@ const fetchWeeklyTopWallpapers = async (
   return [];
 };
 
-const ShinyProIcon = () => {
-  const shineTranslate = useRef(new Animated.Value(-46)).current;
-
-  useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.delay(1400),
-        Animated.timing(shineTranslate, {
-          toValue: 46,
-          duration: 950,
-          useNativeDriver: true,
-        }),
-        Animated.timing(shineTranslate, {
-          toValue: -46,
-          duration: 0,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-
-    animation.start();
-
-    return () => {
-      animation.stop();
-    };
-  }, [shineTranslate]);
-
-  return (
-    <View style={styles.trendingProIconWrap}>
-      <Image
-        source={proButtonIcon}
-        style={styles.trendingProIcon}
-        resizeMode="contain"
-      />
-
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.trendingProShine,
-          {
-            transform: [{ translateX: shineTranslate }, { rotate: '18deg' }],
-          },
-        ]}
-      >
-        <LinearGradient
-          colors={[
-            'rgba(255,255,255,0)',
-            'rgba(255,255,255,0.22)',
-            'rgba(255,255,255,0.9)',
-            'rgba(255,255,255,0.22)',
-            'rgba(255,255,255,0)',
-          ]}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={styles.trendingProShineGradient}
-        />
-      </Animated.View>
-    </View>
-  );
-};
-
 const TrendingTopHeader = ({ navigation }: { navigation: any }) => {
   return (
     <View style={styles.trendingHeader}>
@@ -523,20 +464,10 @@ const TrendingTopHeader = ({ navigation }: { navigation: any }) => {
         />
 
         <View style={styles.trendingRightActions}>
-          <Pressable
-            onPress={() =>
-              navigation.navigate('Premium', {
-                returnTo: 'Trending',
-              })
-            }
-            hitSlop={8}
-            style={({ pressed }) => [
-              styles.trendingPremiumButton,
-              { opacity: pressed ? 0.7 : 1 },
-            ]}
-          >
-            <ShinyProIcon />
-          </Pressable>
+          <PremiumActionButton
+            returnTo="Trending"
+            style={styles.trendingPremiumButton}
+          />
 
           <Pressable
             onPress={() => navigation.navigate('Search')}
@@ -943,6 +874,7 @@ const TrendingScreen = ({ navigation }: { navigation: any }) => {
     useState<CategoryOption>(ALL_CATEGORY);
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [topPicksLoading, setTopPicksLoading] = useState(false);
 
   const loadTrendingPage = async (isRefresh = false) => {
@@ -955,19 +887,22 @@ const TrendingScreen = ({ navigation }: { navigation: any }) => {
       let categoryList: CategoryOption[] = [];
 
       try {
-        const response = await getTrendingWallpapers();
-        trendList = uniqueWallpapers(extractWallpapers(response));
+        const response = await getTrendingWallpapers(TRENDING_HUB_LIMIT);
+
+        trendList = sortByDownloads(
+          uniqueWallpapers(extractWallpapers(response)),
+        ).slice(0, TRENDING_HUB_LIMIT);
 
         if (!trendList.length) {
           const fallbackResponse = await getWallpapers({
-            limit: 20,
+            limit: TRENDING_HUB_LIMIT,
             offset: 0,
             active: true,
           });
 
           trendList = sortByDownloads(
             uniqueWallpapers(extractWallpapers(fallbackResponse)),
-          );
+          ).slice(0, TRENDING_HUB_LIMIT);
         }
       } catch (error) {
         console.log('TRENDING PAGE API ERROR', error);
@@ -987,7 +922,7 @@ const TrendingScreen = ({ navigation }: { navigation: any }) => {
 
       const startIndex = Math.min(2, Math.max(0, trendList.length - 1));
 
-      setTrending(trendList);
+      setTrending(trendList.slice(0, TRENDING_HUB_LIMIT));
       setCategories(categoryList);
       setActiveTrend(startIndex);
       scrollX.setValue(startIndex * TREND_SNAP);
@@ -1006,6 +941,7 @@ const TrendingScreen = ({ navigation }: { navigation: any }) => {
       setTopPicks([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -1091,6 +1027,12 @@ const TrendingScreen = ({ navigation }: { navigation: any }) => {
     }, []),
   );
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+
+    await loadTrendingPage(true);
+  };
+
   const loadTopPicksByCategory = async (category: CategoryOption) => {
     try {
       setSelectedCategory(category);
@@ -1138,6 +1080,13 @@ const TrendingScreen = ({ navigation }: { navigation: any }) => {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.textPrimary}
+            />
+          }
         >
           <TrendingTopHeader navigation={navigation} />
 
@@ -1283,32 +1232,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'visible',
     backgroundColor: 'transparent',
-  },
-
-  trendingProIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-
-  trendingProIcon: {
-    width: 36,
-    height: 36,
-  },
-
-  trendingProShine: {
-    position: 'absolute',
-    top: -12,
-    bottom: -12,
-    width: 22,
-    opacity: 0.95,
-  },
-
-  trendingProShineGradient: {
-    flex: 1,
   },
 
   trendingRightButton: {

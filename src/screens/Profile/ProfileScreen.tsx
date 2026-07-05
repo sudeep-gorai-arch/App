@@ -29,6 +29,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import MeshBackground from "../../components/MeshBackground";
 import Card from "../../components/Card";
+import PremiumActionButton, {
+  usePremiumNavigation,
+} from "../../components/PremiumActionButton";
 
 import { colors, gradients } from "../../styles/colors";
 import { spacing } from "../../utils/constants";
@@ -59,9 +62,11 @@ type RecentDownloadItem = {
 };
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+
 const DOWNLOAD_THUMB_SIZE = Math.floor(
   (SCREEN_WIDTH - spacing.xl * 2 - 32 - 32) / 5,
 );
+
 const DOWNLOAD_THUMB_GAP = 8;
 const DOWNLOAD_PREVIEW_HEIGHT = DOWNLOAD_THUMB_SIZE * 1.5 + DOWNLOAD_THUMB_GAP;
 const LOCAL_DOWNLOADS_KEY = "@flexiwalls:guestDownloads";
@@ -86,7 +91,6 @@ const STAR_PARTICLES = [
 ];
 
 const flexiWallsLogo = require("../../assets/images/flexiwalls-logo.png");
-const proButtonIcon = require("../../assets/images/pro-button.png");
 const appIcon = require("../../assets/icons/profileicon.png");
 
 const getWallpaperImage = (item: Wallpaper | Record<string, any>) => {
@@ -270,72 +274,9 @@ const isPremiumActive = (user: any) => {
   );
 };
 
-const ShinyProIcon = () => {
-  const shineTranslate = useRef(new Animated.Value(-46)).current;
-
-  useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.delay(1400),
-        Animated.timing(shineTranslate, {
-          toValue: 46,
-          duration: 950,
-          useNativeDriver: true,
-        }),
-        Animated.timing(shineTranslate, {
-          toValue: -46,
-          duration: 0,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-
-    animation.start();
-
-    return () => {
-      animation.stop();
-    };
-  }, [shineTranslate]);
-
-  return (
-    <View style={styles.profileProIconWrap}>
-      <Image
-        source={proButtonIcon}
-        style={styles.profileProIcon}
-        resizeMode="contain"
-      />
-
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.profileProShine,
-          {
-            transform: [{ translateX: shineTranslate }, { rotate: "18deg" }],
-          },
-        ]}
-      >
-        <LinearGradient
-          colors={[
-            "rgba(255,255,255,0)",
-            "rgba(255,255,255,0.22)",
-            "rgba(255,255,255,0.9)",
-            "rgba(255,255,255,0.22)",
-            "rgba(255,255,255,0)",
-          ]}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={styles.profileProShineGradient}
-        />
-      </Animated.View>
-    </View>
-  );
-};
-
 const ProfileTopHeader = ({
-  onPremiumPress,
   onSettingsPress,
 }: {
-  onPremiumPress: () => void;
   onSettingsPress: () => void;
 }) => {
   return (
@@ -348,16 +289,10 @@ const ProfileTopHeader = ({
         />
 
         <View style={styles.profileRightActions}>
-          <Pressable
-            onPress={onPremiumPress}
-            hitSlop={8}
-            style={({ pressed }) => [
-              styles.profilePremiumButton,
-              { opacity: pressed ? 0.7 : 1 },
-            ]}
-          >
-            <ShinyProIcon />
-          </Pressable>
+          <PremiumActionButton
+            returnTo="Profile"
+            style={styles.profilePremiumButton}
+          />
 
           <Pressable
             onPress={onSettingsPress}
@@ -485,6 +420,7 @@ const RecentDownloadsPreview = ({
 
 export default function ProfileScreen({ navigation }: Props) {
   const { user, loading, authLoading, signInGoogle, logout } = useAuth();
+  const openPremium = usePremiumNavigation("Profile");
 
   const [downloads, setDownloads] = useState<RecentDownloadItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -590,9 +526,7 @@ export default function ProfileScreen({ navigation }: Props) {
         .map(normalizeRecentDownload)
         .filter(Boolean) as RecentDownloadItem[];
 
-      setDownloads(
-        sortRecentDownloads([...serverDownloads, ...localDownloads]),
-      );
+      setDownloads(sortRecentDownloads([...serverDownloads, ...localDownloads]));
     } catch (err) {
       console.log("PROFILE DOWNLOADS ERROR", err);
       setDownloads(sortRecentDownloads(localDownloads));
@@ -612,9 +546,7 @@ export default function ProfileScreen({ navigation }: Props) {
         return;
       }
 
-      setDownloads((current) =>
-        sortRecentDownloads([nextDownload, ...current]),
-      );
+      setDownloads((current) => sortRecentDownloads([nextDownload, ...current]));
     });
 
     const unsubscribeWallpapers = appEvents.on("wallpapersChanged", () => {
@@ -748,40 +680,7 @@ export default function ProfileScreen({ navigation }: Props) {
     });
   };
 
-  const navigateToPremiumArea = useCallback(
-    (screenName: "Premium" | "ManagePremium") => {
-      const parentNavigation = navigation.getParent?.();
-      const params = {
-        returnTo: "Profile",
-      };
-
-      if (parentNavigation) {
-        parentNavigation.navigate(screenName, params);
-        return;
-      }
-
-      navigation.navigate(screenName, params);
-    },
-    [navigation],
-  );
-
-  const openPremium = () => {
-    if (isPremiumUser) {
-      navigateToPremiumArea("ManagePremium");
-      return;
-    }
-
-    navigateToPremiumArea("Premium");
-  };
-
-  const openManagePremium = () => {
-    if (isPremiumUser) {
-      navigateToPremiumArea("ManagePremium");
-      return;
-    }
-
-    navigateToPremiumArea("Premium");
-  };
+  const openManagePremium = openPremium;
 
   const handleAuthAction = () => {
     if (authLoading) {
@@ -830,10 +729,7 @@ export default function ProfileScreen({ navigation }: Props) {
           }
           contentContainerStyle={styles.scrollContent}
         >
-          <ProfileTopHeader
-            onPremiumPress={openPremium}
-            onSettingsPress={openSettings}
-          />
+          <ProfileTopHeader onSettingsPress={openSettings} />
 
           <View style={styles.heroCard}>
             <LinearGradient
@@ -961,6 +857,7 @@ export default function ProfileScreen({ navigation }: Props) {
                 ]}
               >
                 <Text style={styles.viewAll}>View All</Text>
+
                 <Ionicons
                   name="chevron-forward"
                   size={15}
@@ -1177,32 +1074,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     overflow: "visible",
     backgroundColor: "transparent",
-  },
-
-  profileProIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-
-  profileProIcon: {
-    width: 36,
-    height: 36,
-  },
-
-  profileProShine: {
-    position: "absolute",
-    top: -12,
-    bottom: -12,
-    width: 22,
-    opacity: 0.95,
-  },
-
-  profileProShineGradient: {
-    flex: 1,
   },
 
   profileRightButton: {

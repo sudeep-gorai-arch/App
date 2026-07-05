@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -60,8 +59,32 @@ const getPlanDescription = (plan: string) => {
   }
 };
 
+const getErrorMessage = (error: any) => {
+  return (
+    error?.response?.data?.message ??
+    error?.description ??
+    error?.message ??
+    'Payment failed. Please try again.'
+  );
+};
+
+const isPaymentCancelled = (error: any) => {
+  const message = String(error?.description ?? error?.message ?? '').toLowerCase();
+
+  return (
+    error?.code === 0 ||
+    error?.code === 'payment_cancelled' ||
+    message.includes('cancel') ||
+    message.includes('closed')
+  );
+};
+
 const PaymentScreen = ({ navigation, route }: Props) => {
-  const { refreshProfile } = useAuth();
+  const auth = useAuth() as any;
+
+  const refreshProfile = auth?.refreshProfile;
+
+  const user = auth?.user;
 
   const toast = useToast();
 
@@ -87,72 +110,50 @@ const PaymentScreen = ({ navigation, route }: Props) => {
 
       const options = {
         key: order.keyId,
-
         amount: order.amount,
-
         currency: order.currency,
-
         order_id: order.orderId,
-
         name: 'FlexiWalls',
-
         description: order.title,
-
+        image: undefined,
         theme: {
           color: '#A855F7',
         },
-
         notes: {
           plan: order.plan,
           receipt: order.receipt,
         },
-
-        prefill: {},
+        prefill: {
+          name: user?.username ?? '',
+          email: user?.email ?? '',
+        },
       };
 
-      console.log('========== RAZORPAY OPTIONS ==========');
-      console.log(JSON.stringify(options, null, 2));
+      const payment = await (RazorpayCheckout as any).open(options);
 
-      const payment = await RazorpayCheckout.open({
-        key: order.keyId,
-
-        amount: order.amount,
-
-        currency: order.currency,
-
-        order_id: order.orderId,
-
-        name: 'FlexiWalls',
-
-        description: order.title,
-
-        theme: {
-          color: '#A855F7',
-        },
-
-        notes: {
-          plan: order.plan,
-          receipt: order.receipt,
-        },
-
-        prefill: {},
-      });
+      if (
+        !payment?.razorpay_order_id ||
+        !payment?.razorpay_payment_id ||
+        !payment?.razorpay_signature
+      ) {
+        throw new Error('Payment response is incomplete.');
+      }
 
       await verifyPayment({
         plan: order.plan,
-
         razorpay_order_id: payment.razorpay_order_id,
-
         razorpay_payment_id: payment.razorpay_payment_id,
-
         razorpay_signature: payment.razorpay_signature,
       });
 
-      try {
-        await refreshProfile();
-      } catch {
-        // Premium is already activated on backend.
+      if (typeof refreshProfile === 'function') {
+        try {
+          await refreshProfile();
+        } catch {
+          // Backend has already activated premium. Profile refresh can be retried later.
+        }
       }
+
       toast.success('Premium activated successfully.');
 
       navigation.reset({
@@ -166,19 +167,12 @@ const PaymentScreen = ({ navigation, route }: Props) => {
     } catch (error: any) {
       console.log('RAZORPAY ERROR', error);
 
-      /**
-       * User closed Razorpay.
-       */
-      if (error?.code === 0 || error?.description === 'Payment Cancelled') {
+      if (isPaymentCancelled(error)) {
         toast.info('Payment cancelled.');
-
         return;
       }
 
-      /**
-       * Payment failed.
-       */
-      toast.error(error?.description ?? 'Payment failed.');
+      toast.error(getErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -295,9 +289,8 @@ const PaymentScreen = ({ navigation, route }: Props) => {
                 <Text style={styles.infoTitle}>Secure Checkout</Text>
 
                 <Text style={styles.infoText}>
-                  Your payment will be processed securely using Razorpay. Card
-                  details, UPI, Wallets, Net Banking and more are handled
-                  entirely by Razorpay.
+                  Your payment opens inside Razorpay Checkout. UPI, cards,
+                  wallets and net banking are handled securely by Razorpay.
                 </Text>
               </View>
             </View>
@@ -522,10 +515,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
   },
 
-  /* ===================================
-       PAYMENT INFO
-    =================================== */
-
   infoRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -549,10 +538,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 
-  /* ===================================
-       BENEFITS
-    =================================== */
-
   benefitRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -566,10 +551,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
   },
-
-  /* ===================================
-       PAY BUTTON
-    =================================== */
 
   payWrap: {
     marginHorizontal: spacing.xl,
@@ -599,10 +580,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
   },
-
-  /* ===================================
-       FOOTER
-    =================================== */
 
   secureRow: {
     flexDirection: 'row',
