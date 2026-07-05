@@ -25,7 +25,10 @@ import { RootStackParamList } from '../../navigation/RootStackParamList';
 
 import API from '../../services/api';
 import { downloadWallpaper } from '../../utils/downloadHelper';
-import { addDownload } from '../../services/downloadService';
+import {
+  addDownload,
+  ensureDownloadAllowed,
+} from '../../services/downloadService';
 import {
   toggleFavorite,
   getFavoriteStatus,
@@ -63,11 +66,11 @@ const saveGuestDownloadHistory = async (
   try {
     const id = String(
       wallpaperId ||
-        wallpaper?.id ||
-        wallpaper?._id ||
-        wallpaper?.wallpaperId ||
-        wallpaper?.wallpaper_id ||
-        downloadedUrl,
+      wallpaper?.id ||
+      wallpaper?._id ||
+      wallpaper?.wallpaperId ||
+      wallpaper?.wallpaper_id ||
+      downloadedUrl,
     );
 
     const record = {
@@ -140,10 +143,10 @@ const toAbsoluteMediaUrl = (value?: string | null) => {
 const getWallpaperId = (wallpaper: any) =>
   String(
     wallpaper?.id ||
-      wallpaper?._id ||
-      wallpaper?.wallpaperId ||
-      wallpaper?.wallpaper_id ||
-      '',
+    wallpaper?._id ||
+    wallpaper?.wallpaperId ||
+    wallpaper?.wallpaper_id ||
+    '',
   );
 
 const getWallpaperImage = (wallpaper: any): string => {
@@ -170,18 +173,45 @@ const getDownloadUrlFromResponse = (
   response: any,
   fallbackUrl: string,
 ): string => {
-  const data = response?.data?.data ?? response?.data;
+  const data = response?.data?.data ?? response?.data ?? response;
 
   return (
     toAbsoluteMediaUrl(data?.downloadUrl) ||
+    toAbsoluteMediaUrl(data?.download_url) ||
     toAbsoluteMediaUrl(data?.url) ||
     toAbsoluteMediaUrl(data?.imageUrl) ||
+    toAbsoluteMediaUrl(data?.image_url) ||
+    toAbsoluteMediaUrl(data?.thumbnailUrl) ||
+    toAbsoluteMediaUrl(data?.thumbnail_url) ||
     fallbackUrl
   );
 };
 
 const unwrapApiData = (response: any) =>
   response?.data?.data ?? response?.data ?? response;
+
+const getApiErrorStatus = (error: any) =>
+  error?.response?.status ?? error?.status;
+
+const getApiErrorMessage = (error: any) =>
+  error?.response?.data?.message ||
+  error?.response?.data?.error ||
+  error?.message ||
+  '';
+
+const clearSavedToken = async () => {
+  try {
+    await SecureStore.deleteItemAsync('token');
+  } catch {
+    // ignore
+  }
+
+  try {
+    await AsyncStorage.removeItem('token');
+  } catch {
+    // ignore
+  }
+};
 
 const toNumber = (value: unknown) => {
   if (typeof value === 'number') {
@@ -363,7 +393,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
     } catch (error: any) {
       console.log('Favorite status failed:', error?.response?.data || error);
 
-      if (error?.response?.status === 401) {
+      if (getApiErrorStatus(error) === 401) {
         setIsFavorite(false);
       }
     }
@@ -459,22 +489,25 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
   const onDownload = async () => {
     if (status === 'downloading') return;
 
+    try {
+      await ensureDownloadAllowed();
+    } catch (error: any) {
+      toast.warning(
+        error?.message ||
+        'Wi-Fi only downloads are enabled. Please connect to Wi-Fi or turn this setting off from Settings.',
+      );
+
+      return;
+    }
+
     setStatus('downloading');
 
     try {
       const token = await SecureStore.getItemAsync('token');
-
       const loggedIn = !!token;
-
       const shouldSaveLocalDownload = !loggedIn;
 
       let downloadUrl = finalImage;
-
-      /*
-    ----------------------------------------
-    RECORD DOWNLOAD
-    ----------------------------------------
-    */
 
       if (!isPlaceholder(wallpaperId)) {
         try {
@@ -487,10 +520,90 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
             error?.response?.data || error,
           );
 
-          if (error?.response?.status === 401) {
-            await SecureStore.deleteItemAsync('token');
+          const statusCode = getApiErrorStatus(error);
+          const message = getApiErrorMessage(error);
 
-            toast.info('Please sign in to continue downloading wallpapers.');
+          if (statusCode === 401 && loggedIn) {
+            await clearSavedToken();
+
+            try {
+              const guestResponse = await addDownload(wallpaperId, false);
+              downloadUrl = getDownloadUrlFromResponse(
+                guestResponse,
+                finalImage,
+              );
+            } catch (guestError: any) {
+              console.log(
+                'Guest download record failed:',
+                guestError?.response?.data || guestError,
+              );
+
+              const guestStatusCode = getApiErrorStatus(guestError);
+              const guestMessage = getApiErrorMessage(guestError);
+
+              if (guestStatusCode === 403) {
+                if (guestMessage.includes('Daily free download limit')) {
+                  toast.warning(
+                    'Daily limit reached! Upgrade to Premium for unlimited downloads.',
+                  );
+
+                  setStatus('idle');
+
+                  setTimeout(() => {
+                    navigation.navigate('ManagePremium');
+                  }, 1200);
+
+                  return;
+                }
+
+                if (
+                  guestMessage.includes('Premium subscription required') ||
+                  guestMessage.includes('premium wallpapers') ||
+                  guestMessage.includes('Premium wallpaper')
+                ) {
+                  toast.warning(
+                    'This is a Premium wallpaper. Upgrade to unlock it.',
+                  );
+
+                  setStatus('idle');
+
+                  setTimeout(() => {
+                    navigation.navigate('ManagePremium');
+                  }, 1200);
+
+                  return;
+                }
+
+                toast.warning(guestMessage || 'Download not allowed.');
+
+                setStatus('idle');
+
+                return;
+              }
+
+              if (
+                guestError?.message === 'Network Error' ||
+                !guestError?.response
+              ) {
+                toast.error('No internet connection. Please try again.');
+
+                setStatus('idle');
+
+                return;
+              }
+
+              toast.error(
+                guestMessage || 'Something went wrong while downloading.',
+              );
+
+              setStatus('idle');
+
+              return;
+            }
+          } else if (statusCode === 401) {
+            await clearSavedToken();
+
+            toast.info('Please sign in again to continue downloading.');
 
             setStatus('idle');
 
@@ -499,11 +612,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
             });
 
             return;
-          }
-
-          if (error?.response?.status === 403) {
-            const message = error?.response?.data?.message ?? '';
-
+          } else if (statusCode === 403) {
             if (message.includes('Daily free download limit')) {
               toast.warning(
                 'Daily limit reached! Upgrade to Premium for unlimited downloads.',
@@ -520,7 +629,8 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
 
             if (
               message.includes('Premium subscription required') ||
-              message.includes('premium wallpapers')
+              message.includes('premium wallpapers') ||
+              message.includes('Premium wallpaper')
             ) {
               toast.warning(
                 'This is a Premium wallpaper. Upgrade to unlock it.',
@@ -540,32 +650,21 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
             setStatus('idle');
 
             return;
-          }
-
-          if (error?.message === 'Network Error' || !error?.response) {
+          } else if (error?.message === 'Network Error' || !error?.response) {
             toast.error('No internet connection. Please try again.');
 
             setStatus('idle');
 
             return;
+          } else {
+            toast.error(message || 'Something went wrong while downloading.');
+
+            setStatus('idle');
+
+            return;
           }
-
-          toast.error(
-            error?.response?.data?.message ||
-              'Something went wrong while downloading.',
-          );
-
-          setStatus('idle');
-
-          return;
         }
       }
-
-      /*
-    ----------------------------------------
-    DOWNLOAD IMAGE
-    ----------------------------------------
-    */
 
       const ok = await downloadWallpaper(
         downloadUrl,
@@ -576,12 +675,6 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
         setStatus('idle');
         return;
       }
-
-      /*
-    ----------------------------------------
-    UPDATE UI
-    ----------------------------------------
-    */
 
       const nextDownloadCount = getDownloads(wallpaper) + 1;
 
@@ -601,12 +694,6 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
 
       setWallpaper(updatedWallpaper);
 
-      /*
-    ----------------------------------------
-    SAVE GUEST HISTORY
-    ----------------------------------------
-    */
-
       if (shouldSaveLocalDownload) {
         await saveGuestDownloadHistory(
           updatedWallpaper,
@@ -614,12 +701,6 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
           downloadUrl,
         );
       }
-
-      /*
-    ----------------------------------------
-    NOTIFY APP
-    ----------------------------------------
-    */
 
       if (wallpaperId && !isPlaceholder(wallpaperId)) {
         appEvents.emit('downloadsChanged', {
@@ -735,10 +816,12 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
         wallpaper: rollbackWallpaper,
       });
 
-      if (error?.status === 401) {
+      if (getApiErrorStatus(error) === 401) {
+        await clearSavedToken();
+
         Alert.alert(
-          'Login required',
-          'Please login to add wallpapers to favorites.',
+          'Session expired',
+          'Please login again to add wallpapers to favorites.',
           [
             {
               text: 'OK',
@@ -755,7 +838,11 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
         return;
       }
 
-      Alert.alert('Failed', 'Could not update this wallpaper favorite.');
+      Alert.alert(
+        'Failed',
+        getApiErrorMessage(error) ||
+        'Could not update this wallpaper favorite.',
+      );
     } finally {
       setFavoriteLoading(false);
     }
@@ -1005,14 +1092,6 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
                       color={isFavorite ? colors.heart : colors.textPrimary}
                     />
                   )}
-
-                  {/* {favoriteCount > 0 ? (
-                    <View style={styles.favoriteCountBadge}>
-                      <Text style={styles.favoriteCountText}>
-                        {formatCount(favoriteCount)}
-                      </Text>
-                    </View>
-                  ) : null} */}
                 </BlurView>
               </Pressable>
             </View>
@@ -1033,7 +1112,11 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
             resizeMode="cover"
           >
             <LinearGradient
-              colors={['rgba(0,0,0,0.34)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.38)']}
+              colors={[
+                'rgba(0,0,0,0.34)',
+                'rgba(0,0,0,0)',
+                'rgba(0,0,0,0.38)',
+              ]}
               style={StyleSheet.absoluteFill}
             />
 
@@ -1177,15 +1260,9 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
                           />
                         )}
 
-                        {/* <Text style={styles.dropdownText}>
-                          {isFavorite
-                            ? `Favorite${
-                                favoriteCount > 0
-                                  ? ` (${formatCount(favoriteCount)})`
-                                  : ''
-                              }`
-                            : 'Add to Favorite'}
-                        </Text> */}
+                        <Text style={styles.dropdownText}>
+                          {isFavorite ? 'Remove Favorite' : 'Add Favorite'}
+                        </Text>
                       </Pressable>
                     </BlurView>
                   ) : null}
@@ -1493,6 +1570,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.base,
   },
+
   safeArea: {
     flex: 1,
     backgroundColor: colors.base,
@@ -1502,6 +1580,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.baseElevated,
   },
+
   wallpaperImage: {
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
@@ -1514,11 +1593,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+
   topIconButtonWrap: {
     width: 46,
     height: 46,
     borderRadius: 23,
   },
+
   topIconButton: {
     width: 46,
     height: 46,
@@ -1535,6 +1616,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.base,
     paddingTop: spacing.md,
   },
+
   detailsPanel: {
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
@@ -1562,6 +1644,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     marginTop: spacing.lg,
   },
+
   infoPill: {
     flex: 1,
     minHeight: 38,
@@ -1576,6 +1659,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.18)',
     backgroundColor: 'rgba(255,255,255,0.04)',
   },
+
   infoPillText: {
     flexShrink: 1,
     color: colors.textPrimary,
@@ -1609,6 +1693,7 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 9,
   },
+
   downloadButton: {
     width: '100%',
     height: 52,
@@ -1618,6 +1703,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 5,
   },
+
   downloadText: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
@@ -1639,6 +1725,7 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 9,
   },
+
   applyButton: {
     width: '100%',
     height: 52,
@@ -1649,6 +1736,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 5,
   },
+
   applyButtonText: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
@@ -1656,6 +1744,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 0,
   },
+
   applyIconFrame: {
     width: 22,
     height: 24,
@@ -1674,6 +1763,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: 'hidden',
   },
+
   favoriteIconButton: {
     width: 52,
     height: 52,
@@ -1685,6 +1775,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.34)',
     backgroundColor: 'rgba(5, 8, 18, 0.18)',
   },
+
   favoriteCountBadge: {
     position: 'absolute',
     right: 5,
@@ -1699,20 +1790,16 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.38)',
   },
-  // favoriteCountText: {
-  //   color: colors.textPrimary,
-  //   fontFamily: fontFamily.semiBold,
-  //   fontSize: 9,
-  //   lineHeight: 11,
-  // },
 
   fullscreenRoot: {
     flex: 1,
     backgroundColor: colors.base,
   },
+
   fullscreenSafeArea: {
     flex: 1,
   },
+
   fullscreenTopBar: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,
@@ -1720,10 +1807,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
   },
+
   fullscreenMenuWrap: {
     position: 'relative',
     alignItems: 'flex-end',
   },
+
   fullscreenDropdown: {
     position: 'absolute',
     top: 56,
@@ -1735,6 +1824,7 @@ const styles = StyleSheet.create({
     borderColor: colors.glassBorder,
     backgroundColor: 'rgba(5, 8, 18, 0.78)',
   },
+
   dropdownItem: {
     minHeight: 52,
     paddingHorizontal: spacing.md,
@@ -1742,12 +1832,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
+
   dropdownText: {
     flex: 1,
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 14,
   },
+
   dropdownDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: 'rgba(255,255,255,0.16)',
@@ -1759,6 +1851,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'flex-end',
   },
+
   applySheet: {
     marginHorizontal: spacing.lg,
     marginBottom: spacing.xl,
@@ -1771,12 +1864,14 @@ const styles = StyleSheet.create({
     borderColor: colors.glassBorder,
     backgroundColor: 'rgba(6, 8, 20, 0.86)',
   },
+
   applyTitle: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 24,
     lineHeight: 30,
   },
+
   applySubtitle: {
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
@@ -1785,6 +1880,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: spacing.lg,
   },
+
   applyOption: {
     minHeight: 58,
     flexDirection: 'row',
@@ -1793,9 +1889,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255,255,255,0.14)',
   },
+
   applyOptionLast: {
     borderBottomWidth: 0,
   },
+
   applyOptionText: {
     flex: 1,
     color: colors.textPrimary,
@@ -1810,9 +1908,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
   },
+
   savedBackdrop: {
     ...StyleSheet.absoluteFill,
   },
+
   savedCardBorder: {
     width: '100%',
     maxWidth: 292,
@@ -1829,6 +1929,7 @@ const styles = StyleSheet.create({
     shadowRadius: 26,
     elevation: 16,
   },
+
   savedCard: {
     borderRadius: 27,
     overflow: 'hidden',
@@ -1838,6 +1939,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
     backgroundColor: 'rgba(15, 15, 16, 0.88)',
   },
+
   savedIconRing: {
     width: 70,
     height: 70,
@@ -1849,6 +1951,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.22)',
   },
+
   savedIconCircle: {
     width: 58,
     height: 58,
@@ -1856,6 +1959,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   savedTitle: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
@@ -1864,6 +1968,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.6,
     textAlign: 'center',
   },
+
   savedSubtitle: {
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
@@ -1872,6 +1977,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: 'center',
   },
+
   appliedTitle: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
@@ -1881,12 +1987,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: spacing.sm,
   },
+
   doneButtonWrap: {
     width: '100%',
     borderRadius: radius.pill,
     overflow: 'hidden',
     marginTop: spacing.lg,
   },
+
   doneButton: {
     height: 46,
     borderRadius: radius.pill,
@@ -1895,6 +2003,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.32)',
   },
+
   doneButtonText: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,

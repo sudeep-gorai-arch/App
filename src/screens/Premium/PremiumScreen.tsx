@@ -28,7 +28,13 @@ import {
   createOrder,
 } from '../../services/subscriptionService';
 
-type PremiumReturnRoute = 'Home' | 'Category' | 'Trending' | 'Favorites';
+type PremiumReturnRoute =
+  | 'Home'
+  | 'Category'
+  | 'Trending'
+  | 'Favorites'
+  | 'Profile'
+  | 'Settings';
 
 type PurchasePlan = 'MONTHLY' | 'YEARLY' | 'LIFETIME';
 
@@ -52,13 +58,11 @@ type PaymentParams = {
   order: RazorpayOrder;
 };
 
-type ParentNavigation = {
-  navigate: (screen: 'Payment', params: PaymentParams) => void;
-};
-
 type Navigation = {
   navigate?: (name: string, params?: Record<string, unknown>) => void;
-  getParent?: () => ParentNavigation | undefined;
+  getParent?: () => Navigation | undefined;
+  canGoBack?: () => boolean;
+  goBack?: () => void;
 };
 
 type PremiumScreenProps = {
@@ -90,6 +94,14 @@ type BillingPlan = {
   accent: string;
   badgeTone?: 'gold' | 'green' | 'purple' | 'blue';
 };
+
+const TAB_RETURN_ROUTES: PremiumReturnRoute[] = [
+  'Home',
+  'Category',
+  'Trending',
+  'Favorites',
+  'Profile',
+];
 
 const premiumLogo = require('../../assets/images/premium-logo.png');
 const proButtonIcon = require('../../assets/images/pro-button.png');
@@ -205,15 +217,15 @@ const getBackendPlansArray = (response: any) => {
 const normalizePlanId = (plan: any): BillingPlanId | null => {
   const value = String(
     plan?.id ??
-      plan?.planId ??
-      plan?.plan_id ??
-      plan?.type ??
-      plan?.plan ??
-      plan?.name ??
-      plan?.title ??
-      plan?.interval ??
-      plan?.billingPeriod ??
-      '',
+    plan?.planId ??
+    plan?.plan_id ??
+    plan?.type ??
+    plan?.plan ??
+    plan?.name ??
+    plan?.title ??
+    plan?.interval ??
+    plan?.billingPeriod ??
+    '',
   ).toLowerCase();
 
   if (value.includes('life')) return 'lifetime';
@@ -661,7 +673,20 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
   };
 
   const handleClose = () => {
+    if (navigation?.canGoBack?.()) {
+      navigation.goBack?.();
+      return;
+    }
+
     const returnTo = route?.params?.returnTo ?? 'Home';
+
+    if (TAB_RETURN_ROUTES.includes(returnTo)) {
+      navigation?.navigate?.('MainTabs', {
+        screen: returnTo,
+      });
+
+      return;
+    }
 
     navigation?.navigate?.(returnTo);
   };
@@ -682,7 +707,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
       const parent = navigation?.getParent?.();
 
       if (parent) {
-        parent.navigate('Payment', {
+        parent.navigate?.('Payment', {
           order: order as RazorpayOrder,
         });
 
@@ -699,8 +724,8 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
         error?.response?.status === 401
           ? 'Please login to continue with premium.'
           : error?.response?.data?.message ??
-            error?.message ??
-            'Unable to create payment order.';
+          error?.message ??
+          'Unable to create payment order.';
 
       Alert.alert('Payment', message);
     } finally {

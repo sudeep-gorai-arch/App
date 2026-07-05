@@ -52,6 +52,7 @@ const toAbsoluteMediaUrl = (value?: string | null) => {
   if (!value) return undefined;
 
   const url = String(value).trim();
+
   if (!url) return undefined;
 
   if (/^https?:\/\//i.test(url)) {
@@ -72,23 +73,93 @@ const toAbsoluteMediaUrl = (value?: string | null) => {
   return API_ORIGIN ? `${API_ORIGIN}/${url}` : url;
 };
 
+const getVariantUrl = (item: any, preferredTypes: string[]) => {
+  const variants = Array.isArray(item?.wallpaperVariants)
+    ? item.wallpaperVariants
+    : Array.isArray(item?.variants)
+      ? item.variants
+      : [];
+
+  for (const type of preferredTypes) {
+    const found = variants.find(
+      (variant: any) =>
+        String(variant?.type || "").toUpperCase() === type.toUpperCase(),
+    );
+
+    const url =
+      found?.url ||
+      found?.path ||
+      found?.imageUrl ||
+      found?.image_url ||
+      found?.thumbnailUrl ||
+      found?.thumbnail_url ||
+      found?.fileUrl ||
+      found?.file_url;
+
+    if (url) return url;
+  }
+
+  const defaultVariant = variants.find((variant: any) => variant?.isDefault);
+
+  return (
+    defaultVariant?.url ||
+    defaultVariant?.path ||
+    defaultVariant?.imageUrl ||
+    defaultVariant?.image_url ||
+    defaultVariant?.thumbnailUrl ||
+    defaultVariant?.thumbnail_url ||
+    defaultVariant?.fileUrl ||
+    defaultVariant?.file_url
+  );
+};
+
+const getRawThumbnailUrl = (item: any) =>
+  item?.thumbnailUrl ||
+  item?.thumbnail_url ||
+  item?.thumbnailPath ||
+  item?.thumbnail_path ||
+  item?.thumbUrl ||
+  item?.thumb_url ||
+  item?.thumbnail ||
+  item?.displayUrl ||
+  item?.display_url ||
+  item?.displayPath ||
+  item?.display_path ||
+  getVariantUrl(item, ["THUMBNAIL", "DISPLAY", "ORIGINAL"]) ||
+  item?.imageUrl ||
+  item?.image_url ||
+  item?.downloadUrl ||
+  item?.download_url;
+
+const getRawImageUrl = (item: any) =>
+  item?.imageUrl ||
+  item?.image_url ||
+  item?.downloadUrl ||
+  item?.download_url ||
+  item?.displayUrl ||
+  item?.display_url ||
+  item?.displayPath ||
+  item?.display_path ||
+  item?.url ||
+  item?.image ||
+  item?.photoUrl ||
+  item?.photo_url ||
+  item?.mediaUrl ||
+  item?.media_url ||
+  item?.originalUrl ||
+  item?.original_url ||
+  item?.originalPath ||
+  item?.original_path ||
+  getVariantUrl(item, ["DISPLAY", "ORIGINAL", "THUMBNAIL"]);
+
 const getWallpaperImage = (item?: DownloadWallpaper | null) => {
   if (!item) return undefined;
 
   const record = item as DownloadWallpaper & Record<string, any>;
 
   return (
-    toAbsoluteMediaUrl(record.thumbnailUrl) ||
-    toAbsoluteMediaUrl(record.imageUrl) ||
-    toAbsoluteMediaUrl(record.thumbnail_url) ||
-    toAbsoluteMediaUrl(record.image_url) ||
-    toAbsoluteMediaUrl(record.url) ||
-    toAbsoluteMediaUrl(record.image) ||
-    toAbsoluteMediaUrl(record.thumbnail) ||
-    toAbsoluteMediaUrl(record.photoUrl) ||
-    toAbsoluteMediaUrl(record.photo_url) ||
-    toAbsoluteMediaUrl(record.mediaUrl) ||
-    toAbsoluteMediaUrl(record.media_url)
+    toAbsoluteMediaUrl(getRawThumbnailUrl(record)) ||
+    toAbsoluteMediaUrl(getRawImageUrl(record))
   );
 };
 
@@ -113,22 +184,12 @@ const normalizeDownload = (record: any): DownloadWallpaper | null => {
   const id =
     wallpaper.id ?? record?.wallpaperId ?? record?.wallpaper_id ?? record?.id;
 
-  const imageUrl =
-    wallpaper.imageUrl ??
-    wallpaper.image_url ??
-    wallpaper.url ??
-    wallpaper.image ??
-    wallpaper.mediaUrl ??
-    record?.imageUrl ??
-    record?.image_url;
+  const rawImageUrl = getRawImageUrl(wallpaper) || getRawImageUrl(record);
+  const rawThumbnailUrl =
+    getRawThumbnailUrl(wallpaper) || getRawThumbnailUrl(record) || rawImageUrl;
 
-  const thumbnailUrl =
-    wallpaper.thumbnailUrl ??
-    wallpaper.thumbnail_url ??
-    wallpaper.thumbnail ??
-    wallpaper.photoUrl ??
-    record?.thumbnailUrl ??
-    record?.thumbnail_url;
+  const imageUrl = toAbsoluteMediaUrl(rawImageUrl);
+  const thumbnailUrl = toAbsoluteMediaUrl(rawThumbnailUrl) || imageUrl;
 
   if (!id && !imageUrl && !thumbnailUrl) {
     return null;
@@ -219,6 +280,7 @@ const uniqueById = (items: DownloadWallpaper[]) => {
 
   return items.filter((item) => {
     if (!item?.id || seen.has(item.id)) return false;
+
     seen.add(item.id);
     return true;
   });
@@ -227,9 +289,11 @@ const uniqueById = (items: DownloadWallpaper[]) => {
 const getLocalDownloads = async (): Promise<DownloadWallpaper[]> => {
   try {
     const raw = await AsyncStorage.getItem(LOCAL_DOWNLOADS_KEY);
+
     if (!raw) return [];
 
     const parsed = JSON.parse(raw);
+
     if (!Array.isArray(parsed)) return [];
 
     return parsed.map(normalizeDownload).filter(Boolean) as DownloadWallpaper[];
@@ -520,6 +584,7 @@ export default function DownloadsScreen({ navigation }: Props) {
       }
 
       const response = await getDownloads();
+
       const serverItems = getPayloadArray(response)
         .map(normalizeDownload)
         .filter(Boolean) as DownloadWallpaper[];
@@ -682,19 +747,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.base,
   },
+
   safe: {
     flex: 1,
   },
+
   loadingRoot: {
     alignItems: "center",
     justifyContent: "center",
   },
+
   loadingText: {
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
     fontSize: 14,
     marginTop: spacing.md,
   },
+
   scrollContent: {
     paddingBottom: 130,
   },
@@ -706,28 +775,33 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+
   topTitleWrap: {
     flex: 1,
     alignItems: "center",
     paddingHorizontal: spacing.md,
   },
+
   topTitle: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 24,
     letterSpacing: -0.4,
   },
+
   topSubtitle: {
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
     fontSize: 12,
     marginTop: 2,
   },
+
   roundAction: {
     width: 46,
     height: 46,
     borderRadius: 23,
   },
+
   roundBlur: {
     width: 46,
     height: 46,
@@ -744,6 +818,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     marginTop: spacing.xxl,
   },
+
   filterBar: {
     flexDirection: "row",
     padding: 5,
@@ -753,23 +828,27 @@ const styles = StyleSheet.create({
     borderColor: colors.glassBorder,
     backgroundColor: colors.glassFillSoft,
   },
+
   filterItem: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
+
   filterActive: {
     width: "100%",
     paddingVertical: 10,
     borderRadius: radius.pill,
     alignItems: "center",
   },
+
   filterText: {
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
     fontSize: 13,
     paddingVertical: 10,
   },
+
   filterTextActive: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
@@ -779,6 +858,7 @@ const styles = StyleSheet.create({
   cardNoMargin: {
     marginTop: 0,
   },
+
   downloadGrid: {
     paddingHorizontal: spacing.xl,
     marginTop: spacing.xl,
@@ -786,6 +866,7 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     justifyContent: "space-between",
   },
+
   wallpaperButton: {
     width: "48%",
     aspectRatio: 0.68,
@@ -796,14 +877,17 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorderSoft,
   },
+
   wallpaperImage: {
     width: "100%",
     height: "100%",
     backgroundColor: "#1d1d1d",
   },
+
   wallpaperImageStyle: {
     borderRadius: 18,
   },
+
   qualityChip: {
     position: "absolute",
     top: 10,
@@ -815,11 +899,13 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorderSoft,
   },
+
   qualityText: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 11,
   },
+
   wallpaperMetaLayer: {
     position: "absolute",
     left: 10,
@@ -827,6 +913,7 @@ const styles = StyleSheet.create({
     bottom: 10,
     alignItems: "flex-start",
   },
+
   downloadPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -838,6 +925,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorderSoft,
   },
+
   downloadPillText: {
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
@@ -848,11 +936,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     marginTop: spacing.xl,
   },
+
   emptyDownloads: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 30,
   },
+
   emptyTitle: {
     marginTop: 15,
     color: "#fff",
@@ -860,6 +950,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     textAlign: "center",
   },
+
   emptySubtitle: {
     marginTop: 10,
     color: colors.textSecondary,
@@ -867,6 +958,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginBottom: 22,
   },
+
   browseButton: {
     backgroundColor: colors.accent,
     paddingHorizontal: 24,
@@ -875,6 +967,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
   browseText: {
     color: "#fff",
     fontWeight: "800",

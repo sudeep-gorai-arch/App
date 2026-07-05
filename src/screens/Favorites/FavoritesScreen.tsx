@@ -139,7 +139,9 @@ const getVariantUrl = (item: any, preferredTypes: string[]) => {
       found?.imageUrl ||
       found?.image_url ||
       found?.thumbnailUrl ||
-      found?.thumbnail_url;
+      found?.thumbnail_url ||
+      found?.fileUrl ||
+      found?.file_url;
 
     if (url) return url;
   }
@@ -150,13 +152,21 @@ const getVariantUrl = (item: any, preferredTypes: string[]) => {
     defaultVariant?.url ||
     defaultVariant?.path ||
     defaultVariant?.imageUrl ||
-    defaultVariant?.image_url
+    defaultVariant?.image_url ||
+    defaultVariant?.thumbnailUrl ||
+    defaultVariant?.thumbnail_url ||
+    defaultVariant?.fileUrl ||
+    defaultVariant?.file_url
   );
 };
 
 const getRawImageUrl = (item: any) =>
   item?.imageUrl ||
   item?.image_url ||
+  item?.downloadUrl ||
+  item?.download_url ||
+  item?.displayUrl ||
+  item?.display_url ||
   item?.displayPath ||
   item?.display_path ||
   getVariantUrl(item, ["DISPLAY", "ORIGINAL", "THUMBNAIL"]) ||
@@ -166,6 +176,8 @@ const getRawImageUrl = (item: any) =>
   item?.photo_url ||
   item?.mediaUrl ||
   item?.media_url ||
+  item?.originalUrl ||
+  item?.original_url ||
   item?.originalPath ||
   item?.original_path;
 
@@ -174,6 +186,8 @@ const getRawThumbnailUrl = (item: any) =>
   item?.thumbnail_url ||
   item?.thumbnailPath ||
   item?.thumbnail_path ||
+  item?.displayUrl ||
+  item?.display_url ||
   getVariantUrl(item, ["THUMBNAIL", "DISPLAY", "ORIGINAL"]) ||
   item?.thumbnail ||
   item?.thumbUrl ||
@@ -181,7 +195,9 @@ const getRawThumbnailUrl = (item: any) =>
   item?.displayPath ||
   item?.display_path ||
   item?.imageUrl ||
-  item?.image_url;
+  item?.image_url ||
+  item?.downloadUrl ||
+  item?.download_url;
 
 const normalizeWallpaper = (
   wallpaperInput: FavoriteWallpaper,
@@ -299,6 +315,9 @@ const normalizeFavoriteItem = (
     item?.wallpaper ||
     item?.Wallpaper ||
     item?.wallpaperData ||
+    item?.wallpaper_data ||
+    item?.data?.wallpaper ||
+    item?.data?.Wallpaper ||
     item?.data ||
     item;
 

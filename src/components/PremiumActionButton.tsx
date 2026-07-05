@@ -10,13 +10,13 @@ import {
   ViewStyle,
 } from "react-native";
 
-import { useNavigation } from "@react-navigation/native";
+import { CommonActions, useNavigation } from "@react-navigation/native";
 
 import { LinearGradient } from "expo-linear-gradient";
 
 import { useAuth } from "../context/AuthContext";
 
-type PremiumReturnRoute =
+export type PremiumReturnRoute =
   | "Home"
   | "Category"
   | "Trending"
@@ -32,7 +32,9 @@ type PremiumActionButtonProps = {
 const proButtonIcon = require("../assets/images/pro-button.png");
 
 const isPremiumActive = (user: any) => {
-  if (!user) return false;
+  if (!user) {
+    return false;
+  }
 
   const premiumUntilValue =
     user.premiumUntil ||
@@ -52,8 +54,22 @@ const isPremiumActive = (user: any) => {
       user.is_premium ||
       user.premium ||
       user.subscription?.active ||
+      user.subscription?.isPremium ||
+      user.subscription?.is_premium ||
       hasActivePremiumDate,
   );
+};
+
+const getRootNavigation = (navigation: any) => {
+  let rootNavigation = navigation;
+  let parentNavigation = navigation?.getParent?.();
+
+  while (parentNavigation) {
+    rootNavigation = parentNavigation;
+    parentNavigation = rootNavigation?.getParent?.();
+  }
+
+  return rootNavigation;
 };
 
 export const usePremiumNavigation = (
@@ -64,20 +80,18 @@ export const usePremiumNavigation = (
   const { user } = useAuth();
 
   const openPremium = () => {
-    const parentNavigation = navigation.getParent?.();
+    const rootNavigation = getRootNavigation(navigation);
 
     const screenName = isPremiumActive(user) ? "ManagePremium" : "Premium";
 
-    const params = {
-      returnTo,
-    };
-
-    if (parentNavigation) {
-      parentNavigation.navigate(screenName, params);
-      return;
-    }
-
-    navigation.navigate(screenName, params);
+    rootNavigation.dispatch(
+      CommonActions.navigate({
+        name: screenName,
+        params: {
+          returnTo,
+        },
+      }),
+    );
   };
 
   return openPremium;

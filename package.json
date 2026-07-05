@@ -33,6 +33,8 @@
     "expo-haptics": "~56.0.3",
     "expo-linear-gradient": "~56.0.4",
     "expo-media-library": "~56.0.7",
+    "expo-network": "~56.0.5",
+    "expo-notifications": "~56.0.19",
     "expo-secure-store": "~56.0.4",
     "expo-splash-screen": "~56.0.10",
     "react": "19.2.3",
