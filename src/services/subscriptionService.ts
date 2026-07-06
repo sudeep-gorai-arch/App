@@ -44,12 +44,17 @@ export interface SubscriptionRecord {
   razorpayOrderId?: string | null;
   paymentId?: string | null;
   razorpayPaymentId?: string | null;
+  razorpaySubscriptionId?: string | null;
+  purchaseToken?: string | null;
   amount?: number | null;
   currency?: string | null;
   status: string;
   startDate: string;
   endDate: string;
   active: boolean;
+  cancelAtCycleEnd?: boolean;
+  cancel_at_cycle_end?: boolean;
+  cancelledAt?: string | null;
   createdAt?: string;
 }
 
@@ -65,6 +70,7 @@ export interface PaymentRecord {
   receipt?: string | null;
   paidAt?: string | null;
   createdAt: string;
+  notes?: any;
 }
 
 export interface SubscriptionStatus {
@@ -74,6 +80,11 @@ export interface SubscriptionStatus {
   activeSubscription?: SubscriptionRecord | null;
   latestSubscription?: SubscriptionRecord | null;
   latestPayment?: PaymentRecord | null;
+  cancellation?: {
+    cancelAtCycleEnd: boolean;
+    cancelledAt?: string | null;
+    razorpaySubscriptionId?: string | null;
+  };
 }
 
 export interface VerifyPaymentResponse {
@@ -128,6 +139,19 @@ export const verifyPayment = async (
 export const getSubscriptionStatus = async (): Promise<SubscriptionStatus> => {
   const response = await API.get<ApiResponse<SubscriptionStatus>>(
     '/subscriptions/status',
+  );
+
+  return unwrapApiData<SubscriptionStatus>(response);
+};
+
+export const cancelSubscription = async (
+  cancelAtCycleEnd = true,
+): Promise<SubscriptionStatus> => {
+  const response = await API.post<ApiResponse<SubscriptionStatus>>(
+    '/subscriptions/cancel',
+    {
+      cancel_at_cycle_end: cancelAtCycleEnd,
+    },
   );
 
   return unwrapApiData<SubscriptionStatus>(response);

@@ -43,7 +43,7 @@ const GAP = spacing.lg;
 const CARD_W = (SCREEN.width - spacing.xl * 2 - GAP) / 2;
 const CARD_H = CARD_W * 1.4;
 
-const FILTERS = ["All", "Recent", "Category"] as const;
+const FILTERS = ["All", "Recent", "Live"] as const;
 
 type Filter = (typeof FILTERS)[number];
 
@@ -877,7 +877,7 @@ const FavoritesScreen = () => {
       });
     }
 
-    if (filter === "Category") {
+    if (filter === "Live") {
       return copy.sort(
         (a, b) => getFavoriteCount(b.wallpaper) - getFavoriteCount(a.wallpaper),
       );

@@ -39,9 +39,9 @@ type DownloadWallpaper = Omit<Wallpaper, "category"> & {
   resolution?: string | null;
 };
 
-type Filter = "All" | "4K" | "8K" | "Premium";
+type Filter = "All" | "4K" | "Live" | "Premium";
 
-const FILTERS: Filter[] = ["All", "4K", "8K", "Premium"];
+const FILTERS: Filter[] = ["All", "4K", "Live", "Premium"];
 const API_ORIGIN = String(API.defaults.baseURL || "").replace(/\/api\/?$/, "");
 const LOCAL_DOWNLOADS_KEY = "@flexiwalls:guestDownloads";
 

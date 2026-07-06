@@ -63,12 +63,23 @@ type RecentDownloadItem = {
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
+const RECENT_DOWNLOADS_CARD_PADDING = 16;
+const DOWNLOAD_PREVIEW_COLUMNS = 5;
+const DOWNLOAD_PREVIEW_LIMIT = 10;
+const DOWNLOAD_THUMB_GAP = 7;
+
+const DOWNLOAD_PREVIEW_CONTENT_WIDTH =
+  SCREEN_WIDTH - spacing.xl * 2 - RECENT_DOWNLOADS_CARD_PADDING * 2;
+
 const DOWNLOAD_THUMB_SIZE = Math.floor(
-  (SCREEN_WIDTH - spacing.xl * 2 - 32 - 32) / 5,
+  (DOWNLOAD_PREVIEW_CONTENT_WIDTH -
+    DOWNLOAD_THUMB_GAP * (DOWNLOAD_PREVIEW_COLUMNS - 1)) /
+    DOWNLOAD_PREVIEW_COLUMNS,
 );
 
-const DOWNLOAD_THUMB_GAP = 8;
-const DOWNLOAD_PREVIEW_HEIGHT = DOWNLOAD_THUMB_SIZE * 1.5 + DOWNLOAD_THUMB_GAP;
+const DOWNLOAD_PREVIEW_HEIGHT =
+  DOWNLOAD_THUMB_SIZE * 2 + DOWNLOAD_THUMB_GAP;
+
 const LOCAL_DOWNLOADS_KEY = "@flexiwalls:guestDownloads";
 
 const STAR_PARTICLES = [
@@ -382,7 +393,7 @@ const RecentDownloadsPreview = ({
   downloads: RecentDownloadItem[];
   onOpenWallpaper: (download: RecentDownloadItem) => void;
 }) => {
-  const previewDownloads = downloads.slice(0, 10);
+  const previewDownloads = downloads.slice(0, DOWNLOAD_PREVIEW_LIMIT);
 
   return (
     <View style={styles.recentPreviewMask}>
@@ -404,16 +415,6 @@ const RecentDownloadsPreview = ({
           </Pressable>
         ))}
       </View>
-
-      <LinearGradient
-        pointerEvents="none"
-        colors={[
-          "rgba(16,16,24,0)",
-          "rgba(16,16,24,0.68)",
-          "rgba(16,16,24,1)",
-        ]}
-        style={styles.recentPreviewFade}
-      />
     </View>
   );
 };
@@ -1371,44 +1372,43 @@ const styles = StyleSheet.create({
   recentPreviewMask: {
     height: DOWNLOAD_PREVIEW_HEIGHT,
     marginTop: 16,
-    overflow: "hidden",
-    borderRadius: 18,
+    overflow: "visible",
+    borderRadius: 20,
   },
 
   recentPreviewGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: DOWNLOAD_THUMB_GAP,
+    columnGap: DOWNLOAD_THUMB_GAP,
+    rowGap: DOWNLOAD_THUMB_GAP,
+    justifyContent: "flex-start",
   },
 
   recentPreviewThumbPress: {
     width: DOWNLOAD_THUMB_SIZE,
     height: DOWNLOAD_THUMB_SIZE,
-    borderRadius: 14,
+    borderRadius: 13,
     overflow: "hidden",
-    backgroundColor: "#1d1d1d",
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.16)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 4,
   },
 
   recentPreviewThumbPressed: {
     opacity: 0.72,
-    transform: [{ scale: 0.96 }],
+    transform: [{ scale: 0.94 }],
   },
 
   recentPreviewImage: {
     width: "100%",
     height: "100%",
-    borderRadius: 14,
+    borderRadius: 13,
     backgroundColor: "#1d1d1d",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.glassBorderSoft,
-  },
-
-  recentPreviewFade: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: DOWNLOAD_THUMB_SIZE,
   },
 
   emptyDownloads: {

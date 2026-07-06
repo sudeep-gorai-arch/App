@@ -369,7 +369,7 @@ export default function SettingsScreen({ navigation }: any) {
     try {
       await Share.share({
         message:
-          "Try FlexiWalls — premium wallpapers crafted for every screen. Use this link to download the app - https://expo.dev/artifacts/eas/V3mHQ8w65IxUlSv4Llt5GSNzSCAHcd-T_hWUFqtg_c8.apk",
+          "Try FlexiWalls — premium wallpapers crafted for every screen. Use this link to download the app - https://expo.dev/artifacts/eas/n1SkjYi75dGYT-zY2Yge42C7hqdsqAiC58jKc0IlbDA.apk",
       });
     } catch (error) {
       console.log("SHARE ERROR", error);
