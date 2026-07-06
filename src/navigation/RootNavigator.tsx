@@ -12,6 +12,7 @@ import ManagePremiumScreen from '../screens/ManagePremium/ManagePremiumScreen';
 import CategoryDetailScreen from '../screens/CategoryDetail/CategoryDetailScreen';
 import AllWallpapersScreen from '../screens/AllWallpapers/AllWallpapersScreen';
 import WallpaperDetailsScreen from '../screens/WallpaperDetails/WallpaperDetailsScreen';
+import WallpaperCropPreviewScreen from '../screens/WallpaperCropPreview/WallpaperCropPreviewScreen';
 
 import EditPersonalInfoScreen from '../screens/EditPersonalInfo/EditPersonalInfoScreen';
 import HelpSupportScreen from '../screens/HelpSupport/HelpSupportScreen';
@@ -60,6 +61,17 @@ const RootNavigator = () => {
       <Stack.Screen
         name="WallpaperDetails"
         component={WallpaperDetailsScreen}
+      />
+
+      <Stack.Screen
+        name="WallpaperCropPreview"
+        component={WallpaperCropPreviewScreen}
+        options={{
+          animation: 'slide_from_bottom',
+          contentStyle: {
+            backgroundColor: colors.base,
+          },
+        }}
       />
 
       {/* PROFILE OPTIONS */}

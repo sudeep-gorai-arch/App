@@ -23,6 +23,8 @@ export type RazorpayOrderParam = {
   title: string;
 };
 
+export type WallpaperCropTarget = 'home' | 'lock' | 'both';
+
 export type RootStackParamList = {
   MainTabs:
     | {
@@ -66,7 +68,14 @@ export type RootStackParamList = {
   };
 
   WallpaperDetails: {
-    wallpaper: any;
+    wallpaper?: any;
+    applied?: boolean;
+  };
+
+  WallpaperCropPreview: {
+    imageUrl: string;
+    target: WallpaperCropTarget;
+    title?: string;
   };
 
   // Account/Profile

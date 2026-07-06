@@ -7,9 +7,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // ===============================
 // CHANGE THIS ONLY
 // ===============================
-const BASE_URL = __DEV__
-  ? 'http://192.168.1.6:5000/api' // Local backend
-  : 'https://flexiwalls.onrender.com/api'; // Production backend
+// const BASE_URL = __DEV__
+//   ? 'http://192.168.1.6:5000/api' // Local backend
+//   : 'https://flexiwalls.onrender.com/api'; // Production backend
+const BASE_URL = 'https://flexiwalls.onrender.com/api';
 
 const API = axios.create({
   baseURL: BASE_URL,

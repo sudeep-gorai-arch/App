@@ -6,6 +6,7 @@ export interface WallpaperQuery {
   offset?: number;
   search?: string;
   category?: string;
+  categorySlug?: string;
   active?: boolean;
 }
 
@@ -14,6 +15,7 @@ const buildParams = ({
   offset = 0,
   search,
   category,
+  categorySlug,
   active,
 }: WallpaperQuery) => {
   const params: Record<string, any> = {
@@ -23,6 +25,7 @@ const buildParams = ({
 
   if (search?.trim()) params.search = search.trim();
   if (category?.trim()) params.category = category.trim();
+  if (categorySlug?.trim()) params.categorySlug = categorySlug.trim();
   if (active !== undefined) params.active = active;
 
   return params;
@@ -61,10 +64,34 @@ export const getFeaturedWallpapers = async (limit = 5) => {
 export const getTrendingWallpapers = async (
   limit = 20,
 ) => {
-  const response = await API.get(
-    "/wallpapers/trending",
+  const response = await API.get<ApiResponse<Wallpaper[]>>(
+    '/wallpapers/trending',
     {
       params: { limit },
+    },
+  );
+
+  return response.data;
+};
+
+/**
+ * Top Downloaded Wallpapers This Week
+ */
+export const getTopWeekWallpapers = async (
+  limit = 10,
+  categorySlug?: string,
+) => {
+  const params: Record<string, any> = { limit };
+
+  if (categorySlug?.trim() && categorySlug.trim().toLowerCase() !== 'all') {
+    params.category = categorySlug.trim();
+    params.categorySlug = categorySlug.trim();
+  }
+
+  const response = await API.get<ApiResponse<Wallpaper[]>>(
+    '/wallpapers/top-week',
+    {
+      params,
     },
   );
 

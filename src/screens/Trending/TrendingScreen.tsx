@@ -26,6 +26,7 @@ import PremiumActionButton from '../../components/PremiumActionButton';
 import API from '../../services/api';
 import { getCategories } from '../../services/categoryService';
 import {
+  getTopWeekWallpapers,
   getTrendingWallpapers,
   getWallpapers,
 } from '../../services/wallpaperService';
@@ -226,15 +227,21 @@ const normalizeWallpaper = (item: Wallpaper, index: number): Wallpaper => {
     toNumber(w.favorites),
   );
 
-  const downloadCount = Math.max(
+  const weeklyDownloadCount = Math.max(
     toNumber(w.downloadsThisWeek),
     toNumber(w.weeklyDownloads),
     toNumber(w.downloads_this_week),
     toNumber(w.week_downloads),
+  );
+
+  const allTimeDownloadCount = Math.max(
     toNumber(w.downloadCount),
     toNumber(w.download_count),
     toNumber(w.downloads),
   );
+
+  const downloadCount =
+    weeklyDownloadCount > 0 ? weeklyDownloadCount : allTimeDownloadCount;
 
   return {
     ...item,
@@ -369,11 +376,18 @@ const getFavoriteCount = (item: Wallpaper) => {
 const getDownloadCount = (item: Wallpaper) => {
   const w = item as Wallpaper & Record<string, any>;
 
-  return Math.max(
+  const weeklyDownloadCount = Math.max(
     toNumber(w.downloadsThisWeek),
     toNumber(w.weeklyDownloads),
     toNumber(w.downloads_this_week),
     toNumber(w.week_downloads),
+  );
+
+  if (weeklyDownloadCount > 0) {
+    return weeklyDownloadCount;
+  }
+
+  return Math.max(
     toNumber(w.downloadCount),
     toNumber(w.download_count),
     toNumber(w.downloads),
@@ -414,20 +428,12 @@ const fetchWeeklyTopWallpapers = async (
   category: CategoryOption,
 ) => {
   try {
-    const params =
-      category.slug === 'all'
-        ? { limit: 10 }
-        : {
-            limit: 10,
-            category: category.slug,
-            categorySlug: category.slug,
-          };
+    const response = await getTopWeekWallpapers(
+      10,
+      category.slug === 'all' ? undefined : category.slug,
+    );
 
-    const response = await API.get('/wallpapers/top-week', {
-      params,
-    });
-
-    const weeklyList = uniqueWallpapers(extractWallpapers(response.data));
+    const weeklyList = uniqueWallpapers(extractWallpapers(response));
 
     if (weeklyList.length) {
       return sortByDownloads(weeklyList).slice(0, 10);

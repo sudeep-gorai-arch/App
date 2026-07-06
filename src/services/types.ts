@@ -103,6 +103,10 @@ export interface Wallpaper {
 
     downloadCount: number;
 
+    downloadsThisWeek?: number;
+
+    weeklyDownloads?: number;
+
     viewCount?: number;
 
     createdAt: string;

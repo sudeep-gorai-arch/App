@@ -38,10 +38,7 @@ import {
   getWallpaperById,
   incrementView,
 } from '../../services/wallpaperService';
-import {
-  applyWallpaperToAndroid,
-  WallpaperApplyTarget,
-} from '../../services/applyWallpaperService';
+import type { WallpaperApplyTarget } from '../../services/applyWallpaperService';
 import { appEvents } from '../../utils/appEvents';
 
 import { useToast } from '../../components/ui/toast/useToast';
@@ -352,12 +349,21 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
   const [appliedPopupVisible, setAppliedPopupVisible] = useState(false);
 
   const [applySheetVisible, setApplySheetVisible] = useState(false);
-  const [applyLoading, setApplyLoading] = useState(false);
-  const [applyTarget, setApplyTarget] = useState<WallpaperApplyTarget | null>(
-    null,
-  );
+
+  const applyLoading = false;
+  const applyTarget: WallpaperApplyTarget | null = null;
 
   const toast = useToast();
+
+  useEffect(() => {
+    if (!route.params?.applied) return;
+
+    setAppliedPopupVisible(true);
+
+    navigation.setParams({
+      applied: undefined,
+    } as any);
+  }, [navigation, route.params?.applied]);
 
   const loadWallpaper = async () => {
     if (!wallpaperId || isPlaceholder(wallpaperId)) return;
@@ -848,28 +854,21 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
     }
   };
 
-  const onApplyWallpaper = async (target: WallpaperApplyTarget) => {
-    if (applyLoading) return;
-
-    try {
-      setApplyLoading(true);
-      setApplyTarget(target);
-
-      await applyWallpaperToAndroid(finalImage, target);
-
-      setApplySheetVisible(false);
-      setAppliedPopupVisible(true);
-    } catch (error: any) {
-      console.log('Apply wallpaper failed:', error);
-
-      Alert.alert(
-        'Apply failed',
-        error?.message || 'Could not apply this wallpaper.',
-      );
-    } finally {
-      setApplyLoading(false);
-      setApplyTarget(null);
+  const onApplyWallpaper = (target: WallpaperApplyTarget) => {
+    if (!finalImage) {
+      Alert.alert('Missing wallpaper', 'Wallpaper image URL is missing.');
+      return;
     }
+
+    setApplySheetVisible(false);
+    setFullscreenMenuVisible(false);
+    setFullscreenVisible(false);
+
+    navigation.navigate('WallpaperCropPreview', {
+      imageUrl: finalImage,
+      target,
+      title: wallpaper?.title || 'FlexiWalls Wallpaper',
+    });
   };
 
   const onFullscreenDownload = () => {
