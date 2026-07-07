@@ -72,6 +72,8 @@ export interface Category {
    WALLPAPER
 =========================== */
 
+export type WallpaperMediaType = "IMAGE" | "VIDEO";
+
 export interface Wallpaper {
     id: string;
 
@@ -83,15 +85,41 @@ export interface Wallpaper {
 
     slug?: string;
 
+    mediaType?: WallpaperMediaType | string;
+
+    isVideo?: boolean;
+
     imageUrl: string;
 
     thumbnailUrl?: string | null;
 
+    downloadUrl?: string | null;
+
     videoUrl?: string | null;
+
+    videoPreviewUrl?: string | null;
+
+    videoThumbnailUrl?: string | null;
+
+    durationSeconds?: number | null;
+
+    videoBitrate?: number | null;
+
+    videoFps?: number | null;
+
+    videoSize?: number | null;
+
+    mimeType?: string | null;
+
+    extension?: string | null;
 
     quality: string;
 
     resolution?: string;
+
+    width?: number | null;
+
+    height?: number | null;
 
     active?: boolean;
 
@@ -101,7 +129,11 @@ export interface Wallpaper {
 
     likes: number;
 
+    likeCount?: number;
+
     downloadCount: number;
+
+    downloads?: number;
 
     downloadsThisWeek?: number;
 
@@ -109,13 +141,15 @@ export interface Wallpaper {
 
     viewCount?: number;
 
+    views?: number;
+
     createdAt: string;
 
     updatedAt: string;
 
     categoryId?: string;
 
-    category?: Category;
+    category?: Category | null;
 
     isLiked?: boolean;
 
@@ -145,9 +179,39 @@ export interface Download {
 
     wallpaperId: string;
 
-    wallpaper: Wallpaper;
+    wallpaper?: Wallpaper;
+
+    mediaType?: WallpaperMediaType | string;
+
+    isVideo?: boolean;
+
+    downloadUrl?: string | null;
+
+    imageUrl?: string | null;
+
+    thumbnailUrl?: string | null;
+
+    videoUrl?: string | null;
+
+    videoPreviewUrl?: string | null;
+
+    videoThumbnailUrl?: string | null;
+
+    durationSeconds?: number | null;
+
+    videoSize?: number | null;
+
+    mimeType?: string | null;
+
+    extension?: string | null;
 
     quality: string;
+
+    isPremium?: boolean;
+
+    downloadCount?: number;
+
+    favoriteCount?: number;
 
     createdAt: string;
 }

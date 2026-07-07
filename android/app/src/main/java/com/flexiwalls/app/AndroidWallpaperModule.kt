@@ -1,6 +1,10 @@
 package com.flexiwalls.app
 
 import android.app.WallpaperManager
+import android.content.ActivityNotFoundException
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -10,9 +14,11 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableMap
+import com.facebook.react.bridge.UiThreadUtil
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
@@ -23,6 +29,30 @@ import kotlin.math.roundToInt
 class AndroidWallpaperModule(
   private val reactContext: ReactApplicationContext
 ) : ReactContextBaseJavaModule(reactContext) {
+
+  companion object {
+    const val VIDEO_WALLPAPER_PREFS = "FlexiWallsVideoWallpaperPrefs"
+
+    const val VIDEO_WALLPAPER_PATH = "video_wallpaper_path"
+    const val VIDEO_WALLPAPER_TARGET = "video_wallpaper_target"
+    const val VIDEO_WALLPAPER_TITLE = "video_wallpaper_title"
+
+    const val VIDEO_CROP_HAS_CONFIG = "video_crop_has_config"
+    const val VIDEO_CROP_SCALE = "video_crop_scale"
+    const val VIDEO_CROP_TRANSLATE_X = "video_crop_translate_x"
+    const val VIDEO_CROP_TRANSLATE_Y = "video_crop_translate_y"
+    const val VIDEO_CROP_PREVIEW_WIDTH = "video_crop_preview_width"
+    const val VIDEO_CROP_PREVIEW_HEIGHT = "video_crop_preview_height"
+    const val VIDEO_CROP_VIDEO_WIDTH = "video_crop_video_width"
+    const val VIDEO_CROP_VIDEO_HEIGHT = "video_crop_video_height"
+
+    const val VIDEO_CROP_X = "video_crop_x"
+    const val VIDEO_CROP_Y = "video_crop_y"
+    const val VIDEO_CROP_WIDTH = "video_crop_width"
+    const val VIDEO_CROP_HEIGHT = "video_crop_height"
+
+    private const val VIDEO_WALLPAPER_DIR = "video_wallpapers"
+  }
 
   override fun getName(): String {
     return "AndroidWallpaperModule"
@@ -45,7 +75,7 @@ class AndroidWallpaperModule(
           throw Exception("Wallpaper image URL is missing")
         }
 
-        val imageBytes = readImageBytes(cleanedUrl)
+        val imageBytes = readBytesFromSource(cleanedUrl, "Image")
         val decodedBitmap = decodeSafeBitmap(imageBytes)
 
         bitmapToApply = cropBitmapIfNeeded(decodedBitmap, cropRect)
@@ -92,10 +122,217 @@ class AndroidWallpaperModule(
     }.start()
   }
 
-  private fun readImageBytes(value: String): ByteArray {
-    val inputStream = openImageInputStream(value)
+  @ReactMethod
+  fun applyVideoWallpaper(
+    videoUrl: String,
+    target: String,
+    title: String?,
+    cropConfig: ReadableMap?,
+    promise: Promise
+  ) {
+    Thread {
+      try {
+        val cleanedUrl = videoUrl.trim()
 
-    inputStream.use { stream ->
+        if (cleanedUrl.isEmpty()) {
+          throw Exception("Video wallpaper URL is missing")
+        }
+
+        val localVideoFile = copyVideoToPrivateStorage(cleanedUrl)
+
+        saveVideoWallpaperConfig(
+          videoPath = localVideoFile.absolutePath,
+          target = target.ifBlank { "home" },
+          title = title?.trim().takeUnless { it.isNullOrEmpty() }
+            ?: "FlexiWalls Video Wallpaper",
+          cropConfig = cropConfig
+        )
+
+        openAndroidLiveWallpaperPreview(promise)
+      } catch (error: Exception) {
+        promise.reject(
+          "APPLY_VIDEO_WALLPAPER_FAILED",
+          error.message ?: "Could not open Android live wallpaper preview",
+          error
+        )
+      }
+    }.start()
+  }
+
+  private fun openAndroidLiveWallpaperPreview(promise: Promise) {
+    UiThreadUtil.runOnUiThread {
+      try {
+        val componentName = ComponentName(
+          reactContext,
+          VideoWallpaperService::class.java
+        )
+
+        val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
+          putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, componentName)
+          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+
+        reactContext.startActivity(intent)
+
+        promise.resolve(true)
+      } catch (error: ActivityNotFoundException) {
+        try {
+          val fallbackIntent = Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+          }
+
+          reactContext.startActivity(fallbackIntent)
+
+          promise.resolve(true)
+        } catch (fallbackError: Exception) {
+          promise.reject(
+            "OPEN_LIVE_WALLPAPER_PREVIEW_FAILED",
+            fallbackError.message ?: "Could not open Android live wallpaper preview",
+            fallbackError
+          )
+        }
+      } catch (error: Exception) {
+        promise.reject(
+          "OPEN_LIVE_WALLPAPER_PREVIEW_FAILED",
+          error.message ?: "Could not open Android live wallpaper preview",
+          error
+        )
+      }
+    }
+  }
+
+  private fun saveVideoWallpaperConfig(
+    videoPath: String,
+    target: String,
+    title: String,
+    cropConfig: ReadableMap?
+  ) {
+    val prefs = reactContext.getSharedPreferences(
+      VIDEO_WALLPAPER_PREFS,
+      Context.MODE_PRIVATE
+    )
+
+    val editor = prefs.edit()
+      .putString(VIDEO_WALLPAPER_PATH, videoPath)
+      .putString(VIDEO_WALLPAPER_TARGET, target)
+      .putString(VIDEO_WALLPAPER_TITLE, title)
+
+    saveVideoCropConfig(editor, cropConfig)
+
+    editor.apply()
+  }
+
+  private fun saveVideoCropConfig(
+    editor: android.content.SharedPreferences.Editor,
+    cropConfig: ReadableMap?
+  ) {
+    if (cropConfig == null) {
+      editor.putBoolean(VIDEO_CROP_HAS_CONFIG, false)
+      return
+    }
+
+    val scale = readDouble(cropConfig, "scale", 1.0)
+    val translateX = readDouble(cropConfig, "translateX", 0.0)
+    val translateY = readDouble(cropConfig, "translateY", 0.0)
+
+    val previewWidth = readDouble(cropConfig, "previewWidth", 0.0)
+    val previewHeight = readDouble(cropConfig, "previewHeight", 0.0)
+
+    val videoWidth = readDouble(cropConfig, "videoWidth", 0.0)
+    val videoHeight = readDouble(cropConfig, "videoHeight", 0.0)
+
+    val cropX = readDouble(cropConfig, "cropX", 0.0)
+    val cropY = readDouble(cropConfig, "cropY", 0.0)
+    val cropWidth = readDouble(cropConfig, "cropWidth", 0.0)
+    val cropHeight = readDouble(cropConfig, "cropHeight", 0.0)
+
+    if (
+      !scale.isFinite() ||
+      !translateX.isFinite() ||
+      !translateY.isFinite() ||
+      !previewWidth.isFinite() ||
+      !previewHeight.isFinite() ||
+      !videoWidth.isFinite() ||
+      !videoHeight.isFinite() ||
+      !cropX.isFinite() ||
+      !cropY.isFinite() ||
+      !cropWidth.isFinite() ||
+      !cropHeight.isFinite() ||
+      scale <= 0.0 ||
+      previewWidth <= 0.0 ||
+      previewHeight <= 0.0 ||
+      videoWidth <= 0.0 ||
+      videoHeight <= 0.0 ||
+      cropWidth <= 0.0 ||
+      cropHeight <= 0.0
+    ) {
+      editor.putBoolean(VIDEO_CROP_HAS_CONFIG, false)
+      return
+    }
+
+    editor
+      .putBoolean(VIDEO_CROP_HAS_CONFIG, true)
+      .putFloat(VIDEO_CROP_SCALE, scale.toFloat())
+      .putFloat(VIDEO_CROP_TRANSLATE_X, translateX.toFloat())
+      .putFloat(VIDEO_CROP_TRANSLATE_Y, translateY.toFloat())
+      .putFloat(VIDEO_CROP_PREVIEW_WIDTH, previewWidth.toFloat())
+      .putFloat(VIDEO_CROP_PREVIEW_HEIGHT, previewHeight.toFloat())
+      .putFloat(VIDEO_CROP_VIDEO_WIDTH, videoWidth.toFloat())
+      .putFloat(VIDEO_CROP_VIDEO_HEIGHT, videoHeight.toFloat())
+      .putFloat(VIDEO_CROP_X, cropX.toFloat())
+      .putFloat(VIDEO_CROP_Y, cropY.toFloat())
+      .putFloat(VIDEO_CROP_WIDTH, cropWidth.toFloat())
+      .putFloat(VIDEO_CROP_HEIGHT, cropHeight.toFloat())
+  }
+
+  private fun copyVideoToPrivateStorage(value: String): File {
+    val extension = getVideoExtension(value)
+
+    val directory = File(reactContext.filesDir, VIDEO_WALLPAPER_DIR)
+
+    if (!directory.exists()) {
+      directory.mkdirs()
+    }
+
+    val outputFile = File(directory, "current_video_wallpaper.$extension")
+
+    openInputStream(value, "Video").use { input ->
+      FileOutputStream(outputFile, false).use { output ->
+        val buffer = ByteArray(256 * 1024)
+
+        while (true) {
+          val read = input.read(buffer)
+
+          if (read <= 0) break
+
+          output.write(buffer, 0, read)
+        }
+
+        output.flush()
+      }
+    }
+
+    if (!outputFile.exists() || outputFile.length() <= 0L) {
+      throw Exception("Downloaded video wallpaper is empty")
+    }
+
+    return outputFile
+  }
+
+  private fun getVideoExtension(value: String): String {
+    val cleanedValue = value.substringBefore("?").substringBefore("#").lowercase()
+
+    return when {
+      cleanedValue.endsWith(".webm") -> "webm"
+      cleanedValue.endsWith(".mov") -> "mov"
+      cleanedValue.endsWith(".m4v") -> "m4v"
+      cleanedValue.endsWith(".mp4") -> "mp4"
+      else -> "mp4"
+    }
+  }
+
+  private fun readBytesFromSource(value: String, label: String): ByteArray {
+    openInputStream(value, label).use { stream ->
       val output = ByteArrayOutputStream()
       val buffer = ByteArray(16 * 1024)
 
@@ -111,12 +348,12 @@ class AndroidWallpaperModule(
     }
   }
 
-  private fun openImageInputStream(value: String): InputStream {
+  private fun openInputStream(value: String, label: String): InputStream {
     if (value.startsWith("http://") || value.startsWith("https://")) {
       val connection = URL(value).openConnection() as HttpURLConnection
 
-      connection.connectTimeout = 25000
-      connection.readTimeout = 25000
+      connection.connectTimeout = 30000
+      connection.readTimeout = 30000
       connection.instanceFollowRedirects = true
       connection.setRequestProperty("User-Agent", "FlexiWalls-Android")
 
@@ -124,7 +361,7 @@ class AndroidWallpaperModule(
 
       if (responseCode < 200 || responseCode >= 300) {
         connection.disconnect()
-        throw Exception("Image download failed with status $responseCode")
+        throw Exception("$label download failed with status $responseCode")
       }
 
       return connection.inputStream
@@ -134,12 +371,12 @@ class AndroidWallpaperModule(
       val uri = Uri.parse(value)
 
       return reactContext.contentResolver.openInputStream(uri)
-        ?: throw Exception("Could not open wallpaper image")
+        ?: throw Exception("Could not open $label")
     }
 
     if (value.startsWith("file://")) {
       val uri = Uri.parse(value)
-      val path = uri.path ?: throw Exception("Invalid file path")
+      val path = uri.path ?: throw Exception("Invalid $label file path")
 
       return FileInputStream(File(path))
     }
@@ -196,10 +433,10 @@ class AndroidWallpaperModule(
   ): Bitmap {
     if (cropRect == null) return sourceBitmap
 
-    val rawX = readDouble(cropRect, "x")
-    val rawY = readDouble(cropRect, "y")
-    val rawWidth = readDouble(cropRect, "width")
-    val rawHeight = readDouble(cropRect, "height")
+    val rawX = readDouble(cropRect, "x", 0.0)
+    val rawY = readDouble(cropRect, "y", 0.0)
+    val rawWidth = readDouble(cropRect, "width", 0.0)
+    val rawHeight = readDouble(cropRect, "height", 0.0)
 
     if (rawWidth <= 0.0 || rawHeight <= 0.0) {
       return sourceBitmap
@@ -225,13 +462,17 @@ class AndroidWallpaperModule(
     return Bitmap.createBitmap(sourceBitmap, x, y, width, height)
   }
 
-  private fun readDouble(map: ReadableMap, key: String): Double {
-    if (!map.hasKey(key) || map.isNull(key)) return 0.0
+  private fun readDouble(
+    map: ReadableMap?,
+    key: String,
+    defaultValue: Double = 0.0
+  ): Double {
+    if (map == null || !map.hasKey(key) || map.isNull(key)) return defaultValue
 
     return try {
       map.getDouble(key)
     } catch (_: Exception) {
-      0.0
+      defaultValue
     }
   }
 

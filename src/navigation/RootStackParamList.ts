@@ -25,6 +25,8 @@ export type RazorpayOrderParam = {
 
 export type WallpaperCropTarget = 'home' | 'lock' | 'both';
 
+export type WallpaperCropMediaType = 'IMAGE' | 'VIDEO';
+
 export type RootStackParamList = {
   MainTabs:
     | {
@@ -73,9 +75,40 @@ export type RootStackParamList = {
   };
 
   WallpaperCropPreview: {
+    /**
+     * IMAGE: actual wallpaper image URL.
+     * VIDEO: poster/preview image URL used behind the video while loading.
+     */
     imageUrl: string;
+
+    /**
+     * Only for VIDEO wallpapers.
+     * This is the real video URL passed to Android live wallpaper preview.
+     */
+    videoUrl?: string;
+
+    mediaType?: WallpaperCropMediaType;
+
+    isVideo?: boolean;
+
+    /**
+     * IMAGE:
+     * - home / lock / both based on the option selected from the apply sheet.
+     *
+     * VIDEO:
+     * - forced as lock preview UI in React Native.
+     * - Android system preview will decide final Home / Lock / Both target.
+     */
     target: WallpaperCropTarget;
+
     title?: string;
+
+    /**
+     * Optional source dimensions for video crop calculation.
+     * If not available, crop preview will use a safe 1080x1920 fallback.
+     */
+    videoWidth?: number | null;
+    videoHeight?: number | null;
   };
 
   // Account/Profile

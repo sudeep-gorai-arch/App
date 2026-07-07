@@ -16,6 +16,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as FileSystem from "expo-file-system/legacy";
+import * as MediaLibrary from "expo-media-library";
 
 import MeshBackground from "../../components/MeshBackground";
 import Card from "../../components/Card";
@@ -44,6 +46,7 @@ type Filter = "All" | "4K" | "Live" | "Premium";
 const FILTERS: Filter[] = ["All", "4K", "Live", "Premium"];
 const API_ORIGIN = String(API.defaults.baseURL || "").replace(/\/api\/?$/, "");
 const LOCAL_DOWNLOADS_KEY = "@flexiwalls:guestDownloads";
+const LOCAL_DELETED_DOWNLOADS_KEY = "@flexiwalls:locallyDeletedDownloads";
 
 const fallbackImage = (seed: string) =>
   `https://picsum.photos/seed/flexiwalls-download-${seed}/700/1100`;
@@ -54,6 +57,10 @@ const toAbsoluteMediaUrl = (value?: string | null) => {
   const url = String(value).trim();
 
   if (!url) return undefined;
+
+  if (/^(file|content|asset-library):\/\//i.test(url)) {
+    return url;
+  }
 
   if (/^https?:\/\//i.test(url)) {
     if (!API_ORIGIN) return url;
@@ -181,12 +188,23 @@ const normalizeDownload = (record: any): DownloadWallpaper | null => {
     return null;
   }
 
-  const id =
-    wallpaper.id ?? record?.wallpaperId ?? record?.wallpaper_id ?? record?.id;
+  const merged = {
+    ...(typeof wallpaper === "object" ? wallpaper : {}),
+    ...(typeof record === "object" ? record : {}),
+  };
 
-  const rawImageUrl = getRawImageUrl(wallpaper) || getRawImageUrl(record);
+  const id =
+    wallpaper.id ??
+    wallpaper._id ??
+    record?.wallpaperId ??
+    record?.wallpaper_id ??
+    record?.id;
+
+  const rawImageUrl = getRawImageUrl(merged) || getRawImageUrl(wallpaper);
   const rawThumbnailUrl =
-    getRawThumbnailUrl(wallpaper) || getRawThumbnailUrl(record) || rawImageUrl;
+    getRawThumbnailUrl(merged) ||
+    getRawThumbnailUrl(wallpaper) ||
+    rawImageUrl;
 
   const imageUrl = toAbsoluteMediaUrl(rawImageUrl);
   const thumbnailUrl = toAbsoluteMediaUrl(rawThumbnailUrl) || imageUrl;
@@ -195,24 +213,55 @@ const normalizeDownload = (record: any): DownloadWallpaper | null => {
     return null;
   }
 
+  const finalId = String(id ?? imageUrl ?? thumbnailUrl);
+
   return {
-    ...wallpaper,
-    id: String(id ?? imageUrl ?? thumbnailUrl),
-    title: wallpaper.title ?? wallpaper.name ?? "Downloaded Wallpaper",
+    ...merged,
+    id: finalId,
+    wallpaperId: finalId,
+    title:
+      merged.title ??
+      wallpaper.title ??
+      wallpaper.name ??
+      "Downloaded Wallpaper",
     imageUrl,
     thumbnailUrl,
-    quality: wallpaper.quality ?? wallpaper.type ?? "4K",
-    category: wallpaper.category ?? record?.category ?? null,
+    quality: merged.quality ?? wallpaper.quality ?? wallpaper.type ?? "4K",
+    category: merged.category ?? wallpaper.category ?? record?.category ?? null,
     downloadedAt:
+      merged.downloadedAt ??
       record?.downloadedAt ??
       record?.createdAt ??
       record?.created_at ??
       wallpaper.downloadedAt ??
       wallpaper.createdAt ??
       null,
-    isPremium: Boolean(wallpaper.isPremium ?? wallpaper.premium ?? false),
-    resolution: wallpaper.resolution ?? wallpaper.dimensions ?? null,
+    isPremium: Boolean(
+      merged.isPremium ?? wallpaper.isPremium ?? wallpaper.premium ?? false,
+    ),
+    resolution:
+      merged.resolution ?? wallpaper.resolution ?? wallpaper.dimensions ?? null,
+
+    localUri: merged.localUri ?? merged.local_uri ?? null,
+    local_uri: merged.local_uri ?? merged.localUri ?? null,
+    fileUri: merged.fileUri ?? merged.file_uri ?? null,
+    file_uri: merged.file_uri ?? merged.fileUri ?? null,
+    savedUri: merged.savedUri ?? merged.saved_uri ?? null,
+    saved_uri: merged.saved_uri ?? merged.savedUri ?? null,
+    assetId: merged.assetId ?? merged.asset_id ?? null,
+    asset_id: merged.asset_id ?? merged.assetId ?? null,
+    mediaAssetId: merged.mediaAssetId ?? merged.media_asset_id ?? null,
+    media_asset_id: merged.media_asset_id ?? merged.mediaAssetId ?? null,
+    mediaLibraryAssetId:
+      merged.mediaLibraryAssetId ?? merged.media_library_asset_id ?? null,
+    media_library_asset_id:
+      merged.media_library_asset_id ?? merged.mediaLibraryAssetId ?? null,
+    galleryAssetId: merged.galleryAssetId ?? merged.gallery_asset_id ?? null,
+    gallery_asset_id: merged.gallery_asset_id ?? merged.galleryAssetId ?? null,
+
     downloadCount:
+      merged.downloadCount ??
+      merged.download_count ??
       wallpaper.downloadCount ??
       wallpaper.download_count ??
       wallpaper.downloads ??
@@ -275,16 +324,158 @@ const getDownloadCount = (item?: DownloadWallpaper | null) => {
   );
 };
 
-const uniqueById = (items: DownloadWallpaper[]) => {
-  const seen = new Set<string>();
+const getDownloadEventId = (
+  item?: DownloadWallpaper | Record<string, any> | null,
+) => {
+  if (!item) return "";
 
-  return items.filter((item) => {
-    if (!item?.id || seen.has(item.id)) return false;
+  const record = item as DownloadWallpaper & Record<string, any>;
 
-    seen.add(item.id);
-    return true;
-  });
+  return String(
+    record.id ||
+      record._id ||
+      record.wallpaperId ||
+      record.wallpaper_id ||
+      record.uuid ||
+      "",
+  );
 };
+
+const mergeDownloadRecords = (
+  current: DownloadWallpaper,
+  incoming: DownloadWallpaper,
+) => {
+  const currentRecord = current as DownloadWallpaper & Record<string, any>;
+  const incomingRecord = incoming as DownloadWallpaper & Record<string, any>;
+
+  return {
+    ...currentRecord,
+    ...incomingRecord,
+
+    localUri:
+      incomingRecord.localUri ||
+      incomingRecord.local_uri ||
+      currentRecord.localUri ||
+      currentRecord.local_uri ||
+      null,
+    local_uri:
+      incomingRecord.local_uri ||
+      incomingRecord.localUri ||
+      currentRecord.local_uri ||
+      currentRecord.localUri ||
+      null,
+
+    fileUri:
+      incomingRecord.fileUri ||
+      incomingRecord.file_uri ||
+      currentRecord.fileUri ||
+      currentRecord.file_uri ||
+      null,
+    file_uri:
+      incomingRecord.file_uri ||
+      incomingRecord.fileUri ||
+      currentRecord.file_uri ||
+      currentRecord.fileUri ||
+      null,
+
+    savedUri:
+      incomingRecord.savedUri ||
+      incomingRecord.saved_uri ||
+      currentRecord.savedUri ||
+      currentRecord.saved_uri ||
+      null,
+    saved_uri:
+      incomingRecord.saved_uri ||
+      incomingRecord.savedUri ||
+      currentRecord.saved_uri ||
+      currentRecord.savedUri ||
+      null,
+
+    assetId:
+      incomingRecord.assetId ||
+      incomingRecord.asset_id ||
+      currentRecord.assetId ||
+      currentRecord.asset_id ||
+      null,
+    asset_id:
+      incomingRecord.asset_id ||
+      incomingRecord.assetId ||
+      currentRecord.asset_id ||
+      currentRecord.assetId ||
+      null,
+
+    mediaAssetId:
+      incomingRecord.mediaAssetId ||
+      incomingRecord.media_asset_id ||
+      currentRecord.mediaAssetId ||
+      currentRecord.media_asset_id ||
+      null,
+    media_asset_id:
+      incomingRecord.media_asset_id ||
+      incomingRecord.mediaAssetId ||
+      currentRecord.media_asset_id ||
+      currentRecord.mediaAssetId ||
+      null,
+
+    mediaLibraryAssetId:
+      incomingRecord.mediaLibraryAssetId ||
+      incomingRecord.media_library_asset_id ||
+      currentRecord.mediaLibraryAssetId ||
+      currentRecord.media_library_asset_id ||
+      null,
+    media_library_asset_id:
+      incomingRecord.media_library_asset_id ||
+      incomingRecord.mediaLibraryAssetId ||
+      currentRecord.media_library_asset_id ||
+      currentRecord.mediaLibraryAssetId ||
+      null,
+
+    galleryAssetId:
+      incomingRecord.galleryAssetId ||
+      incomingRecord.gallery_asset_id ||
+      currentRecord.galleryAssetId ||
+      currentRecord.gallery_asset_id ||
+      null,
+    gallery_asset_id:
+      incomingRecord.gallery_asset_id ||
+      incomingRecord.galleryAssetId ||
+      currentRecord.gallery_asset_id ||
+      currentRecord.galleryAssetId ||
+      null,
+
+    downloadedAt:
+      parseTime(incomingRecord.downloadedAt) >=
+      parseTime(currentRecord.downloadedAt)
+        ? incomingRecord.downloadedAt
+        : currentRecord.downloadedAt,
+  } as DownloadWallpaper;
+};
+
+const uniqueById = (items: DownloadWallpaper[]) => {
+  const map = new Map<string, DownloadWallpaper>();
+
+  items.forEach((item) => {
+    const id = getDownloadEventId(item) || item.id;
+
+    if (!id) return;
+
+    const existing = map.get(id);
+
+    if (!existing) {
+      map.set(id, item);
+      return;
+    }
+
+    map.set(id, mergeDownloadRecords(existing, item));
+  });
+
+  return Array.from(map.values());
+};
+
+const sortDownloads = (items: DownloadWallpaper[]) =>
+  uniqueById(items).sort(
+    (a, b) => parseTime(b.downloadedAt) - parseTime(a.downloadedAt),
+  );
 
 const getLocalDownloads = async (): Promise<DownloadWallpaper[]> => {
   try {
@@ -303,27 +494,81 @@ const getLocalDownloads = async (): Promise<DownloadWallpaper[]> => {
   }
 };
 
-const getDownloadEventId = (
-  item?: DownloadWallpaper | Record<string, any> | null,
-) => {
-  if (!item) return "";
+const getLocallyDeletedDownloadIds = async (): Promise<Set<string>> => {
+  try {
+    const raw = await AsyncStorage.getItem(LOCAL_DELETED_DOWNLOADS_KEY);
 
-  const record = item as DownloadWallpaper & Record<string, any>;
+    if (!raw) return new Set();
 
-  return String(
-    record.id ||
-      record._id ||
-      record.wallpaperId ||
-      record.wallpaper_id ||
-      record.uuid ||
-      "",
-  );
+    const parsed = JSON.parse(raw);
+
+    if (!Array.isArray(parsed)) return new Set();
+
+    return new Set(
+      parsed
+        .map((value) => String(value || "").trim())
+        .filter((value) => Boolean(value)),
+    );
+  } catch (error) {
+    console.log("LOCAL DELETED DOWNLOAD IDS LOAD ERROR", error);
+    return new Set();
+  }
 };
 
-const sortDownloads = (items: DownloadWallpaper[]) =>
-  uniqueById(items).sort(
-    (a, b) => parseTime(b.downloadedAt) - parseTime(a.downloadedAt),
-  );
+const saveLocallyDeletedDownloadIds = async (ids: Set<string>) => {
+  try {
+    const values = Array.from(ids).filter(Boolean);
+
+    if (values.length === 0) {
+      await AsyncStorage.removeItem(LOCAL_DELETED_DOWNLOADS_KEY);
+      return;
+    }
+
+    await AsyncStorage.setItem(
+      LOCAL_DELETED_DOWNLOADS_KEY,
+      JSON.stringify(values),
+    );
+  } catch (error) {
+    console.log("LOCAL DELETED DOWNLOAD IDS SAVE ERROR", error);
+  }
+};
+
+const addLocallyDeletedDownloadIds = async (ids: Set<string>) => {
+  const current = await getLocallyDeletedDownloadIds();
+
+  ids.forEach((id) => {
+    if (id) {
+      current.add(id);
+    }
+  });
+
+  await saveLocallyDeletedDownloadIds(current);
+};
+
+const removeLocallyDeletedDownloadIds = async (ids: Set<string>) => {
+  const current = await getLocallyDeletedDownloadIds();
+
+  ids.forEach((id) => {
+    if (id) {
+      current.delete(id);
+    }
+  });
+
+  await saveLocallyDeletedDownloadIds(current);
+};
+
+const filterOutLocallyDeletedDownloads = (
+  items: DownloadWallpaper[],
+  locallyDeletedIds: Set<string>,
+) => {
+  if (locallyDeletedIds.size === 0) return items;
+
+  return items.filter((item) => {
+    const id = getDownloadEventId(item);
+
+    return !id || !locallyDeletedIds.has(id);
+  });
+};
 
 const createDownloadFromEvent = (payload: {
   wallpaperId: string;
@@ -350,6 +595,7 @@ const createDownloadFromEvent = (payload: {
   return {
     ...normalized,
     id: String(payload.wallpaperId || normalized.id),
+    wallpaperId: String(payload.wallpaperId || normalized.id),
     downloadedAt,
     downloadCount: payload.downloadCount ?? getDownloadCount(normalized),
     download_count: payload.downloadCount ?? getDownloadCount(normalized),
@@ -379,17 +625,155 @@ const patchDownloadedWallpaper = (
   return normalized || item;
 };
 
+const getUniqueStrings = (values: unknown[]) => {
+  const seen = new Set<string>();
+
+  values.forEach((value) => {
+    if (typeof value !== "string") return;
+
+    const clean = value.trim();
+
+    if (clean) {
+      seen.add(clean);
+    }
+  });
+
+  return Array.from(seen);
+};
+
+const getDeviceFileUris = (item: DownloadWallpaper) => {
+  const record = item as DownloadWallpaper & Record<string, any>;
+
+  return getUniqueStrings([
+    record.localUri,
+    record.local_uri,
+    record.fileUri,
+    record.file_uri,
+    record.savedUri,
+    record.saved_uri,
+    record.deviceUri,
+    record.device_uri,
+    record.downloadedUri,
+    record.downloaded_uri,
+    record.localPath,
+    record.local_path,
+    record.filePath,
+    record.file_path,
+    record.path,
+    record.uri,
+    record.imageUri,
+    record.image_uri,
+    record.thumbnailUri,
+    record.thumbnail_uri,
+  ]).filter((uri) => /^file:\/\//i.test(uri));
+};
+
+const getMediaAssetIds = (item: DownloadWallpaper) => {
+  const record = item as DownloadWallpaper & Record<string, any>;
+
+  return getUniqueStrings([
+    record.assetId,
+    record.asset_id,
+    record.localAssetId,
+    record.local_asset_id,
+    record.mediaAssetId,
+    record.media_asset_id,
+    record.mediaLibraryAssetId,
+    record.media_library_asset_id,
+    record.galleryAssetId,
+    record.gallery_asset_id,
+  ]);
+};
+
+const deleteDeviceFiles = async (items: DownloadWallpaper[]) => {
+  const assetIds = getUniqueStrings(items.flatMap(getMediaAssetIds));
+
+  console.log("DELETE_DEVICE_DEBUG_ASSETS", assetIds);
+
+  if (assetIds.length > 0) {
+    try {
+      const permission = await MediaLibrary.requestPermissionsAsync();
+
+      if (permission.granted) {
+        await MediaLibrary.deleteAssetsAsync(assetIds);
+      } else {
+        console.log("MEDIA LIBRARY DELETE PERMISSION DENIED");
+      }
+    } catch (error) {
+      console.log("MEDIA LIBRARY DELETE ERROR", error);
+    }
+  }
+
+  const fileUris = getUniqueStrings(items.flatMap(getDeviceFileUris));
+
+  console.log("DELETE_DEVICE_DEBUG_FILES", fileUris);
+
+  await Promise.all(
+    fileUris.map(async (uri) => {
+      try {
+        const info = await FileSystem.getInfoAsync(uri);
+
+        if (info.exists) {
+          await FileSystem.deleteAsync(uri, { idempotent: true });
+        }
+      } catch (error) {
+        console.log("DEVICE FILE DELETE ERROR", uri, error);
+      }
+    }),
+  );
+};
+
+const removeLocalDownloadsByIds = async (ids: Set<string>) => {
+  try {
+    const raw = await AsyncStorage.getItem(LOCAL_DOWNLOADS_KEY);
+
+    if (!raw) return;
+
+    const parsed = JSON.parse(raw);
+
+    if (!Array.isArray(parsed)) return;
+
+    const next = parsed.filter((record) => {
+      const normalized = normalizeDownload(record);
+      const id = getDownloadEventId(normalized || record);
+
+      return !ids.has(id);
+    });
+
+    if (next.length === 0) {
+      await AsyncStorage.removeItem(LOCAL_DOWNLOADS_KEY);
+      return;
+    }
+
+    await AsyncStorage.setItem(LOCAL_DOWNLOADS_KEY, JSON.stringify(next));
+  } catch (error) {
+    console.log("LOCAL DOWNLOADS DELETE ERROR", error);
+  }
+};
+
 const DownloadsHeader = ({
   navigation,
   activeFilter,
   onFilterChange,
-  onBrowse,
+  selectionMode,
+  selectedCount,
+  hasDownloads,
+  onDeletePress,
 }: {
   navigation: Props["navigation"];
   activeFilter: Filter;
   onFilterChange: (filter: Filter) => void;
-  onBrowse: () => void;
+  selectionMode: boolean;
+  selectedCount: number;
+  hasDownloads: boolean;
+  onDeletePress: () => void;
 }) => {
+  const subtitle = selectionMode
+    ? selectedCount > 0
+      ? `${selectedCount} selected`
+      : "Select wallpapers to delete"
+    : "Your saved wallpaper gallery";
+
   return (
     <View>
       <View style={styles.topBar}>
@@ -412,22 +796,23 @@ const DownloadsHeader = ({
 
         <View style={styles.topTitleWrap}>
           <Text style={styles.topTitle}>Downloads</Text>
-          <Text style={styles.topSubtitle}>Your saved wallpaper gallery</Text>
+          <Text style={styles.topSubtitle}>{subtitle}</Text>
         </View>
 
         <Pressable
-          onPress={onBrowse}
+          onPress={onDeletePress}
+          disabled={!hasDownloads}
           hitSlop={8}
           style={({ pressed }) => [
             styles.roundAction,
-            { opacity: pressed ? 0.65 : 1 },
+            { opacity: !hasDownloads ? 0.35 : pressed ? 0.65 : 1 },
           ]}
         >
           <BlurView intensity={30} tint="dark" style={styles.roundBlur}>
             <Ionicons
-              name="grid-outline"
+              name={selectionMode ? "close" : "trash-outline"}
               size={20}
-              color={colors.textPrimary}
+              color={selectionMode ? colors.textPrimary : colors.accent}
             />
           </BlurView>
         </Pressable>
@@ -467,23 +852,34 @@ const DownloadsHeader = ({
 
 const DownloadsGrid = ({
   downloads,
+  selectionMode,
+  selectedIds,
   onOpenWallpaper,
+  onToggleSelect,
 }: {
   downloads: DownloadWallpaper[];
+  selectionMode: boolean;
+  selectedIds: Set<string>;
   onOpenWallpaper: (wallpaper: DownloadWallpaper) => void;
+  onToggleSelect: (wallpaper: DownloadWallpaper) => void;
 }) => {
   return (
     <View style={styles.downloadGrid}>
       {downloads.map((item) => {
         const image = getWallpaperImage(item) ?? fallbackImage(item.id);
         const downloadCount = getDownloadCount(item);
+        const itemId = getDownloadEventId(item);
+        const selected = selectedIds.has(itemId);
 
         return (
           <Pressable
             key={item.id}
-            onPress={() => onOpenWallpaper(item)}
+            onPress={() =>
+              selectionMode ? onToggleSelect(item) : onOpenWallpaper(item)
+            }
             style={({ pressed }) => [
               styles.wallpaperButton,
+              selectionMode && selected ? styles.wallpaperButtonSelected : null,
               {
                 opacity: pressed ? 0.78 : 1,
                 transform: [{ scale: pressed ? 0.98 : 1 }],
@@ -508,6 +904,21 @@ const DownloadsGrid = ({
               <BlurView intensity={26} tint="dark" style={styles.qualityChip}>
                 <Text style={styles.qualityText}>{item.quality || "HD"}</Text>
               </BlurView>
+
+              {selectionMode ? (
+                <View style={styles.selectionLayer}>
+                  <View
+                    style={[
+                      styles.selectionCircle,
+                      selected ? styles.selectionCircleActive : null,
+                    ]}
+                  >
+                    {selected ? (
+                      <Ionicons name="checkmark" size={17} color="#fff" />
+                    ) : null}
+                  </View>
+                </View>
+              ) : null}
 
               <View style={styles.wallpaperMetaLayer}>
                 <View style={styles.downloadPill}>
@@ -562,6 +973,36 @@ const EmptyState = ({
   </View>
 );
 
+const DeleteBottomOverlay = ({
+  selectedCount,
+  onDelete,
+}: {
+  selectedCount: number;
+  onDelete: () => void;
+}) => {
+  const disabled = selectedCount === 0;
+
+  return (
+    <SafeAreaView edges={["bottom"]} style={styles.deleteDock}>
+      <BlurView intensity={24} tint="dark" style={StyleSheet.absoluteFill} />
+
+      <Pressable
+        disabled={disabled}
+        onPress={onDelete}
+        style={({ pressed }) => [
+          styles.deleteDeviceButton,
+          disabled ? styles.deleteDeviceButtonDisabled : null,
+          {
+            transform: [{ scale: pressed && !disabled ? 0.985 : 1 }],
+          },
+        ]}
+      >
+        <Text style={styles.deleteDeviceText}>Delete from device</Text>
+      </Pressable>
+    </SafeAreaView>
+  );
+};
+
 export default function DownloadsScreen({ navigation }: Props) {
   const { user } = useAuth();
 
@@ -569,15 +1010,22 @@ export default function DownloadsScreen({ navigation }: Props) {
   const [activeFilter, setActiveFilter] = useState<Filter>("All");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
 
   const loadDownloads = useCallback(async () => {
     let localItems: DownloadWallpaper[] = [];
+    let locallyDeletedIds = new Set<string>();
 
     try {
       localItems = await getLocalDownloads();
+      locallyDeletedIds = await getLocallyDeletedDownloadIds();
 
       if (!user) {
-        const sortedLocal = sortDownloads(localItems);
+        const sortedLocal = filterOutLocallyDeletedDownloads(
+          sortDownloads(localItems),
+          locallyDeletedIds,
+        );
 
         setDownloads(sortedLocal);
         return;
@@ -589,7 +1037,10 @@ export default function DownloadsScreen({ navigation }: Props) {
         .map(normalizeDownload)
         .filter(Boolean) as DownloadWallpaper[];
 
-      const sorted = sortDownloads([...serverItems, ...localItems]);
+      const sorted = filterOutLocallyDeletedDownloads(
+        sortDownloads([...serverItems, ...localItems]),
+        locallyDeletedIds,
+      );
 
       setDownloads(sorted);
     } catch (error) {
@@ -598,7 +1049,10 @@ export default function DownloadsScreen({ navigation }: Props) {
         (error as any)?.response?.data || (error as any)?.message || error,
       );
 
-      const sortedLocal = sortDownloads(localItems);
+      const sortedLocal = filterOutLocallyDeletedDownloads(
+        sortDownloads(localItems),
+        locallyDeletedIds,
+      );
 
       setDownloads(sortedLocal);
     } finally {
@@ -620,7 +1074,18 @@ export default function DownloadsScreen({ navigation }: Props) {
         return;
       }
 
-      setDownloads((current) => sortDownloads([nextDownload, ...current]));
+      const nextId = getDownloadEventId(nextDownload);
+
+      if (nextId) {
+        void removeLocallyDeletedDownloadIds(new Set([nextId]));
+      }
+
+      setDownloads((current) =>
+        sortDownloads([
+          nextDownload,
+          ...current.filter((item) => getDownloadEventId(item) !== nextId),
+        ]),
+      );
     });
 
     const unsubscribeWallpaper = appEvents.on("wallpaperChanged", (payload) => {
@@ -673,6 +1138,11 @@ export default function DownloadsScreen({ navigation }: Props) {
     );
   }, [activeFilter, downloads]);
 
+  const handleFilterChange = useCallback((filter: Filter) => {
+    setActiveFilter(filter);
+    setSelectedIds(new Set());
+  }, []);
+
   const openWallpaper = (wallpaper: DownloadWallpaper) => {
     navigation.navigate("WallpaperDetails", {
       wallpaper,
@@ -682,6 +1152,59 @@ export default function DownloadsScreen({ navigation }: Props) {
   const browseWallpapers = () => {
     navigation.navigate("MainTabs");
   };
+
+  const toggleSelectionMode = useCallback(() => {
+    if (!selectionMode && filteredDownloads.length === 0) return;
+
+    setSelectionMode((current) => !current);
+    setSelectedIds(new Set());
+  }, [filteredDownloads.length, selectionMode]);
+
+  const toggleWallpaperSelection = useCallback((wallpaper: DownloadWallpaper) => {
+    const id = getDownloadEventId(wallpaper);
+
+    if (!id) return;
+
+    setSelectedIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+
+      return next;
+    });
+  }, []);
+
+  const deleteSelectedWallpapers = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+
+    const idsToDelete = new Set(selectedIds);
+
+    const selectedItems = downloads.filter((item) =>
+      idsToDelete.has(getDownloadEventId(item)),
+    );
+
+    setDownloads((current) =>
+      current.filter((item) => !idsToDelete.has(getDownloadEventId(item))),
+    );
+
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+
+    try {
+      await deleteDeviceFiles(selectedItems);
+      await removeLocalDownloadsByIds(idsToDelete);
+      await addLocallyDeletedDownloadIds(idsToDelete);
+    } catch (error) {
+      console.log(
+        "DELETE LOCAL DOWNLOADS ERROR",
+        (error as any)?.message || error,
+      );
+    }
+  }, [downloads, selectedIds]);
 
   if (loading) {
     return (
@@ -707,19 +1230,28 @@ export default function DownloadsScreen({ navigation }: Props) {
               tintColor={colors.accent}
             />
           }
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            selectionMode ? styles.scrollContentWithDelete : null,
+          ]}
         >
           <DownloadsHeader
             navigation={navigation}
             activeFilter={activeFilter}
-            onFilterChange={setActiveFilter}
-            onBrowse={browseWallpapers}
+            onFilterChange={handleFilterChange}
+            selectionMode={selectionMode}
+            selectedCount={selectedIds.size}
+            hasDownloads={filteredDownloads.length > 0}
+            onDeletePress={toggleSelectionMode}
           />
 
           {filteredDownloads.length > 0 ? (
             <DownloadsGrid
               downloads={filteredDownloads}
+              selectionMode={selectionMode}
+              selectedIds={selectedIds}
               onOpenWallpaper={openWallpaper}
+              onToggleSelect={toggleWallpaperSelection}
             />
           ) : (
             <EmptyState
@@ -738,6 +1270,13 @@ export default function DownloadsScreen({ navigation }: Props) {
           )}
         </ScrollView>
       </SafeAreaView>
+
+      {selectionMode ? (
+        <DeleteBottomOverlay
+          selectedCount={selectedIds.size}
+          onDelete={deleteSelectedWallpapers}
+        />
+      ) : null}
     </View>
   );
 }
@@ -766,6 +1305,10 @@ const styles = StyleSheet.create({
 
   scrollContent: {
     paddingBottom: 130,
+  },
+
+  scrollContentWithDelete: {
+    paddingBottom: 210,
   },
 
   topBar: {
@@ -878,6 +1421,11 @@ const styles = StyleSheet.create({
     borderColor: colors.glassBorderSoft,
   },
 
+  wallpaperButtonSelected: {
+    borderWidth: 2,
+    borderColor: colors.accent,
+  },
+
   wallpaperImage: {
     width: "100%",
     height: "100%",
@@ -904,6 +1452,30 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 11,
+  },
+
+  selectionLayer: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "rgba(0,0,0,0.24)",
+  },
+
+  selectionCircle: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.56)",
+  },
+
+  selectionCircleActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
 
   wallpaperMetaLayer: {
@@ -971,5 +1543,45 @@ const styles = StyleSheet.create({
   browseText: {
     color: "#fff",
     fontWeight: "800",
+  },
+
+  deleteDock: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: spacing.xl,
+    paddingTop: 18,
+    paddingBottom: 18,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    overflow: "hidden",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorder,
+    backgroundColor: "rgba(15,15,16,0.82)",
+  },
+
+  deleteDeviceButton: {
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.24,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+
+  deleteDeviceButtonDisabled: {
+    opacity: 0.55,
+  },
+
+  deleteDeviceText: {
+    color: colors.accent,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 15,
+    letterSpacing: 0.2,
   },
 });

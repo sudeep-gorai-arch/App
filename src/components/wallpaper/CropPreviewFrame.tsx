@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 
 import { LinearGradient } from 'expo-linear-gradient';
+import { useVideoPlayer, VideoView } from 'expo-video';
 
 import { SCREEN } from '../../utils/constants';
 import HomeScreenPreview from './HomeScreenPreview';
@@ -26,9 +27,14 @@ import {
   WallpaperPreviewMode,
 } from '../../utils/wallpaperCrop';
 
+export type CropPreviewMediaType = 'IMAGE' | 'VIDEO';
+
 export type CropPreviewFrameValue = {
   mode: WallpaperPreviewMode;
   imageUrl: string;
+  videoUrl?: string;
+  mediaType: CropPreviewMediaType;
+  isVideo: boolean;
   cropRect: WallpaperCropRect;
   imageSize: WallpaperCropSize;
   frameSize: WallpaperCropSize;
@@ -37,10 +43,15 @@ export type CropPreviewFrameValue = {
 
 type Props = {
   imageUrl: string;
+  videoUrl?: string;
+  mediaType?: CropPreviewMediaType | string;
+  isVideo?: boolean;
   mode: WallpaperPreviewMode;
   active?: boolean;
   frameWidth?: number;
   frameHeight?: number;
+  sourceWidth?: number | null;
+  sourceHeight?: number | null;
   onCropChange?: (value: CropPreviewFrameValue) => void;
   onInteractionStart?: () => void;
   onInteractionEnd?: () => void;
@@ -50,6 +61,11 @@ const DEFAULT_FRAME_WIDTH = Math.min(SCREEN.width - 52, 350);
 const DEFAULT_FRAME_HEIGHT = Math.round(
   DEFAULT_FRAME_WIDTH * WALLPAPER_PHONE_ASPECT_RATIO,
 );
+
+const DEFAULT_SOURCE_SIZE = {
+  width: 1080,
+  height: 1920,
+};
 
 const areSizesEqual = (a: WallpaperCropSize, b: WallpaperCropSize) => {
   return (
@@ -94,6 +110,33 @@ const getTouchDistance = (event: GestureResponderEvent) => {
   return Math.sqrt(dx * dx + dy * dy);
 };
 
+const toPositiveNumber = (value?: number | null) => {
+  if (typeof value !== 'number') return undefined;
+  if (!Number.isFinite(value) || value <= 0) return undefined;
+
+  return value;
+};
+
+const getInitialSourceSize = ({
+  sourceWidth,
+  sourceHeight,
+}: {
+  sourceWidth?: number | null;
+  sourceHeight?: number | null;
+}): WallpaperCropSize => {
+  const width = toPositiveNumber(sourceWidth);
+  const height = toPositiveNumber(sourceHeight);
+
+  if (width && height) {
+    return {
+      width,
+      height,
+    };
+  }
+
+  return DEFAULT_SOURCE_SIZE;
+};
+
 const CropGrid = () => {
   return (
     <View pointerEvents="none" style={styles.fill}>
@@ -113,23 +156,80 @@ const CropPreviewOverlay = ({ mode }: { mode: WallpaperPreviewMode }) => {
   return <LockScreenPreview />;
 };
 
+type VideoCropLayerProps = {
+  videoUrl: string;
+  posterUrl: string;
+};
+
+const VideoCropLayer = ({ videoUrl, posterUrl }: VideoCropLayerProps) => {
+  const player = useVideoPlayer(videoUrl, videoPlayer => {
+    videoPlayer.loop = true;
+    videoPlayer.muted = true;
+    videoPlayer.play();
+  });
+
+  useEffect(() => {
+    try {
+      player.loop = true;
+      player.muted = true;
+      player.play();
+    } catch (error) {
+      console.log('Crop preview video play failed:', error);
+    }
+  }, [player, videoUrl]);
+
+  return (
+    <View style={styles.videoLayer}>
+      {posterUrl ? (
+        <Image
+          source={{ uri: posterUrl }}
+          resizeMode="stretch"
+          style={styles.image}
+        />
+      ) : null}
+
+      <VideoView
+        player={player}
+        style={StyleSheet.absoluteFill}
+        contentFit="fill"
+        nativeControls={false}
+      />
+    </View>
+  );
+};
+
 const CropPreviewFrame = ({
   imageUrl,
+  videoUrl,
+  mediaType,
+  isVideo: rawIsVideo,
   mode,
   active = true,
   frameWidth = DEFAULT_FRAME_WIDTH,
   frameHeight = DEFAULT_FRAME_HEIGHT,
+  sourceWidth,
+  sourceHeight,
   onCropChange,
   onInteractionStart,
   onInteractionEnd,
 }: Props) => {
+  const normalizedMediaType = String(mediaType || '').toUpperCase();
+
+  const isVideo =
+    rawIsVideo === true || normalizedMediaType === 'VIDEO' || !!videoUrl;
+
+  const cropMediaType: CropPreviewMediaType = isVideo ? 'VIDEO' : 'IMAGE';
+  const mediaUrl = isVideo ? videoUrl || imageUrl : imageUrl;
+
   const onCropChangeRef = useRef<Props['onCropChange']>(onCropChange);
   const lastCropRectRef = useRef<WallpaperCropRect | undefined>(undefined);
 
-  const [imageSize, setImageSize] = useState<WallpaperCropSize>({
-    width: 1080,
-    height: 1920,
-  });
+  const [imageSize, setImageSize] = useState<WallpaperCropSize>(
+    getInitialSourceSize({
+      sourceWidth,
+      sourceHeight,
+    }),
+  );
 
   const [frameSize, setFrameSize] = useState<WallpaperCropSize>({
     width: frameWidth,
@@ -187,13 +287,16 @@ const CropPreviewFrame = ({
       onCropChangeRef.current?.({
         mode,
         imageUrl,
+        videoUrl,
+        mediaType: cropMediaType,
+        isVideo,
         cropRect,
         imageSize: currentImageSize,
         frameSize: currentFrameSize,
         transform: nextTransform,
       });
     },
-    [imageUrl, mode],
+    [cropMediaType, imageUrl, isVideo, mode, videoUrl],
   );
 
   const updateTransform = useCallback(
@@ -232,9 +335,23 @@ const CropPreviewFrame = ({
     requestAnimationFrame(() => {
       emitCropChange(initialTransform, true);
     });
-  }, [imageUrl, mode, emitCropChange]);
+  }, [emitCropChange, imageUrl, mode, videoUrl]);
 
   useEffect(() => {
+    if (isVideo) {
+      const nextSize = getInitialSourceSize({
+        sourceWidth,
+        sourceHeight,
+      });
+
+      setImageSize(prev => {
+        if (areSizesEqual(prev, nextSize)) return prev;
+        return nextSize;
+      });
+
+      return;
+    }
+
     if (!imageUrl) return;
 
     Image.getSize(
@@ -250,15 +367,13 @@ const CropPreviewFrame = ({
         });
       },
       () => {
-        const fallbackSize = { width: 1080, height: 1920 };
-
         setImageSize(prev => {
-          if (areSizesEqual(prev, fallbackSize)) return prev;
-          return fallbackSize;
+          if (areSizesEqual(prev, DEFAULT_SOURCE_SIZE)) return prev;
+          return DEFAULT_SOURCE_SIZE;
         });
       },
     );
-  }, [imageUrl]);
+  }, [imageUrl, isVideo, sourceHeight, sourceWidth]);
 
   useEffect(() => {
     emitCropChange(transformRef.current, true);
@@ -314,6 +429,7 @@ const CropPreviewFrame = ({
             }
 
             const startDistance = Math.max(1, pinchStartDistanceRef.current);
+
             const nextScale =
               startTransformRef.current.scale * (nextDistance / startDistance);
 
@@ -403,26 +519,30 @@ const CropPreviewFrame = ({
                 },
               ]}
             >
-              <Image
-                source={{ uri: imageUrl }}
-                resizeMode="stretch"
-                onLoad={event => {
-                  const source = event.nativeEvent.source;
+              {isVideo && mediaUrl ? (
+                <VideoCropLayer videoUrl={mediaUrl} posterUrl={imageUrl} />
+              ) : (
+                <Image
+                  source={{ uri: imageUrl }}
+                  resizeMode="stretch"
+                  onLoad={event => {
+                    const source = event.nativeEvent.source;
 
-                  if (source?.width > 0 && source?.height > 0) {
-                    const nextSize = {
-                      width: source.width,
-                      height: source.height,
-                    };
+                    if (source?.width > 0 && source?.height > 0) {
+                      const nextSize = {
+                        width: source.width,
+                        height: source.height,
+                      };
 
-                    setImageSize(prev => {
-                      if (areSizesEqual(prev, nextSize)) return prev;
-                      return nextSize;
-                    });
-                  }
-                }}
-                style={styles.image}
-              />
+                      setImageSize(prev => {
+                        if (areSizesEqual(prev, nextSize)) return prev;
+                        return nextSize;
+                      });
+                    }
+                  }}
+                  style={styles.image}
+                />
+              )}
             </View>
 
             <LinearGradient
@@ -492,6 +612,13 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
+  },
+
+  videoLayer: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#050505',
+    overflow: 'hidden',
   },
 
   fill: {

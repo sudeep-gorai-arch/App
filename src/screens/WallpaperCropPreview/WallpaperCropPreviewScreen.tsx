@@ -30,22 +30,50 @@ import {
   WallpaperPreviewMode,
 } from '../../utils/wallpaperCrop';
 import {
+  applyVideoWallpaperToAndroid,
   applyWallpaperToAndroid,
   WallpaperApplyTarget,
 } from '../../services/applyWallpaperService';
+
+type CropMediaType = 'IMAGE' | 'VIDEO';
 
 type Props = {
   navigation: any;
   route: {
     params?: {
       imageUrl?: string;
+      videoUrl?: string;
+      mediaType?: CropMediaType | string;
+      isVideo?: boolean;
       target?: WallpaperCropTarget;
       title?: string;
+      videoWidth?: number | null;
+      videoHeight?: number | null;
     };
   };
 };
 
 type CropMap = Partial<Record<WallpaperPreviewMode, CropPreviewFrameValue>>;
+
+const getPrimaryCropValue = ({
+  cropMap,
+  target,
+  latestCrop,
+}: {
+  cropMap: CropMap;
+  target: WallpaperCropTarget;
+  latestCrop?: CropPreviewFrameValue | null;
+}): CropPreviewFrameValue | undefined => {
+  if (target === 'home') {
+    return cropMap.home || latestCrop || undefined;
+  }
+
+  if (target === 'lock') {
+    return cropMap.lock || latestCrop || undefined;
+  }
+
+  return latestCrop || cropMap.home || cropMap.lock || undefined;
+};
 
 const getPrimaryCropRect = ({
   cropMap,
@@ -56,19 +84,38 @@ const getPrimaryCropRect = ({
   target: WallpaperCropTarget;
   latestCrop?: CropPreviewFrameValue | null;
 }): WallpaperCropRect | undefined => {
-  if (target === 'home') {
-    return cropMap.home?.cropRect || latestCrop?.cropRect;
-  }
+  return getPrimaryCropValue({
+    cropMap,
+    target,
+    latestCrop,
+  })?.cropRect;
+};
 
-  if (target === 'lock') {
-    return cropMap.lock?.cropRect || latestCrop?.cropRect;
-  }
+const toNumberOrNull = (value: unknown) => {
+  const parsed = Number(value);
 
-  return (
-    latestCrop?.cropRect ||
-    cropMap.home?.cropRect ||
-    cropMap.lock?.cropRect
-  );
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const buildVideoCropConfig = (cropValue?: CropPreviewFrameValue | null) => {
+  if (!cropValue) return null;
+
+  return {
+    scale: cropValue.transform.scale,
+    translateX: cropValue.transform.translateX,
+    translateY: cropValue.transform.translateY,
+
+    previewWidth: cropValue.frameSize.width,
+    previewHeight: cropValue.frameSize.height,
+
+    videoWidth: cropValue.imageSize.width,
+    videoHeight: cropValue.imageSize.height,
+
+    cropX: cropValue.cropRect.x,
+    cropY: cropValue.cropRect.y,
+    cropWidth: cropValue.cropRect.width,
+    cropHeight: cropValue.cropRect.height,
+  };
 };
 
 const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
@@ -77,18 +124,40 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const imageUrl = String(route.params?.imageUrl || '').trim();
-  const target = (route.params?.target || 'home') as WallpaperCropTarget;
+  const videoUrl = String(route.params?.videoUrl || '').trim();
+
+  const mediaType = String(route.params?.mediaType || '').toUpperCase();
+
+  const isVideo = Boolean(
+    route.params?.isVideo || mediaType === 'VIDEO' || videoUrl,
+  );
+
+  const target = (
+    isVideo ? 'lock' : route.params?.target || 'home'
+  ) as WallpaperCropTarget;
+
+  const title = route.params?.title || 'FlexiWalls Wallpaper';
+
+  const sourceWidth = toNumberOrNull(route.params?.videoWidth);
+  const sourceHeight = toNumberOrNull(route.params?.videoHeight);
 
   const [cropMap, setCropMap] = useState<CropMap>({});
   const [activeIndex, setActiveIndex] = useState(0);
   const [applying, setApplying] = useState(false);
   const [cropInteractionActive, setCropInteractionActive] = useState(false);
 
-  const previewModes = useMemo(() => getPreviewModesForTarget(target), [target]);
-  const isBoth = target === 'both';
+  const previewModes = useMemo(() => {
+    if (isVideo) {
+      return ['lock'] as WallpaperPreviewMode[];
+    }
+
+    return getPreviewModesForTarget(target);
+  }, [isVideo, target]);
+
+  const isBoth = !isVideo && target === 'both';
 
   const maxCardWidthByScreen = Math.max(240, windowWidth - 46);
-  const reservedVerticalSpace = isBoth ? 245 : 185;
+  const reservedVerticalSpace = isBoth ? 245 : isVideo ? 235 : 185;
   const maxCardHeightByScreen = Math.max(
     420,
     windowHeight - reservedVerticalSpace,
@@ -133,18 +202,51 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
     if (applying) return;
 
     if (!imageUrl) {
-      Alert.alert('Missing wallpaper', 'Wallpaper image URL is missing.');
+      Alert.alert(
+        'Missing wallpaper',
+        isVideo
+          ? 'Video preview image URL is missing.'
+          : 'Wallpaper image URL is missing.',
+      );
+      return;
+    }
+
+    if (isVideo && !videoUrl) {
+      Alert.alert('Missing video', 'Video wallpaper URL is missing.');
       return;
     }
 
     try {
       setApplying(true);
 
-      const cropRect = getPrimaryCropRect({
+      const cropValue = getPrimaryCropValue({
         cropMap,
         target,
         latestCrop: latestCropRef.current,
       });
+
+      const cropRect =
+        cropValue?.cropRect ||
+        getPrimaryCropRect({
+          cropMap,
+          target,
+          latestCrop: latestCropRef.current,
+        });
+
+      if (isVideo) {
+        const videoCropConfig = buildVideoCropConfig(cropValue);
+
+        await applyVideoWallpaperToAndroid(
+          videoUrl,
+          target as WallpaperApplyTarget,
+          title || 'FlexiWalls Video Wallpaper',
+          videoCropConfig,
+        );
+
+        navigation.goBack();
+
+        return;
+      }
 
       await applyWallpaperToAndroid(
         imageUrl,
@@ -154,11 +256,19 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
 
       navigation.goBack();
     } catch (error: any) {
-      console.log('Apply cropped wallpaper failed:', error);
+      console.log(
+        isVideo
+          ? 'Open Android live wallpaper preview failed:'
+          : 'Apply cropped wallpaper failed:',
+        error,
+      );
 
       Alert.alert(
-        'Apply failed',
-        error?.message || 'Could not apply this wallpaper.',
+        isVideo ? 'Preview failed' : 'Apply failed',
+        error?.message ||
+        (isVideo
+          ? 'Could not open Android live wallpaper preview.'
+          : 'Could not apply this wallpaper.'),
       );
     } finally {
       setApplying(false);
@@ -220,7 +330,9 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
             {applying ? (
               <ActivityIndicator size="small" color={colors.textPrimary} />
             ) : (
-              <Text style={styles.doneButtonText}>Done</Text>
+              <Text style={styles.doneButtonText}>
+                {isVideo ? 'Next' : 'Done'}
+              </Text>
             )}
           </BlurView>
         </Pressable>
@@ -277,10 +389,15 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
                 >
                   <CropPreviewFrame
                     imageUrl={imageUrl}
+                    videoUrl={videoUrl}
+                    mediaType={isVideo ? 'VIDEO' : 'IMAGE'}
+                    isVideo={isVideo}
                     mode={mode}
                     active={!applying}
                     frameWidth={cardWidth}
                     frameHeight={cardHeight}
+                    sourceWidth={sourceWidth}
+                    sourceHeight={sourceHeight}
                     onCropChange={onCropChange}
                     onInteractionStart={() => setCropInteractionActive(true)}
                     onInteractionEnd={() => setCropInteractionActive(false)}
@@ -289,7 +406,23 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
                   {renderFloatingActions()}
                 </View>
 
-                <Text style={styles.modeLabel}>{getPreviewModeLabel(mode)}</Text>
+                <Text style={styles.modeLabel}>
+                  {isVideo ? 'Lock screen preview' : getPreviewModeLabel(mode)}
+                </Text>
+
+                {isVideo ? (
+                  <View style={styles.videoExternalNote}>
+                    <Ionicons
+                      name="open-outline"
+                      size={15}
+                      color={colors.textSecondary}
+                    />
+
+                    <Text style={styles.videoExternalNoteText}>
+                      Apply using Android external preview
+                    </Text>
+                  </View>
+                ) : null}
               </View>
             ))}
           </ScrollView>
@@ -483,6 +616,26 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.bold,
     fontSize: 14,
     textAlign: 'center',
+  },
+
+  videoExternalNote: {
+    marginTop: spacing.sm,
+    minHeight: 34,
+    borderRadius: 999,
+    paddingHorizontal: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorder,
+  },
+
+  videoExternalNoteText: {
+    color: colors.textSecondary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 12,
   },
 
   previewSwitchBottom: {
