@@ -37,8 +37,36 @@
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0" />
 
     <service
-      android:name=".VideoWallpaperService"
-      android:label="FlexiWalls Video Wallpaper"
+      android:name=".HomeVideoWallpaperService"
+      android:label="FlexiWalls Home Live Wallpaper"
+      android:permission="android.permission.BIND_WALLPAPER"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.service.wallpaper.WallpaperService" />
+      </intent-filter>
+
+      <meta-data
+        android:name="android.service.wallpaper"
+        android:resource="@xml/video_wallpaper" />
+    </service>
+
+    <service
+      android:name=".LockVideoWallpaperService"
+      android:label="FlexiWalls Lock Live Wallpaper"
+      android:permission="android.permission.BIND_WALLPAPER"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.service.wallpaper.WallpaperService" />
+      </intent-filter>
+
+      <meta-data
+        android:name="android.service.wallpaper"
+        android:resource="@xml/video_wallpaper" />
+    </service>
+
+    <service
+      android:name=".BothVideoWallpaperService"
+      android:label="FlexiWalls Live Wallpaper"
       android:permission="android.permission.BIND_WALLPAPER"
       android:exported="true">
       <intent-filter>

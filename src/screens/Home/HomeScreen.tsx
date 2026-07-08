@@ -10,7 +10,6 @@ import {
   Pressable,
   NativeSyntheticEvent,
   NativeScrollEvent,
-  ActivityIndicator,
   Animated,
 } from "react-native";
 
@@ -23,6 +22,7 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import MeshBackground from "../../components/MeshBackground";
 import Button from "../../components/Button";
 import PremiumActionButton from "../../components/PremiumActionButton";
+import LiquidAppLoader from "../../components/LiquidAppLoader";
 
 import { colors } from "../../styles/colors";
 import { spacing, radius, SCREEN } from "../../utils/constants";
@@ -44,12 +44,18 @@ const HERO_GAP = spacing.md;
 const HERO_SNAP = HERO_W + HERO_GAP;
 
 const HOME_WALLPAPER_LIMIT = 10;
+const HOME_IMAGE_PREFETCH_LIMIT = 8;
+const HOME_LOADER_MIN_TIME = 2200;
+const HOME_IMAGE_PREFETCH_TIMEOUT = 3200;
 
 const GRID_GAP = spacing.md;
 const CARD_W = (SCREEN.width - spacing.xl * 2 - GRID_GAP) / 2;
 const CARD_H = CARD_W * 1.52;
 
 const API_ORIGIN = String(API.defaults.baseURL || "").replace(/\/api\/?$/, "");
+
+const wait = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const toAbsoluteMediaUrl = (value?: string | null) => {
   if (!value) return undefined;
@@ -91,6 +97,23 @@ const getWallpaperImage = (item: Wallpaper) => {
     toAbsoluteMediaUrl(w.mediaUrl) ||
     toAbsoluteMediaUrl(w.media_url)
   );
+};
+
+const preloadHomeImages = async (items: Wallpaper[]) => {
+  const urls = Array.from(
+    new Set(
+      items
+        .map((item) => getWallpaperImage(item))
+        .filter((url): url is string => Boolean(url)),
+    ),
+  ).slice(0, HOME_IMAGE_PREFETCH_LIMIT);
+
+  if (!urls.length) return;
+
+  await Promise.race([
+    Promise.all(urls.map((url) => Image.prefetch(url).catch(() => false))),
+    wait(HOME_IMAGE_PREFETCH_TIMEOUT),
+  ]);
 };
 
 const toNumber = (value: unknown) => {
@@ -615,6 +638,8 @@ const HomeScreen = () => {
   };
 
   const loadHome = async (isRefresh = false) => {
+    const startedAt = Date.now();
+
     try {
       if (!isRefresh) {
         setLoading(true);
@@ -653,6 +678,18 @@ const HomeScreen = () => {
 
       const safeHeroData =
         heroData.length > 0 ? heroData : safeLatestData.slice(0, 5);
+
+      if (!isRefresh) {
+        const remainingTime = Math.max(
+          0,
+          HOME_LOADER_MIN_TIME - (Date.now() - startedAt),
+        );
+
+        await Promise.all([
+          preloadHomeImages([...safeHeroData, ...safeLatestData]),
+          wait(remainingTime),
+        ]);
+      }
 
       setFeatured(safeHeroData);
       setHomeWallpapers(safeLatestData);
@@ -771,11 +808,7 @@ const HomeScreen = () => {
   };
 
   if (loading) {
-    return (
-      <View style={styles.loadingRoot}>
-        <ActivityIndicator size="large" color={colors.textPrimary} />
-      </View>
-    );
+    return <LiquidAppLoader />;
   }
 
   return (
@@ -822,13 +855,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.base,
-  },
-
-  loadingRoot: {
-    flex: 1,
-    backgroundColor: colors.base,
-    justifyContent: "center",
-    alignItems: "center",
   },
 
   scrollContent: {

@@ -21,9 +21,17 @@ import java.nio.FloatBuffer
 import kotlin.math.max
 import kotlin.math.min
 
-class VideoWallpaperService : WallpaperService() {
+open class VideoWallpaperService : WallpaperService() {
   override fun onCreateEngine(): Engine {
     return VideoWallpaperEngine()
+  }
+
+  protected open fun getVideoPrefsName(): String {
+    return AndroidWallpaperModule.VIDEO_WALLPAPER_PREFS
+  }
+
+  protected open fun getServiceLogName(): String {
+    return "base"
   }
 
   private inner class VideoWallpaperEngine : Engine() {
@@ -105,14 +113,14 @@ class VideoWallpaperService : WallpaperService() {
       val config = readVideoWallpaperConfig()
 
       if (config.videoPath.isBlank()) {
-        Log.e(TAG, "Video path is missing")
+        Log.e(TAG, "Video path is missing for ${getServiceLogName()}")
         return
       }
 
       val videoFile = File(config.videoPath)
 
       if (!videoFile.exists() || videoFile.length() <= 0L) {
-        Log.e(TAG, "Video file does not exist: ${config.videoPath}")
+        Log.e(TAG, "Video file does not exist for ${getServiceLogName()}: ${config.videoPath}")
         return
       }
 
@@ -131,7 +139,7 @@ class VideoWallpaperService : WallpaperService() {
       }
 
       if (resolvedWidth <= 0 || resolvedHeight <= 0) {
-        Log.e(TAG, "Invalid wallpaper surface size")
+        Log.e(TAG, "Invalid wallpaper surface size for ${getServiceLogName()}")
         return
       }
 
@@ -141,7 +149,8 @@ class VideoWallpaperService : WallpaperService() {
         outputSurface = surface,
         outputWidth = resolvedWidth,
         outputHeight = resolvedHeight,
-        config = config
+        config = config,
+        serviceName = getServiceLogName()
       ).also {
         it.start()
       }
@@ -171,6 +180,7 @@ class VideoWallpaperService : WallpaperService() {
   private data class VideoWallpaperConfig(
     val videoPath: String,
     val title: String,
+    val target: String,
     val hasCropConfig: Boolean,
     val scale: Float,
     val translateX: Float,
@@ -189,8 +199,9 @@ class VideoWallpaperService : WallpaperService() {
     private val outputSurface: Surface,
     private val outputWidth: Int,
     private val outputHeight: Int,
-    private val config: VideoWallpaperConfig
-  ) : Thread("FlexiWallsVideoWallpaperRenderer") {
+    private val config: VideoWallpaperConfig,
+    private val serviceName: String
+  ) : Thread("FlexiWallsVideoWallpaperRenderer-$serviceName") {
     @Volatile
     private var running = true
 
@@ -268,7 +279,7 @@ class VideoWallpaperService : WallpaperService() {
                 surfaceTexture?.getTransformMatrix(stMatrix)
                 shouldDraw = true
               } catch (error: Exception) {
-                Log.e(TAG, "SurfaceTexture update failed", error)
+                Log.e(TAG, "SurfaceTexture update failed for $serviceName", error)
               }
 
               frameAvailable = false
@@ -286,7 +297,7 @@ class VideoWallpaperService : WallpaperService() {
           }
         }
       } catch (error: Exception) {
-        Log.e(TAG, "Renderer failed", error)
+        Log.e(TAG, "Renderer failed for $serviceName", error)
       } finally {
         releaseAll()
       }
@@ -440,7 +451,7 @@ class VideoWallpaperService : WallpaperService() {
       val videoFile = File(config.videoPath)
 
       if (!videoFile.exists() || videoFile.length() <= 0L) {
-        throw RuntimeException("Video file does not exist")
+        throw RuntimeException("Video file does not exist for $serviceName")
       }
 
       mediaPlayer = MediaPlayer().apply {
@@ -468,7 +479,7 @@ class VideoWallpaperService : WallpaperService() {
               )
             }
           } catch (error: Exception) {
-            Log.e(TAG, "Could not set default video buffer size", error)
+            Log.e(TAG, "Could not set default video buffer size for $serviceName", error)
           }
 
           textureCoordsNeedUpdate = true
@@ -487,7 +498,7 @@ class VideoWallpaperService : WallpaperService() {
         }
 
         setOnErrorListener { _, what, extra ->
-          Log.e(TAG, "MediaPlayer error what=$what extra=$extra")
+          Log.e(TAG, "MediaPlayer error for $serviceName what=$what extra=$extra")
           true
         }
 
@@ -579,7 +590,7 @@ class VideoWallpaperService : WallpaperService() {
        * y = 0 means top of the video.
        *
        * OpenGL texture coordinates need Y mapping handled here so the Android
-       * preview matches the React Native lock-screen crop preview.
+       * preview matches the React Native crop preview.
        */
       val vTop = clamp(1f - (safeCrop.y / actualVideoHeight), 0f, 1f)
       val vBottom = clamp(
@@ -601,7 +612,7 @@ class VideoWallpaperService : WallpaperService() {
 
       Log.d(
         TAG,
-        "Applied video crop actual=${actualVideoWidth}x$actualVideoHeight saved=${config.videoWidth}x${config.videoHeight} crop x=${safeCrop.x}, y=${safeCrop.y}, w=${safeCrop.width}, h=${safeCrop.height}, output=${outputWidth}x$outputHeight"
+        "Applied video crop service=$serviceName target=${config.target} actual=${actualVideoWidth}x$actualVideoHeight saved=${config.videoWidth}x${config.videoHeight} crop x=${safeCrop.x}, y=${safeCrop.y}, w=${safeCrop.width}, h=${safeCrop.height}, output=${outputWidth}x$outputHeight"
       )
     }
 
@@ -867,7 +878,7 @@ class VideoWallpaperService : WallpaperService() {
 
   private fun readVideoWallpaperConfig(): VideoWallpaperConfig {
     val prefs = getSharedPreferences(
-      AndroidWallpaperModule.VIDEO_WALLPAPER_PREFS,
+      getVideoPrefsName(),
       Context.MODE_PRIVATE
     )
 
@@ -881,6 +892,11 @@ class VideoWallpaperService : WallpaperService() {
       "FlexiWalls Video Wallpaper"
     ) ?: "FlexiWalls Video Wallpaper"
 
+    val target = prefs.getString(
+      AndroidWallpaperModule.VIDEO_WALLPAPER_TARGET,
+      "lock"
+    ) ?: "lock"
+
     val hasCropConfig = prefs.getBoolean(
       AndroidWallpaperModule.VIDEO_CROP_HAS_CONFIG,
       false
@@ -889,6 +905,7 @@ class VideoWallpaperService : WallpaperService() {
     return VideoWallpaperConfig(
       videoPath = videoPath,
       title = title,
+      target = target,
       hasCropConfig = hasCropConfig,
 
       scale = prefs.getFloat(AndroidWallpaperModule.VIDEO_CROP_SCALE, 1f),
@@ -938,5 +955,35 @@ class VideoWallpaperService : WallpaperService() {
         gl_FragColor = texture2D(sTexture, vTexCoord);
       }
     """
+  }
+}
+
+class HomeVideoWallpaperService : VideoWallpaperService() {
+  override fun getVideoPrefsName(): String {
+    return AndroidWallpaperModule.VIDEO_WALLPAPER_PREFS_HOME
+  }
+
+  override fun getServiceLogName(): String {
+    return "home"
+  }
+}
+
+class LockVideoWallpaperService : VideoWallpaperService() {
+  override fun getVideoPrefsName(): String {
+    return AndroidWallpaperModule.VIDEO_WALLPAPER_PREFS_LOCK
+  }
+
+  override fun getServiceLogName(): String {
+    return "lock"
+  }
+}
+
+class BothVideoWallpaperService : VideoWallpaperService() {
+  override fun getVideoPrefsName(): String {
+    return AndroidWallpaperModule.VIDEO_WALLPAPER_PREFS_BOTH
+  }
+
+  override fun getServiceLogName(): String {
+    return "both"
   }
 }

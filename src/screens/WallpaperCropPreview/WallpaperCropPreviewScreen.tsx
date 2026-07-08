@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -55,6 +56,43 @@ type Props = {
 
 type CropMap = Partial<Record<WallpaperPreviewMode, CropPreviewFrameValue>>;
 
+const VIDEO_TARGETS: WallpaperApplyTarget[] = ['home', 'lock', 'both'];
+
+const isWallpaperApplyTarget = (
+  value: unknown,
+): value is WallpaperApplyTarget => {
+  return value === 'home' || value === 'lock' || value === 'both';
+};
+
+const getVideoPreviewModeForTarget = (
+  target: WallpaperApplyTarget,
+): WallpaperPreviewMode => {
+  return target === 'home' ? 'home' : 'lock';
+};
+
+const getVideoTargetLabel = (target: WallpaperApplyTarget) => {
+  if (target === 'home') return 'Home Screen';
+  if (target === 'lock') return 'Lock Screen';
+
+  return 'Both Screens';
+};
+
+const getVideoTargetShortLabel = (target: WallpaperApplyTarget) => {
+  if (target === 'home') return 'Home';
+  if (target === 'lock') return 'Lock';
+
+  return 'Both';
+};
+
+const getVideoTargetIcon = (
+  target: WallpaperApplyTarget,
+): keyof typeof Ionicons.glyphMap => {
+  if (target === 'home') return 'home-outline';
+  if (target === 'lock') return 'lock-closed-outline';
+
+  return 'phone-portrait-outline';
+};
+
 const getPrimaryCropValue = ({
   cropMap,
   target,
@@ -65,14 +103,22 @@ const getPrimaryCropValue = ({
   latestCrop?: CropPreviewFrameValue | null;
 }): CropPreviewFrameValue | undefined => {
   if (target === 'home') {
-    return cropMap.home || latestCrop || undefined;
+    return (
+      cropMap.home ||
+      (latestCrop?.mode === 'home' ? latestCrop : undefined) ||
+      undefined
+    );
   }
 
   if (target === 'lock') {
-    return cropMap.lock || latestCrop || undefined;
+    return (
+      cropMap.lock ||
+      (latestCrop?.mode === 'lock' ? latestCrop : undefined) ||
+      undefined
+    );
   }
 
-  return latestCrop || cropMap.home || cropMap.lock || undefined;
+  return latestCrop || cropMap.lock || cropMap.home || undefined;
 };
 
 const getPrimaryCropRect = ({
@@ -132,8 +178,16 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
     route.params?.isVideo || mediaType === 'VIDEO' || videoUrl,
   );
 
+  const initialRouteTarget = isWallpaperApplyTarget(route.params?.target)
+    ? route.params?.target
+    : 'lock';
+
+  const [videoTarget, setVideoTarget] = useState<WallpaperApplyTarget>(
+    initialRouteTarget,
+  );
+
   const target = (
-    isVideo ? 'lock' : route.params?.target || 'home'
+    isVideo ? videoTarget : route.params?.target || 'home'
   ) as WallpaperCropTarget;
 
   const title = route.params?.title || 'FlexiWalls Wallpaper';
@@ -145,21 +199,23 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
   const [activeIndex, setActiveIndex] = useState(0);
   const [applying, setApplying] = useState(false);
   const [cropInteractionActive, setCropInteractionActive] = useState(false);
+  const [androidUtilityNoticeVisible, setAndroidUtilityNoticeVisible] =
+    useState(false);
 
   const previewModes = useMemo(() => {
     if (isVideo) {
-      return ['lock'] as WallpaperPreviewMode[];
+      return [getVideoPreviewModeForTarget(videoTarget)] as WallpaperPreviewMode[];
     }
 
     return getPreviewModesForTarget(target);
-  }, [isVideo, target]);
+  }, [isVideo, target, videoTarget]);
 
   const isBoth = !isVideo && target === 'both';
 
   const maxCardWidthByScreen = Math.max(240, windowWidth - 46);
-  const reservedVerticalSpace = isBoth ? 245 : isVideo ? 235 : 185;
+  const reservedVerticalSpace = isBoth ? 245 : isVideo ? 305 : 185;
   const maxCardHeightByScreen = Math.max(
-    420,
+    380,
     windowHeight - reservedVerticalSpace,
   );
 
@@ -175,6 +231,8 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
 
   const cardOuterWidth = cardWidth + 14;
   const cardOuterHeight = cardHeight + 14;
+
+  const activeVideoTargetLabel = getVideoTargetLabel(videoTarget);
 
   const onCropChange = (value: CropPreviewFrameValue) => {
     latestCropRef.current = value;
@@ -195,6 +253,29 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
     scrollRef.current?.scrollTo({
       x: SCREEN.width * nextIndex,
       animated: true,
+    });
+  };
+
+  const selectVideoTarget = (nextTarget: WallpaperApplyTarget) => {
+    if (applying) return;
+
+    setVideoTarget(nextTarget);
+    setActiveIndex(0);
+
+    scrollRef.current?.scrollTo({
+      x: 0,
+      animated: true,
+    });
+  };
+
+  const showAndroidUtilityNotice = () => {
+    return new Promise<void>(resolve => {
+      setAndroidUtilityNoticeVisible(true);
+
+      setTimeout(() => {
+        setAndroidUtilityNoticeVisible(false);
+        resolve();
+      }, 950);
     });
   };
 
@@ -236,9 +317,11 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
       if (isVideo) {
         const videoCropConfig = buildVideoCropConfig(cropValue);
 
+        await showAndroidUtilityNotice();
+
         await applyVideoWallpaperToAndroid(
           videoUrl,
-          target as WallpaperApplyTarget,
+          videoTarget,
           title || 'FlexiWalls Video Wallpaper',
           videoCropConfig,
         );
@@ -266,9 +349,9 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
       Alert.alert(
         isVideo ? 'Preview failed' : 'Apply failed',
         error?.message ||
-        (isVideo
-          ? 'Could not open Android live wallpaper preview.'
-          : 'Could not apply this wallpaper.'),
+          (isVideo
+            ? 'Could not open Android live wallpaper preview.'
+            : 'Could not apply this wallpaper.'),
       );
     } finally {
       setApplying(false);
@@ -370,7 +453,7 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
           >
             {previewModes.map(mode => (
               <View
-                key={mode}
+                key={isVideo ? 'video-live-preview' : mode}
                 style={[
                   styles.previewPage,
                   {
@@ -407,7 +490,9 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
                 </View>
 
                 <Text style={styles.modeLabel}>
-                  {isVideo ? 'Lock screen preview' : getPreviewModeLabel(mode)}
+                  {isVideo
+                    ? `${activeVideoTargetLabel} preview`
+                    : getPreviewModeLabel(mode)}
                 </Text>
 
                 {isVideo ? (
@@ -419,7 +504,7 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
                     />
 
                     <Text style={styles.videoExternalNoteText}>
-                      Apply using Android external preview
+                      On Android preview, choose {activeVideoTargetLabel}.
                     </Text>
                   </View>
                 ) : null}
@@ -428,7 +513,41 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
           </ScrollView>
         </View>
 
-        {isBoth ? (
+        {isVideo ? (
+          <View style={styles.previewSwitchBottom}>
+            {VIDEO_TARGETS.map(nextTarget => {
+              const active = nextTarget === videoTarget;
+
+              return (
+                <Pressable
+                  key={nextTarget}
+                  disabled={applying}
+                  onPress={() => selectVideoTarget(nextTarget)}
+                  style={({ pressed }) => [
+                    styles.videoTargetPill,
+                    active ? styles.switchPillActive : null,
+                    pressed ? styles.switchPillPressed : null,
+                  ]}
+                >
+                  <Ionicons
+                    name={getVideoTargetIcon(nextTarget)}
+                    size={15}
+                    color={active ? colors.textPrimary : colors.textSecondary}
+                  />
+
+                  <Text
+                    style={[
+                      styles.switchText,
+                      active ? styles.switchTextActive : null,
+                    ]}
+                  >
+                    {getVideoTargetShortLabel(nextTarget)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : isBoth ? (
           <View style={styles.previewSwitchBottom}>
             {previewModes.map((mode, index) => {
               const active = index === activeIndex;
@@ -468,6 +587,40 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
           </View>
         ) : null}
       </SafeAreaView>
+
+      <Modal
+        visible={androidUtilityNoticeVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => undefined}
+      >
+        <View style={styles.noticeOverlay}>
+          <BlurView intensity={42} tint="dark" style={styles.noticeCard}>
+            <LinearGradient
+              colors={[
+                'rgba(255,255,255,0.16)',
+                'rgba(255,255,255,0.06)',
+                'rgba(15,15,16,0.92)',
+              ]}
+              style={StyleSheet.absoluteFill}
+            />
+
+            <View style={styles.noticeIconCircle}>
+              <Ionicons
+                name="open-outline"
+                size={26}
+                color={colors.textPrimary}
+              />
+            </View>
+
+            <Text style={styles.noticeTitle}>Opening Android Utility</Text>
+
+            <Text style={styles.noticeText}>
+              Moving to external Android utility to apply live wallpaper.
+            </Text>
+          </BlurView>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -663,6 +816,17 @@ const styles = StyleSheet.create({
     gap: 7,
   },
 
+  videoTargetPill: {
+    minHeight: 36,
+    minWidth: 88,
+    borderRadius: 999,
+    paddingHorizontal: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+  },
+
   switchPillActive: {
     backgroundColor: 'rgba(255,255,255,0.14)',
   },
@@ -680,5 +844,54 @@ const styles = StyleSheet.create({
 
   switchTextActive: {
     color: colors.textPrimary,
+  },
+
+  noticeOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.54)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+
+  noticeCard: {
+    width: '100%',
+    maxWidth: 310,
+    borderRadius: 28,
+    overflow: 'hidden',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xl,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorder,
+    backgroundColor: 'rgba(15,15,16,0.88)',
+  },
+
+  noticeIconCircle: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.24)',
+  },
+
+  noticeTitle: {
+    color: colors.textPrimary,
+    fontFamily: fontFamily.bold,
+    fontSize: 20,
+    textAlign: 'center',
+  },
+
+  noticeText: {
+    color: colors.textSecondary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: spacing.sm,
+    textAlign: 'center',
   },
 });

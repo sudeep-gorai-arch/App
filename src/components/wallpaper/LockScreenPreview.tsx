@@ -11,6 +11,118 @@ type Props = {
   height?: number;
 };
 
+type PreviewMetrics = {
+  paddingTop: number;
+  paddingHorizontal: number;
+  paddingBottom: number;
+
+  lockAreaMarginTop: number;
+  lockIconSize: number;
+
+  clockMarginTop: number;
+  clockFontSize: number;
+  clockLineHeight: number;
+  clockLetterSpacing: number;
+
+  dateMarginTop: number;
+  dateFontSize: number;
+
+  widgetMarginTop: number;
+  widgetHeight: number;
+  widgetMinWidth: number;
+  widgetFontSize: number;
+
+  notificationGap: number;
+  notificationMinHeight: number;
+  notificationRadius: number;
+  notificationPaddingHorizontal: number;
+  notificationPaddingVertical: number;
+  notificationInnerGap: number;
+  notificationIconSize: number;
+  notificationIconRadius: number;
+  notificationIonSize: number;
+  notificationTitleFontSize: number;
+  notificationTextFontSize: number;
+
+  hintChevronSize: number;
+  hintFontSize: number;
+
+  bottomMinHeight: number;
+  roundActionSize: number;
+  roundActionIonSize: number;
+  homeIndicatorWidth: number;
+  homeIndicatorHeight: number;
+  homeIndicatorMarginBottom: number;
+};
+
+const clamp = (value: number, min: number, max: number) => {
+  return Math.max(min, Math.min(value, max));
+};
+
+const buildMetrics = (width?: number, height?: number): PreviewMetrics => {
+  const safeWidth = typeof width === 'number' && width > 0 ? width : 340;
+  const safeHeight = typeof height === 'number' && height > 0 ? height : 604;
+
+  /*
+   * Premium responsive lock-screen preview:
+   * - Scales for both image and video crop preview frames.
+   * - Keeps the top clean for Back and Next/Done buttons.
+   * - Keeps lock screen UI compact so wallpaper remains the hero.
+   */
+  const baseScale = clamp(Math.min(safeWidth / 340, safeHeight / 604), 0.66, 1);
+  const compactScale = clamp(baseScale * 0.92, 0.58, 0.92);
+
+  const clockFontSize = Math.round(clamp(61 * baseScale, 45, 61));
+  const clockLineHeight = Math.round(clamp(56 * baseScale, 42, 56));
+
+  const roundActionSize = Math.round(clamp(48 * compactScale, 36, 44));
+  const notificationIconSize = Math.round(clamp(34 * compactScale, 27, 34));
+
+  return {
+    paddingTop: Math.round(clamp(safeHeight * 0.058, 28, 40)),
+    paddingHorizontal: Math.round(clamp(safeWidth * 0.058, 16, 21)),
+    paddingBottom: Math.round(clamp(safeHeight * 0.026, 12, 17)),
+
+    lockAreaMarginTop: Math.round(clamp(safeHeight * 0.022, 10, 16)),
+    lockIconSize: Math.round(clamp(17 * compactScale, 13, 16)),
+
+    clockMarginTop: Math.round(clamp(9 * baseScale, 6, 9)),
+    clockFontSize,
+    clockLineHeight,
+    clockLetterSpacing: clamp(-1.8 * baseScale, -1.8, -1.2),
+
+    dateMarginTop: Math.round(clamp(7 * baseScale, 4, 7)),
+    dateFontSize: Math.round(clamp(13 * baseScale, 10, 13)),
+
+    widgetMarginTop: Math.round(clamp(safeHeight * 0.025, 12, 16)),
+    widgetHeight: Math.round(clamp(28 * compactScale, 22, 28)),
+    widgetMinWidth: Math.round(clamp(158 * compactScale, 118, 158)),
+    widgetFontSize: Math.round(clamp(11 * compactScale, 9, 11)),
+
+    notificationGap: Math.round(clamp(12 * compactScale, 8, 12)),
+    notificationMinHeight: Math.round(clamp(70 * compactScale, 53, 68)),
+    notificationRadius: Math.round(clamp(24 * compactScale, 18, 24)),
+    notificationPaddingHorizontal: Math.round(clamp(15 * compactScale, 11, 15)),
+    notificationPaddingVertical: Math.round(clamp(12 * compactScale, 9, 12)),
+    notificationInnerGap: Math.round(clamp(11 * compactScale, 8, 11)),
+    notificationIconSize,
+    notificationIconRadius: Math.round(clamp(notificationIconSize * 0.36, 10, 13)),
+    notificationIonSize: Math.round(clamp(15 * compactScale, 11, 15)),
+    notificationTitleFontSize: Math.round(clamp(12.5 * compactScale, 10, 12)),
+    notificationTextFontSize: Math.round(clamp(10.5 * compactScale, 8, 10)),
+
+    hintChevronSize: Math.round(clamp(15 * compactScale, 11, 15)),
+    hintFontSize: Math.round(clamp(10.5 * compactScale, 8, 10)),
+
+    bottomMinHeight: Math.round(clamp(58 * compactScale, 42, 54)),
+    roundActionSize,
+    roundActionIonSize: Math.round(clamp(21 * compactScale, 15, 20)),
+    homeIndicatorWidth: Math.round(clamp(66 * compactScale, 46, 64)),
+    homeIndicatorHeight: Math.round(clamp(4 * compactScale, 3, 4)),
+    homeIndicatorMarginBottom: Math.round(clamp(5 * compactScale, 3, 5)),
+  };
+};
+
 const formatCurrentTime = () => {
   const now = new Date();
 
@@ -59,6 +171,8 @@ const useCurrentDateTime = () => {
 const LockScreenPreview = ({ width, height }: Props) => {
   const { time, date } = useCurrentDateTime();
 
+  const metrics = useMemo(() => buildMetrics(width, height), [width, height]);
+
   const clockText = useMemo(() => {
     return `${time.hour}\n${time.minute}`;
   }, [time.hour, time.minute]);
@@ -70,70 +184,213 @@ const LockScreenPreview = ({ width, height }: Props) => {
         styles.container,
         typeof width === 'number' ? { width } : null,
         typeof height === 'number' ? { height } : null,
+        {
+          paddingTop: metrics.paddingTop,
+          paddingHorizontal: metrics.paddingHorizontal,
+          paddingBottom: metrics.paddingBottom,
+        },
       ]}
     >
-      <View style={styles.statusBar}>
-        <Text style={styles.statusTime}>
-          {Number(time.hour)}:{time.minute}
-        </Text>
-
-        <View style={styles.statusRight}>
-          <Ionicons name="notifications-off" size={14} color="#FFFFFF" />
-          <Ionicons name="wifi" size={14} color="#FFFFFF" />
-          <Ionicons name="cellular" size={13} color="#FFFFFF" />
-
-          <View style={styles.battery}>
-            <Text style={styles.batteryText}>98</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.lockArea}>
+      <View
+        style={[
+          styles.lockArea,
+          {
+            marginTop: metrics.lockAreaMarginTop,
+          },
+        ]}
+      >
         <Ionicons
           name="lock-closed-outline"
-          size={18}
+          size={metrics.lockIconSize}
           color="rgba(255,255,255,0.84)"
         />
 
-        <Text style={styles.clock}>{clockText}</Text>
+        <Text
+          style={[
+            styles.clock,
+            {
+              marginTop: metrics.clockMarginTop,
+              fontSize: metrics.clockFontSize,
+              lineHeight: metrics.clockLineHeight,
+              letterSpacing: metrics.clockLetterSpacing,
+            },
+          ]}
+        >
+          {clockText}
+        </Text>
 
-        <Text style={styles.date}>{date}</Text>
+        <Text
+          style={[
+            styles.date,
+            {
+              marginTop: metrics.dateMarginTop,
+              fontSize: metrics.dateFontSize,
+            },
+          ]}
+        >
+          {date}
+        </Text>
 
-        <View style={styles.addWidgets}>
-          <Text style={styles.addWidgetsText}>Add widgets</Text>
+        <View
+          style={[
+            styles.addWidgets,
+            {
+              marginTop: metrics.widgetMarginTop,
+              height: metrics.widgetHeight,
+              minWidth: metrics.widgetMinWidth,
+              borderRadius: metrics.widgetHeight / 2,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.addWidgetsText,
+              {
+                fontSize: metrics.widgetFontSize,
+              },
+            ]}
+          >
+            Add widgets
+          </Text>
         </View>
       </View>
 
-      <View style={styles.notificationStack}>
+      <View
+        style={[
+          styles.notificationStack,
+          {
+            gap: metrics.notificationGap,
+          },
+        ]}
+      >
         <LinearGradient
-          colors={['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.10)']}
-          style={styles.notificationCard}
+          colors={['rgba(255,255,255,0.20)', 'rgba(255,255,255,0.09)']}
+          style={[
+            styles.notificationCard,
+            {
+              minHeight: metrics.notificationMinHeight,
+              borderRadius: metrics.notificationRadius,
+              paddingHorizontal: metrics.notificationPaddingHorizontal,
+              paddingVertical: metrics.notificationPaddingVertical,
+              gap: metrics.notificationInnerGap,
+            },
+          ]}
         >
-          <View style={styles.notificationIcon}>
-            <Ionicons name="sparkles-outline" size={16} color="#FFFFFF" />
+          <View
+            style={[
+              styles.notificationIcon,
+              {
+                width: metrics.notificationIconSize,
+                height: metrics.notificationIconSize,
+                borderRadius: metrics.notificationIconRadius,
+              },
+            ]}
+          >
+            <Ionicons
+              name="sparkles-outline"
+              size={metrics.notificationIonSize}
+              color="#FFFFFF"
+            />
           </View>
 
           <View style={styles.notificationTextWrap}>
-            <Text style={styles.notificationTitle}>FlexiWalls</Text>
-            <Text style={styles.notificationText}>Wallpaper preview is ready</Text>
+            <Text
+              style={[
+                styles.notificationTitle,
+                {
+                  fontSize: metrics.notificationTitleFontSize,
+                },
+              ]}
+            >
+              FlexiWalls
+            </Text>
+
+            <Text
+              style={[
+                styles.notificationText,
+                {
+                  fontSize: metrics.notificationTextFontSize,
+                },
+              ]}
+              numberOfLines={1}
+            >
+              Wallpaper preview is ready
+            </Text>
           </View>
         </LinearGradient>
 
         <View style={styles.smallHint}>
-          <Ionicons name="chevron-up" size={16} color="rgba(255,255,255,0.82)" />
-          <Text style={styles.smallHintText}>Swipe to unlock</Text>
+          <Ionicons
+            name="chevron-up"
+            size={metrics.hintChevronSize}
+            color="rgba(255,255,255,0.78)"
+          />
+
+          <Text
+            style={[
+              styles.smallHintText,
+              {
+                fontSize: metrics.hintFontSize,
+              },
+            ]}
+          >
+            Swipe to unlock
+          </Text>
         </View>
       </View>
 
-      <View style={styles.bottomActions}>
-        <View style={styles.roundAction}>
-          <Ionicons name="flashlight-outline" size={24} color="#FFFFFF" />
+      <View
+        style={[
+          styles.bottomActions,
+          {
+            minHeight: metrics.bottomMinHeight,
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.roundAction,
+            {
+              width: metrics.roundActionSize,
+              height: metrics.roundActionSize,
+              borderRadius: metrics.roundActionSize / 2,
+            },
+          ]}
+        >
+          <Ionicons
+            name="flashlight-outline"
+            size={metrics.roundActionIonSize}
+            color="#FFFFFF"
+          />
         </View>
 
-        <View style={styles.homeIndicator} />
+        <View
+          style={[
+            styles.homeIndicator,
+            {
+              width: metrics.homeIndicatorWidth,
+              height: metrics.homeIndicatorHeight,
+              borderRadius: metrics.homeIndicatorHeight / 2,
+              marginBottom: metrics.homeIndicatorMarginBottom,
+            },
+          ]}
+        />
 
-        <View style={styles.roundAction}>
-          <Ionicons name="camera-outline" size={24} color="#FFFFFF" />
+        <View
+          style={[
+            styles.roundAction,
+            {
+              width: metrics.roundActionSize,
+              height: metrics.roundActionSize,
+              borderRadius: metrics.roundActionSize / 2,
+            },
+          ]}
+        >
+          <Ionicons
+            name="camera-outline"
+            size={metrics.roundActionIonSize}
+            color="#FFFFFF"
+          />
         </View>
       </View>
     </View>
@@ -145,64 +402,16 @@ export default LockScreenPreview;
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFill,
-    paddingTop: 20,
-    paddingHorizontal: 22,
-    paddingBottom: 18,
     justifyContent: 'space-between',
-  },
-
-  statusBar: {
-    minHeight: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-
-  statusTime: {
-    color: '#FFFFFF',
-    fontFamily: fontFamily.bold,
-    fontSize: 17,
-    letterSpacing: -0.2,
-    textShadowColor: 'rgba(0,0,0,0.45)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
-
-  statusRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-
-  battery: {
-    minWidth: 24,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-
-  batteryText: {
-    color: '#111111',
-    fontFamily: fontFamily.bold,
-    fontSize: 10,
-    lineHeight: 12,
   },
 
   lockArea: {
-    marginTop: 18,
     alignItems: 'center',
   },
 
   clock: {
-    marginTop: 10,
     color: '#FFFFFF',
     fontFamily: fontFamily.bold,
-    fontSize: 66,
-    lineHeight: 61,
-    letterSpacing: -2,
     textAlign: 'center',
     textShadowColor: 'rgba(0,0,0,0.45)',
     textShadowOffset: { width: 0, height: 2 },
@@ -210,23 +419,17 @@ const styles = StyleSheet.create({
   },
 
   date: {
-    marginTop: 7,
     color: 'rgba(255,255,255,0.92)',
     fontFamily: fontFamily.semiBold,
-    fontSize: 14,
     textShadowColor: 'rgba(0,0,0,0.45)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 5,
   },
 
   addWidgets: {
-    marginTop: 17,
-    height: 30,
-    minWidth: 172,
-    borderRadius: 99,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.50)',
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(255,255,255,0.46)',
+    backgroundColor: 'rgba(255,255,255,0.11)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -234,33 +437,22 @@ const styles = StyleSheet.create({
   addWidgetsText: {
     color: '#FFFFFF',
     fontFamily: fontFamily.semiBold,
-    fontSize: 12,
     textShadowColor: 'rgba(0,0,0,0.45)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
 
-  notificationStack: {
-    gap: 13,
-  },
+  notificationStack: {},
 
   notificationCard: {
-    minHeight: 76,
-    borderRadius: 26,
-    paddingHorizontal: 16,
-    paddingVertical: 13,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: 'rgba(255,255,255,0.16)',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
   },
 
   notificationIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 14,
-    backgroundColor: 'rgba(139,92,246,0.72)',
+    backgroundColor: 'rgba(139,92,246,0.70)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -272,14 +464,12 @@ const styles = StyleSheet.create({
   notificationTitle: {
     color: '#FFFFFF',
     fontFamily: fontFamily.bold,
-    fontSize: 13,
   },
 
   notificationText: {
     marginTop: 3,
     color: 'rgba(255,255,255,0.72)',
     fontFamily: fontFamily.semiBold,
-    fontSize: 11,
   },
 
   smallHint: {
@@ -289,37 +479,28 @@ const styles = StyleSheet.create({
   },
 
   smallHintText: {
-    color: 'rgba(255,255,255,0.76)',
+    color: 'rgba(255,255,255,0.72)',
     fontFamily: fontFamily.semiBold,
-    fontSize: 11,
     textShadowColor: 'rgba(0,0,0,0.45)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
 
   bottomActions: {
-    minHeight: 62,
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
   },
 
   roundAction: {
-    width: 54,
-    height: 54,
-    borderRadius: 99,
-    backgroundColor: 'rgba(0,0,0,0.34)',
+    backgroundColor: 'rgba(0,0,0,0.30)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
+    borderColor: 'rgba(255,255,255,0.20)',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   homeIndicator: {
-    width: 74,
-    height: 4,
-    borderRadius: 99,
-    backgroundColor: 'rgba(255,255,255,0.86)',
-    marginBottom: 5,
+    backgroundColor: 'rgba(255,255,255,0.78)',
   },
 });

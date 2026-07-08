@@ -1399,7 +1399,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
         videoUrl: liveWallpaperUrl,
         mediaType: 'VIDEO',
         isVideo: true,
-        target: 'lock',
+        target,
         title: wallpaper?.title || 'FlexiWalls Video Wallpaper',
         videoWidth: getWallpaperSourceWidth(wallpaper),
         videoHeight: getWallpaperSourceHeight(wallpaper),

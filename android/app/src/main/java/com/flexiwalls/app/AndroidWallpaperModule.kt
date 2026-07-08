@@ -32,6 +32,9 @@ class AndroidWallpaperModule(
 
   companion object {
     const val VIDEO_WALLPAPER_PREFS = "FlexiWallsVideoWallpaperPrefs"
+    const val VIDEO_WALLPAPER_PREFS_HOME = "FlexiWallsVideoWallpaperPrefsHome"
+    const val VIDEO_WALLPAPER_PREFS_LOCK = "FlexiWallsVideoWallpaperPrefsLock"
+    const val VIDEO_WALLPAPER_PREFS_BOTH = "FlexiWallsVideoWallpaperPrefsBoth"
 
     const val VIDEO_WALLPAPER_PATH = "video_wallpaper_path"
     const val VIDEO_WALLPAPER_TARGET = "video_wallpaper_target"
@@ -138,17 +141,27 @@ class AndroidWallpaperModule(
           throw Exception("Video wallpaper URL is missing")
         }
 
-        val localVideoFile = copyVideoToPrivateStorage(cleanedUrl)
+        val normalizedTarget = normalizeVideoTarget(target)
+        val prefsName = getVideoPrefsName(normalizedTarget)
+
+        val localVideoFile = copyVideoToPrivateStorage(
+          value = cleanedUrl,
+          target = normalizedTarget
+        )
 
         saveVideoWallpaperConfig(
+          prefsName = prefsName,
           videoPath = localVideoFile.absolutePath,
-          target = target.ifBlank { "home" },
+          target = normalizedTarget,
           title = title?.trim().takeUnless { it.isNullOrEmpty() }
             ?: "FlexiWalls Video Wallpaper",
           cropConfig = cropConfig
         )
 
-        openAndroidLiveWallpaperPreview(promise)
+        openAndroidLiveWallpaperPreview(
+          target = normalizedTarget,
+          promise = promise
+        )
       } catch (error: Exception) {
         promise.reject(
           "APPLY_VIDEO_WALLPAPER_FAILED",
@@ -159,12 +172,15 @@ class AndroidWallpaperModule(
     }.start()
   }
 
-  private fun openAndroidLiveWallpaperPreview(promise: Promise) {
+  private fun openAndroidLiveWallpaperPreview(
+    target: String,
+    promise: Promise
+  ) {
     UiThreadUtil.runOnUiThread {
       try {
         val componentName = ComponentName(
           reactContext,
-          VideoWallpaperService::class.java
+          getVideoWallpaperServiceClass(target)
         )
 
         val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
@@ -201,20 +217,50 @@ class AndroidWallpaperModule(
     }
   }
 
+  private fun getVideoWallpaperServiceClass(
+    target: String
+  ): Class<out VideoWallpaperService> {
+    return when (normalizeVideoTarget(target)) {
+      "home" -> HomeVideoWallpaperService::class.java
+      "lock" -> LockVideoWallpaperService::class.java
+      "both" -> BothVideoWallpaperService::class.java
+      else -> LockVideoWallpaperService::class.java
+    }
+  }
+
+  private fun getVideoPrefsName(target: String): String {
+    return when (normalizeVideoTarget(target)) {
+      "home" -> VIDEO_WALLPAPER_PREFS_HOME
+      "lock" -> VIDEO_WALLPAPER_PREFS_LOCK
+      "both" -> VIDEO_WALLPAPER_PREFS_BOTH
+      else -> VIDEO_WALLPAPER_PREFS_LOCK
+    }
+  }
+
+  private fun normalizeVideoTarget(target: String?): String {
+  return when ((target ?: "").trim().lowercase()) {
+    "home", "system" -> "home"
+    "lock" -> "lock"
+    "both", "all" -> "both"
+    else -> "lock"
+    }
+  }
+
   private fun saveVideoWallpaperConfig(
+    prefsName: String,
     videoPath: String,
     target: String,
     title: String,
     cropConfig: ReadableMap?
   ) {
     val prefs = reactContext.getSharedPreferences(
-      VIDEO_WALLPAPER_PREFS,
+      prefsName,
       Context.MODE_PRIVATE
     )
 
     val editor = prefs.edit()
       .putString(VIDEO_WALLPAPER_PATH, videoPath)
-      .putString(VIDEO_WALLPAPER_TARGET, target)
+      .putString(VIDEO_WALLPAPER_TARGET, normalizeVideoTarget(target))
       .putString(VIDEO_WALLPAPER_TITLE, title)
 
     saveVideoCropConfig(editor, cropConfig)
@@ -285,8 +331,12 @@ class AndroidWallpaperModule(
       .putFloat(VIDEO_CROP_HEIGHT, cropHeight.toFloat())
   }
 
-  private fun copyVideoToPrivateStorage(value: String): File {
+  private fun copyVideoToPrivateStorage(
+    value: String,
+    target: String
+  ): File {
     val extension = getVideoExtension(value)
+    val normalizedTarget = normalizeVideoTarget(target)
 
     val directory = File(reactContext.filesDir, VIDEO_WALLPAPER_DIR)
 
@@ -294,7 +344,12 @@ class AndroidWallpaperModule(
       directory.mkdirs()
     }
 
-    val outputFile = File(directory, "current_video_wallpaper.$extension")
+    cleanPreviousTargetVideos(directory, normalizedTarget, extension)
+
+    val outputFile = File(
+      directory,
+      "current_video_wallpaper_$normalizedTarget.$extension"
+    )
 
     openInputStream(value, "Video").use { input ->
       FileOutputStream(outputFile, false).use { output ->
@@ -317,6 +372,31 @@ class AndroidWallpaperModule(
     }
 
     return outputFile
+  }
+
+  private fun cleanPreviousTargetVideos(
+    directory: File,
+    target: String,
+    keepExtension: String
+  ) {
+    val possibleExtensions = listOf("mp4", "webm", "mov", "m4v")
+
+    possibleExtensions.forEach { extension ->
+      if (extension == keepExtension) return@forEach
+
+      try {
+        val oldFile = File(
+          directory,
+          "current_video_wallpaper_${normalizeVideoTarget(target)}.$extension"
+        )
+
+        if (oldFile.exists()) {
+          oldFile.delete()
+        }
+      } catch (_: Exception) {
+        // ignore cleanup error
+      }
+    }
   }
 
   private fun getVideoExtension(value: String): String {
