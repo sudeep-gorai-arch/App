@@ -51,6 +51,58 @@ const GRID_CARD_H = GRID_CARD_W * 1.52;
 
 const API_ORIGIN = String(API.defaults.baseURL || '').replace(/\/api\/?$/, '');
 
+const VIDEO_EXTENSION_PATTERN = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
+
+const isBlankishValue = (value: unknown) => {
+  const text = String(value ?? '').trim().toLowerCase();
+
+  return (
+    !text ||
+    text === 'null' ||
+    text === 'undefined' ||
+    text === 'false' ||
+    text === '0'
+  );
+};
+
+const isRealVideoUrlValue = (value: unknown) => {
+  if (isBlankishValue(value)) return false;
+
+  const text = String(value).trim();
+
+  return (
+    VIDEO_EXTENSION_PATTERN.test(text) ||
+    /\/videos?\//i.test(text) ||
+    /video-wallpapers?/i.test(text)
+  );
+};
+
+const getWallpaperMediaType = (item: Record<string, any>) => {
+  return String(item?.mediaType || item?.media_type || item?.type || '')
+    .trim()
+    .toUpperCase();
+};
+
+const isVideoWallpaper = (item?: Record<string, any> | null) => {
+  if (!item) return false;
+
+  const mediaType = getWallpaperMediaType(item);
+
+  if (mediaType === 'IMAGE') return false;
+  if (mediaType === 'VIDEO') return true;
+  if (item?.isVideo === true || item?.is_video === true) return true;
+
+  return (
+    isRealVideoUrlValue(item?.videoUrl) ||
+    isRealVideoUrlValue(item?.video_url) ||
+    isRealVideoUrlValue(item?.videoPath) ||
+    isRealVideoUrlValue(item?.video_path) ||
+    isRealVideoUrlValue(item?.downloadUrl) ||
+    isRealVideoUrlValue(item?.download_url) ||
+    isRealVideoUrlValue(item?.url)
+  );
+};
+
 type CategoryOption = {
   id: string;
   name: string;
@@ -142,6 +194,10 @@ const getVariantUrl = (item: any, preferredTypes: string[]) => {
 };
 
 const getRawImageUrl = (item: any) =>
+  item?.videoPreviewUrl ||
+  item?.video_preview_url ||
+  item?.videoPreviewPath ||
+  item?.video_preview_path ||
   item?.imageUrl ||
   item?.image_url ||
   item?.displayPath ||
@@ -157,6 +213,14 @@ const getRawImageUrl = (item: any) =>
   item?.original_path;
 
 const getRawThumbnailUrl = (item: any) =>
+  item?.videoThumbnailUrl ||
+  item?.video_thumbnail_url ||
+  item?.videoThumbnailPath ||
+  item?.video_thumbnail_path ||
+  item?.videoPreviewUrl ||
+  item?.video_preview_url ||
+  item?.videoPreviewPath ||
+  item?.video_preview_path ||
   item?.thumbnailUrl ||
   item?.thumbnail_url ||
   item?.thumbnailPath ||
@@ -286,7 +350,15 @@ const normalizeWallpaper = (item: Wallpaper, index: number): Wallpaper => {
 
     isLiked: Boolean(w.isLiked),
 
-    videoUrl: w.videoUrl,
+    mediaType: w.mediaType || w.media_type,
+
+    isVideo: Boolean(w.isVideo || w.is_video),
+
+    videoUrl: w.videoUrl || w.video_url,
+
+    videoPreviewUrl: w.videoPreviewUrl || w.video_preview_url,
+
+    videoThumbnailUrl: w.videoThumbnailUrl || w.video_thumbnail_url,
 
     favoriteCount,
     favoritesCount: favoriteCount,
@@ -567,6 +639,16 @@ const CategorySelector = ({
   );
 };
 
+const VideoBadge = ({ item }: { item: Wallpaper }) => {
+  if (!isVideoWallpaper(item as Wallpaper & Record<string, any>)) return null;
+
+  return (
+    <BlurView intensity={30} tint="dark" style={styles.videoBadge}>
+      <Ionicons name="videocam" size={14} color={colors.textPrimary} />
+    </BlurView>
+  );
+};
+
 const TrendStackCard = ({
   item,
   onPress,
@@ -600,6 +682,8 @@ const TrendStackCard = ({
           <Text style={styles.trendingBadgeText}>Trending</Text>
         </BlurView>
       </View>
+
+      <VideoBadge item={item} />
 
       <View style={styles.trendStackBottom}>
         <View style={styles.trendLikePill}>
@@ -796,6 +880,8 @@ const TopPickCard = ({
       <BlurView intensity={30} tint="dark" style={styles.rankBadge}>
         <Text style={styles.rankText}>#{index + 1}</Text>
       </BlurView>
+
+      <VideoBadge item={item} />
 
       <View style={styles.topPickBottom}>
         <Text style={styles.topPickTitle} numberOfLines={2}>
@@ -1379,6 +1465,21 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontFamily: fontFamily.semiBold,
     fontSize: 12,
+  },
+
+  videoBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorderSoft,
+    backgroundColor: 'rgba(0,0,0,0.38)',
   },
 
   trendStackBottom: {

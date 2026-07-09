@@ -45,6 +45,58 @@ type Filter = "All" | "4K" | "Live" | "Premium";
 
 const FILTERS: Filter[] = ["All", "4K", "Live", "Premium"];
 const API_ORIGIN = String(API.defaults.baseURL || "").replace(/\/api\/?$/, "");
+
+const VIDEO_EXTENSION_PATTERN = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
+
+const isBlankishValue = (value: unknown) => {
+  const text = String(value ?? "").trim().toLowerCase();
+
+  return (
+    !text ||
+    text === "null" ||
+    text === "undefined" ||
+    text === "false" ||
+    text === "0"
+  );
+};
+
+const isRealVideoUrlValue = (value: unknown) => {
+  if (isBlankishValue(value)) return false;
+
+  const text = String(value).trim();
+
+  return (
+    VIDEO_EXTENSION_PATTERN.test(text) ||
+    /\/videos?\//i.test(text) ||
+    /video-wallpapers?/i.test(text)
+  );
+};
+
+const getWallpaperMediaType = (item: Record<string, any>) => {
+  return String(item?.mediaType || item?.media_type || item?.type || "")
+    .trim()
+    .toUpperCase();
+};
+
+const isVideoWallpaper = (item?: Record<string, any> | null) => {
+  if (!item) return false;
+
+  const mediaType = getWallpaperMediaType(item);
+
+  if (mediaType === "IMAGE") return false;
+  if (mediaType === "VIDEO") return true;
+  if (item?.isVideo === true || item?.is_video === true) return true;
+
+  return (
+    isRealVideoUrlValue(item?.videoUrl) ||
+    isRealVideoUrlValue(item?.video_url) ||
+    isRealVideoUrlValue(item?.videoPath) ||
+    isRealVideoUrlValue(item?.video_path) ||
+    isRealVideoUrlValue(item?.downloadUrl) ||
+    isRealVideoUrlValue(item?.download_url) ||
+    isRealVideoUrlValue(item?.url)
+  );
+};
 const LOCAL_DOWNLOADS_KEY = "@flexiwalls:guestDownloads";
 const LOCAL_DELETED_DOWNLOADS_KEY = "@flexiwalls:locallyDeletedDownloads";
 
@@ -121,6 +173,14 @@ const getVariantUrl = (item: any, preferredTypes: string[]) => {
 };
 
 const getRawThumbnailUrl = (item: any) =>
+  item?.videoThumbnailUrl ||
+  item?.video_thumbnail_url ||
+  item?.videoThumbnailPath ||
+  item?.video_thumbnail_path ||
+  item?.videoPreviewUrl ||
+  item?.video_preview_url ||
+  item?.videoPreviewPath ||
+  item?.video_preview_path ||
   item?.thumbnailUrl ||
   item?.thumbnail_url ||
   item?.thumbnailPath ||
@@ -139,6 +199,10 @@ const getRawThumbnailUrl = (item: any) =>
   item?.download_url;
 
 const getRawImageUrl = (item: any) =>
+  item?.videoPreviewUrl ||
+  item?.video_preview_url ||
+  item?.videoPreviewPath ||
+  item?.video_preview_path ||
   item?.imageUrl ||
   item?.image_url ||
   item?.downloadUrl ||
@@ -850,6 +914,26 @@ const DownloadsHeader = ({
   );
 };
 
+const QualityChip = ({ item }: { item: DownloadWallpaper }) => {
+  if (isVideoWallpaper(item as DownloadWallpaper & Record<string, any>)) {
+    return (
+      <BlurView
+        intensity={26}
+        tint="dark"
+        style={[styles.qualityChip, styles.videoQualityChip]}
+      >
+        <Ionicons name="videocam" size={14} color={colors.textPrimary} />
+      </BlurView>
+    );
+  }
+
+  return (
+    <BlurView intensity={26} tint="dark" style={styles.qualityChip}>
+      <Text style={styles.qualityText}>{item.quality || "HD"}</Text>
+    </BlurView>
+  );
+};
+
 const DownloadsGrid = ({
   downloads,
   selectionMode,
@@ -901,9 +985,7 @@ const DownloadsGrid = ({
                 style={StyleSheet.absoluteFill}
               />
 
-              <BlurView intensity={26} tint="dark" style={styles.qualityChip}>
-                <Text style={styles.qualityText}>{item.quality || "HD"}</Text>
-              </BlurView>
+              <QualityChip item={item} />
 
               {selectionMode ? (
                 <View style={styles.selectionLayer}>
@@ -1129,6 +1211,12 @@ export default function DownloadsScreen({ navigation }: Props) {
 
     if (activeFilter === "Premium") {
       return downloads.filter((item) => item.isPremium);
+    }
+
+    if (activeFilter === "Live") {
+      return downloads.filter((item) =>
+        isVideoWallpaper(item as DownloadWallpaper & Record<string, any>),
+      );
     }
 
     return downloads.filter((item) =>
@@ -1446,6 +1534,16 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorderSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  videoQualityChip: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
   },
 
   qualityText: {

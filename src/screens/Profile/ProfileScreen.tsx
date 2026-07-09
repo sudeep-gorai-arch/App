@@ -82,6 +82,58 @@ const DOWNLOAD_PREVIEW_HEIGHT =
 
 const LOCAL_DOWNLOADS_KEY = "@flexiwalls:guestDownloads";
 
+const VIDEO_EXTENSION_PATTERN = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
+
+const isBlankishValue = (value: unknown) => {
+  const text = String(value ?? "").trim().toLowerCase();
+
+  return (
+    !text ||
+    text === "null" ||
+    text === "undefined" ||
+    text === "false" ||
+    text === "0"
+  );
+};
+
+const isRealVideoUrlValue = (value: unknown) => {
+  if (isBlankishValue(value)) return false;
+
+  const text = String(value).trim();
+
+  return (
+    VIDEO_EXTENSION_PATTERN.test(text) ||
+    /\/videos?\//i.test(text) ||
+    /video-wallpapers?/i.test(text)
+  );
+};
+
+const getWallpaperMediaType = (item: Record<string, any>) => {
+  return String(item?.mediaType || item?.media_type || item?.type || "")
+    .trim()
+    .toUpperCase();
+};
+
+const isVideoWallpaper = (item?: Record<string, any> | null) => {
+  if (!item) return false;
+
+  const mediaType = getWallpaperMediaType(item);
+
+  if (mediaType === "IMAGE") return false;
+  if (mediaType === "VIDEO") return true;
+  if (item?.isVideo === true || item?.is_video === true) return true;
+
+  return (
+    isRealVideoUrlValue(item?.videoUrl) ||
+    isRealVideoUrlValue(item?.video_url) ||
+    isRealVideoUrlValue(item?.videoPath) ||
+    isRealVideoUrlValue(item?.video_path) ||
+    isRealVideoUrlValue(item?.downloadUrl) ||
+    isRealVideoUrlValue(item?.download_url) ||
+    isRealVideoUrlValue(item?.url)
+  );
+};
+
 const STAR_PARTICLES = [
   { id: "s1", x: -130, y: -120, size: 20, color: "#FFD76A", rotate: "-18deg" },
   { id: "s2", x: -78, y: -158, size: 15, color: "#FFFFFF", rotate: "18deg" },
@@ -106,6 +158,27 @@ const appIcon = require("../../assets/icons/profileicon.png");
 
 const getWallpaperImage = (item: Wallpaper | Record<string, any>) => {
   const wallpaper = item as Wallpaper & Record<string, any>;
+
+  if (isVideoWallpaper(wallpaper)) {
+    return (
+      wallpaper.videoThumbnailUrl ||
+      wallpaper.video_thumbnail_url ||
+      wallpaper.videoThumbnailPath ||
+      wallpaper.video_thumbnail_path ||
+      wallpaper.videoPreviewUrl ||
+      wallpaper.video_preview_url ||
+      wallpaper.videoPreviewPath ||
+      wallpaper.video_preview_path ||
+      wallpaper.thumbnailUrl ||
+      wallpaper.imageUrl ||
+      wallpaper.thumbnail_url ||
+      wallpaper.image_url ||
+      wallpaper.thumbnail ||
+      wallpaper.image ||
+      wallpaper.mediaUrl ||
+      wallpaper.media_url
+    );
+  }
 
   return (
     wallpaper.imageUrl ||
@@ -167,11 +240,24 @@ const normalizeRecentDownload = (download: any, index: number) => {
     id: wallpaperId,
     imageUrl: rawWallpaper?.imageUrl || rawWallpaper?.image_url || image,
     thumbnailUrl:
+      rawWallpaper?.videoThumbnailUrl ||
+      rawWallpaper?.video_thumbnail_url ||
+      rawWallpaper?.videoThumbnailPath ||
+      rawWallpaper?.video_thumbnail_path ||
+      rawWallpaper?.videoPreviewUrl ||
+      rawWallpaper?.video_preview_url ||
+      rawWallpaper?.videoPreviewPath ||
+      rawWallpaper?.video_preview_path ||
       rawWallpaper?.thumbnailUrl ||
       rawWallpaper?.thumbnail_url ||
       rawWallpaper?.thumbnailPath ||
       rawWallpaper?.thumbnail_path ||
       image,
+    mediaType: rawWallpaper?.mediaType || rawWallpaper?.media_type,
+    isVideo: Boolean(rawWallpaper?.isVideo || rawWallpaper?.is_video),
+    videoUrl: rawWallpaper?.videoUrl || rawWallpaper?.video_url,
+    videoPreviewUrl: rawWallpaper?.videoPreviewUrl || rawWallpaper?.video_preview_url,
+    videoThumbnailUrl: rawWallpaper?.videoThumbnailUrl || rawWallpaper?.video_thumbnail_url,
     downloadedAt,
     isDownloaded: true,
   } as Wallpaper & Record<string, any>;
@@ -412,6 +498,12 @@ const RecentDownloadsPreview = ({
               style={styles.recentPreviewImage}
               resizeMode="cover"
             />
+
+            {isVideoWallpaper(download.wallpaper) ? (
+              <View style={styles.recentVideoBadge}>
+                <Ionicons name="videocam" size={10} color={colors.textPrimary} />
+              </View>
+            ) : null}
           </Pressable>
         ))}
       </View>
@@ -1409,6 +1501,20 @@ const styles = StyleSheet.create({
     height: "100%",
     borderRadius: 13,
     backgroundColor: "#1d1d1d",
+  },
+
+  recentVideoBadge: {
+    position: "absolute",
+    top: 5,
+    right: 5,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.55)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.24)",
   },
 
   emptyDownloads: {

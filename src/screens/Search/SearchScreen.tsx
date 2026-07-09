@@ -31,6 +31,73 @@ const COLS = 3;
 const GAP = spacing.md;
 const TILE = (SCREEN.width - spacing.xl * 2 - GAP * (COLS - 1)) / COLS;
 
+const VIDEO_EXTENSION_PATTERN = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
+
+const isBlankishValue = (value: unknown) => {
+  const text = String(value ?? '').trim().toLowerCase();
+
+  return (
+    !text ||
+    text === 'null' ||
+    text === 'undefined' ||
+    text === 'false' ||
+    text === '0'
+  );
+};
+
+const isRealVideoUrlValue = (value: unknown) => {
+  if (isBlankishValue(value)) return false;
+
+  const text = String(value).trim();
+
+  return (
+    VIDEO_EXTENSION_PATTERN.test(text) ||
+    /\/videos?\//i.test(text) ||
+    /video-wallpapers?/i.test(text)
+  );
+};
+
+const getWallpaperMediaType = (item: Wallpaper & Record<string, any>) => {
+  return String(item?.mediaType || item?.media_type || item?.type || '')
+    .trim()
+    .toUpperCase();
+};
+
+const isVideoWallpaper = (item: Wallpaper & Record<string, any>) => {
+  const mediaType = getWallpaperMediaType(item);
+
+  if (mediaType === 'IMAGE') return false;
+  if (mediaType === 'VIDEO') return true;
+  if (item?.isVideo === true || item?.is_video === true) return true;
+
+  return (
+    isRealVideoUrlValue(item?.videoUrl) ||
+    isRealVideoUrlValue(item?.video_url) ||
+    isRealVideoUrlValue(item?.videoPath) ||
+    isRealVideoUrlValue(item?.video_path) ||
+    isRealVideoUrlValue(item?.downloadUrl) ||
+    isRealVideoUrlValue(item?.download_url) ||
+    isRealVideoUrlValue(item?.url)
+  );
+};
+
+const getWallpaperPreviewImage = (wallpaper: Wallpaper) => {
+  const w = wallpaper as Wallpaper & Record<string, any>;
+
+  if (isVideoWallpaper(w)) {
+    return (
+      w.videoThumbnailUrl ||
+      w.video_thumbnail_url ||
+      w.videoPreviewUrl ||
+      w.video_preview_url ||
+      w.thumbnailUrl ||
+      w.imageUrl
+    );
+  }
+
+  return w.thumbnailUrl || w.imageUrl;
+};
+
 const ResultTile = ({ wallpaper }: { wallpaper: Wallpaper }) => {
   const [fav, setFav] = useState(wallpaper.isFavorite ?? false);
 
@@ -54,7 +121,7 @@ const ResultTile = ({ wallpaper }: { wallpaper: Wallpaper }) => {
   return (
     <ImageBackground
       source={{
-        uri: wallpaper.thumbnailUrl || wallpaper.imageUrl,
+        uri: getWallpaperPreviewImage(wallpaper),
       }}
       style={styles.tile}
       imageStyle={{ borderRadius: radius.md }}
@@ -67,8 +134,12 @@ const ResultTile = ({ wallpaper }: { wallpaper: Wallpaper }) => {
         />
       </Pressable>
 
-      <View style={styles.quality}>
-        <Text style={styles.qualityText}>{wallpaper.quality}</Text>
+      <View style={[styles.quality, isVideoWallpaper(wallpaper as Wallpaper & Record<string, any>) && styles.videoQuality]}>
+        {isVideoWallpaper(wallpaper as Wallpaper & Record<string, any>) ? (
+          <Ionicons name="videocam" size={14} color={colors.textPrimary} />
+        ) : (
+          <Text style={styles.qualityText}>{wallpaper.quality}</Text>
+        )}
       </View>
     </ImageBackground>
   );
@@ -311,6 +382,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorderSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  videoQuality: {
+    alignSelf: 'flex-end',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
   },
   qualityText: { color: colors.textPrimary, fontSize: 11, fontWeight: '800' },
 });

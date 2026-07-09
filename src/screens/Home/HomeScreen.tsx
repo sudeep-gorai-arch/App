@@ -54,6 +54,61 @@ const CARD_H = CARD_W * 1.52;
 
 const API_ORIGIN = String(API.defaults.baseURL || "").replace(/\/api\/?$/, "");
 
+const VIDEO_EXTENSION_PATTERN = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
+
+const isBlankishValue = (value: unknown) => {
+  const text = String(value ?? "").trim().toLowerCase();
+
+  return (
+    !text ||
+    text === "null" ||
+    text === "undefined" ||
+    text === "false" ||
+    text === "0"
+  );
+};
+
+const isRealVideoUrlValue = (value: unknown) => {
+  if (isBlankishValue(value)) return false;
+
+  const text = String(value).trim();
+
+  return (
+    VIDEO_EXTENSION_PATTERN.test(text) ||
+    /\/videos?\//i.test(text) ||
+    /video-wallpapers?/i.test(text)
+  );
+};
+
+const getWallpaperMediaType = (item: Wallpaper | Record<string, any>) => {
+  const wallpaper = item as Wallpaper & Record<string, any>;
+
+  return String(
+    wallpaper?.mediaType || wallpaper?.media_type || wallpaper?.type || "",
+  )
+    .trim()
+    .toUpperCase();
+};
+
+const isVideoWallpaper = (item: Wallpaper | Record<string, any>) => {
+  const wallpaper = item as Wallpaper & Record<string, any>;
+  const mediaType = getWallpaperMediaType(wallpaper);
+
+  if (mediaType === "IMAGE") return false;
+  if (mediaType === "VIDEO") return true;
+  if (wallpaper?.isVideo === true || wallpaper?.is_video === true) return true;
+
+  return (
+    isRealVideoUrlValue(wallpaper?.videoUrl) ||
+    isRealVideoUrlValue(wallpaper?.video_url) ||
+    isRealVideoUrlValue(wallpaper?.videoPath) ||
+    isRealVideoUrlValue(wallpaper?.video_path) ||
+    isRealVideoUrlValue(wallpaper?.downloadUrl) ||
+    isRealVideoUrlValue(wallpaper?.download_url) ||
+    isRealVideoUrlValue(wallpaper?.url)
+  );
+};
+
 const wait = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -83,6 +138,30 @@ const toAbsoluteMediaUrl = (value?: string | null) => {
 
 const getWallpaperImage = (item: Wallpaper) => {
   const w = item as Wallpaper & Record<string, any>;
+  const isVideo = isVideoWallpaper(w);
+
+  if (isVideo) {
+    return (
+      toAbsoluteMediaUrl(w.videoPreviewUrl) ||
+      toAbsoluteMediaUrl(w.video_preview_url) ||
+      toAbsoluteMediaUrl(w.videoPreviewPath) ||
+      toAbsoluteMediaUrl(w.video_preview_path) ||
+      toAbsoluteMediaUrl(w.videoThumbnailUrl) ||
+      toAbsoluteMediaUrl(w.video_thumbnail_url) ||
+      toAbsoluteMediaUrl(w.videoThumbnailPath) ||
+      toAbsoluteMediaUrl(w.video_thumbnail_path) ||
+      toAbsoluteMediaUrl(w.thumbnailUrl) ||
+      toAbsoluteMediaUrl(w.imageUrl) ||
+      toAbsoluteMediaUrl(w.thumbnail_url) ||
+      toAbsoluteMediaUrl(w.image_url) ||
+      toAbsoluteMediaUrl(w.image) ||
+      toAbsoluteMediaUrl(w.thumbnail) ||
+      toAbsoluteMediaUrl(w.photoUrl) ||
+      toAbsoluteMediaUrl(w.photo_url) ||
+      toAbsoluteMediaUrl(w.mediaUrl) ||
+      toAbsoluteMediaUrl(w.media_url)
+    );
+  }
 
   return (
     toAbsoluteMediaUrl(w.thumbnailUrl) ||
@@ -249,6 +328,47 @@ const patchWallpaperList = (
   return changed ? nextItems : items;
 };
 
+const QualityBadge = ({ item }: { item: Wallpaper }) => {
+  if (isVideoWallpaper(item)) {
+    return (
+      <BlurView
+        intensity={30}
+        tint="dark"
+        style={[styles.qualityBadge, styles.videoQualityBadge]}
+      >
+        <Ionicons name="videocam" size={20} color={colors.textPrimary} />
+      </BlurView>
+    );
+  }
+
+  return (
+    <BlurView intensity={30} tint="dark" style={styles.qualityBadge}>
+      <Text style={styles.qualityText}>{item.quality || "4K"}</Text>
+      <Text style={styles.qualitySub}>ULTRA HD</Text>
+    </BlurView>
+  );
+};
+
+const QualityChip = ({ item }: { item: Wallpaper }) => {
+  if (isVideoWallpaper(item)) {
+    return (
+      <BlurView
+        intensity={28}
+        tint="dark"
+        style={[styles.qualityChip, styles.videoQualityChip]}
+      >
+        <Ionicons name="videocam" size={14} color={colors.textPrimary} />
+      </BlurView>
+    );
+  }
+
+  return (
+    <BlurView intensity={28} tint="dark" style={styles.qualityChip}>
+      <Text style={styles.qualityChipText}>{item.quality || "4K"}</Text>
+    </BlurView>
+  );
+};
+
 const HomeTopHeader = () => {
   const navigation = useNavigation<any>();
 
@@ -305,10 +425,7 @@ const HeroCard = ({
           pressed && onPress && styles.heroPressed,
         ]}
       >
-        <BlurView intensity={24} tint="dark" style={styles.qualityBadge}>
-          <Text style={styles.qualityText}>{item.quality || "4K"}</Text>
-          <Text style={styles.qualitySub}>ULTRA HD</Text>
-        </BlurView>
+        <QualityBadge item={item} />
 
         <View style={styles.heroContent}>
           <View style={styles.tagPill}>
@@ -350,10 +467,7 @@ const HeroCard = ({
           style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]}
         />
 
-        <BlurView intensity={30} tint="dark" style={styles.qualityBadge}>
-          <Text style={styles.qualityText}>{item.quality || "4K"}</Text>
-          <Text style={styles.qualitySub}>ULTRA HD</Text>
-        </BlurView>
+        <QualityBadge item={item} />
 
         <View style={styles.heroContent}>
           <View style={styles.tagPill}>
@@ -539,9 +653,7 @@ const WallpaperCard = ({
         />
 
         <View style={styles.wallpaperTop}>
-          <BlurView intensity={28} tint="dark" style={styles.qualityChip}>
-            <Text style={styles.qualityChipText}>{item.quality || "4K"}</Text>
-          </BlurView>
+          <QualityChip item={item} />
         </View>
 
         <View style={styles.wallpaperBottom}>
@@ -972,10 +1084,19 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: "hidden",
     alignItems: "center",
+    justifyContent: "center",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
     zIndex: 10,
     elevation: 10,
+  },
+
+  videoQualityBadge: {
+    width: 42,
+    height: 42,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    borderRadius: 21,
   },
 
   qualityText: {
@@ -1130,7 +1251,7 @@ const styles = StyleSheet.create({
   },
 
   wallpaperTop: {
-    alignItems: "flex-start",
+    alignItems: "flex-end",
     padding: spacing.sm,
   },
 
@@ -1141,6 +1262,16 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorderSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  videoQualityChip: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
   },
 
   qualityChipText: {

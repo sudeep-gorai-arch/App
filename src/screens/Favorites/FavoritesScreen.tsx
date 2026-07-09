@@ -58,6 +58,58 @@ type FavoriteItem = {
 
 const API_ORIGIN = String(API.defaults.baseURL || "").replace(/\/api\/?$/, "");
 
+const VIDEO_EXTENSION_PATTERN = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
+
+const isBlankishValue = (value: unknown) => {
+  const text = String(value ?? "").trim().toLowerCase();
+
+  return (
+    !text ||
+    text === "null" ||
+    text === "undefined" ||
+    text === "false" ||
+    text === "0"
+  );
+};
+
+const isRealVideoUrlValue = (value: unknown) => {
+  if (isBlankishValue(value)) return false;
+
+  const text = String(value).trim();
+
+  return (
+    VIDEO_EXTENSION_PATTERN.test(text) ||
+    /\/videos?\//i.test(text) ||
+    /video-wallpapers?/i.test(text)
+  );
+};
+
+const getWallpaperMediaType = (item: Record<string, any>) => {
+  return String(item?.mediaType || item?.media_type || item?.type || "")
+    .trim()
+    .toUpperCase();
+};
+
+const isVideoWallpaper = (item?: Record<string, any> | null) => {
+  if (!item) return false;
+
+  const mediaType = getWallpaperMediaType(item);
+
+  if (mediaType === "IMAGE") return false;
+  if (mediaType === "VIDEO") return true;
+  if (item?.isVideo === true || item?.is_video === true) return true;
+
+  return (
+    isRealVideoUrlValue(item?.videoUrl) ||
+    isRealVideoUrlValue(item?.video_url) ||
+    isRealVideoUrlValue(item?.videoPath) ||
+    isRealVideoUrlValue(item?.video_path) ||
+    isRealVideoUrlValue(item?.downloadUrl) ||
+    isRealVideoUrlValue(item?.download_url) ||
+    isRealVideoUrlValue(item?.url)
+  );
+};
+
 const toAbsoluteMediaUrl = (value?: string | null) => {
   if (!value) return "";
 
@@ -161,6 +213,10 @@ const getVariantUrl = (item: any, preferredTypes: string[]) => {
 };
 
 const getRawImageUrl = (item: any) =>
+  item?.videoPreviewUrl ||
+  item?.video_preview_url ||
+  item?.videoPreviewPath ||
+  item?.video_preview_path ||
   item?.imageUrl ||
   item?.image_url ||
   item?.downloadUrl ||
@@ -182,6 +238,14 @@ const getRawImageUrl = (item: any) =>
   item?.original_path;
 
 const getRawThumbnailUrl = (item: any) =>
+  item?.videoThumbnailUrl ||
+  item?.video_thumbnail_url ||
+  item?.videoThumbnailPath ||
+  item?.video_thumbnail_path ||
+  item?.videoPreviewUrl ||
+  item?.video_preview_url ||
+  item?.videoPreviewPath ||
+  item?.video_preview_path ||
   item?.thumbnailUrl ||
   item?.thumbnail_url ||
   item?.thumbnailPath ||
@@ -471,6 +535,26 @@ const FavoritesTopHeader = ({ navigation }: { navigation: any }) => {
   );
 };
 
+const QualityChip = ({ wallpaper }: { wallpaper: FavoriteWallpaper }) => {
+  if (isVideoWallpaper(wallpaper)) {
+    return (
+      <BlurView
+        intensity={26}
+        tint="dark"
+        style={[styles.qualityChip, styles.videoQualityChip]}
+      >
+        <Ionicons name="videocam" size={14} color={colors.textPrimary} />
+      </BlurView>
+    );
+  }
+
+  return (
+    <BlurView intensity={26} tint="dark" style={styles.qualityChip}>
+      <Text style={styles.qualityText}>{wallpaper.quality || "HD"}</Text>
+    </BlurView>
+  );
+};
+
 const FavoriteCard = ({
   item,
   onRemove,
@@ -520,9 +604,7 @@ const FavoriteCard = ({
             ]}
           />
 
-          <BlurView intensity={26} tint="dark" style={styles.qualityChip}>
-            <Text style={styles.qualityText}>{wallpaper.quality || "HD"}</Text>
-          </BlurView>
+          <QualityChip wallpaper={wallpaper} />
 
           <Pressable
             hitSlop={8}
@@ -565,9 +647,7 @@ const FavoriteCard = ({
             color={colors.textSecondary}
           />
 
-          <BlurView intensity={26} tint="dark" style={styles.qualityChip}>
-            <Text style={styles.qualityText}>{wallpaper.quality || "HD"}</Text>
-          </BlurView>
+          <QualityChip wallpaper={wallpaper} />
 
           <Pressable
             hitSlop={8}
@@ -1159,6 +1239,16 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 9,
     overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  videoQualityChip: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
   },
 
   qualityText: {

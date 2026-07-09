@@ -39,6 +39,58 @@ const CARD_H = CARD_W * 1.5;
 
 const API_ORIGIN = String(API.defaults.baseURL || '').replace(/\/api\/?$/, '');
 
+const VIDEO_EXTENSION_PATTERN = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
+
+const isBlankishValue = (value: unknown) => {
+  const text = String(value ?? '').trim().toLowerCase();
+
+  return (
+    !text ||
+    text === 'null' ||
+    text === 'undefined' ||
+    text === 'false' ||
+    text === '0'
+  );
+};
+
+const isRealVideoUrlValue = (value: unknown) => {
+  if (isBlankishValue(value)) return false;
+
+  const text = String(value).trim();
+
+  return (
+    VIDEO_EXTENSION_PATTERN.test(text) ||
+    /\/videos?\//i.test(text) ||
+    /video-wallpapers?/i.test(text)
+  );
+};
+
+const getWallpaperMediaType = (item: Record<string, any>) => {
+  return String(item?.mediaType || item?.media_type || item?.type || '')
+    .trim()
+    .toUpperCase();
+};
+
+const isVideoWallpaper = (item?: Record<string, any> | null) => {
+  if (!item) return false;
+
+  const mediaType = getWallpaperMediaType(item);
+
+  if (mediaType === 'IMAGE') return false;
+  if (mediaType === 'VIDEO') return true;
+  if (item?.isVideo === true || item?.is_video === true) return true;
+
+  return (
+    isRealVideoUrlValue(item?.videoUrl) ||
+    isRealVideoUrlValue(item?.video_url) ||
+    isRealVideoUrlValue(item?.videoPath) ||
+    isRealVideoUrlValue(item?.video_path) ||
+    isRealVideoUrlValue(item?.downloadUrl) ||
+    isRealVideoUrlValue(item?.download_url) ||
+    isRealVideoUrlValue(item?.url)
+  );
+};
+
 const toAbsoluteMediaUrl = (value?: string | null) => {
   if (!value) return undefined;
 
@@ -144,7 +196,15 @@ const normalizeWallpaper = (item: Wallpaper, index: number): Wallpaper => {
 
     slug: wallpaper.slug,
 
+    mediaType: wallpaper.mediaType || wallpaper.media_type,
+
+    isVideo: Boolean(wallpaper.isVideo || wallpaper.is_video),
+
     imageUrl:
+      toAbsoluteMediaUrl(wallpaper.videoPreviewUrl) ||
+      toAbsoluteMediaUrl(wallpaper.video_preview_url) ||
+      toAbsoluteMediaUrl(wallpaper.videoPreviewPath) ||
+      toAbsoluteMediaUrl(wallpaper.video_preview_path) ||
       toAbsoluteMediaUrl(wallpaper.imageUrl) ||
       toAbsoluteMediaUrl(wallpaper.image_url) ||
       toAbsoluteMediaUrl(wallpaper.url) ||
@@ -156,6 +216,14 @@ const normalizeWallpaper = (item: Wallpaper, index: number): Wallpaper => {
       '',
 
     thumbnailUrl:
+      toAbsoluteMediaUrl(wallpaper.videoThumbnailUrl) ||
+      toAbsoluteMediaUrl(wallpaper.video_thumbnail_url) ||
+      toAbsoluteMediaUrl(wallpaper.videoThumbnailPath) ||
+      toAbsoluteMediaUrl(wallpaper.video_thumbnail_path) ||
+      toAbsoluteMediaUrl(wallpaper.videoPreviewUrl) ||
+      toAbsoluteMediaUrl(wallpaper.video_preview_url) ||
+      toAbsoluteMediaUrl(wallpaper.videoPreviewPath) ||
+      toAbsoluteMediaUrl(wallpaper.video_preview_path) ||
       toAbsoluteMediaUrl(wallpaper.thumbnailUrl) ||
       toAbsoluteMediaUrl(wallpaper.thumbnail_url) ||
       toAbsoluteMediaUrl(wallpaper.thumbnail) ||
@@ -164,6 +232,10 @@ const normalizeWallpaper = (item: Wallpaper, index: number): Wallpaper => {
       '',
 
     videoUrl: wallpaper.videoUrl || wallpaper.video_url,
+
+    videoPreviewUrl: wallpaper.videoPreviewUrl || wallpaper.video_preview_url,
+
+    videoThumbnailUrl: wallpaper.videoThumbnailUrl || wallpaper.video_thumbnail_url,
 
     quality: wallpaper.quality || '',
 
@@ -243,6 +315,10 @@ const getWallpaperImage = (item: Wallpaper) => {
   const wallpaper = item as Wallpaper & Record<string, any>;
 
   return (
+    toAbsoluteMediaUrl(wallpaper.videoThumbnailUrl) ||
+    toAbsoluteMediaUrl(wallpaper.video_thumbnail_url) ||
+    toAbsoluteMediaUrl(wallpaper.videoPreviewUrl) ||
+    toAbsoluteMediaUrl(wallpaper.video_preview_url) ||
     toAbsoluteMediaUrl(wallpaper.thumbnailUrl) ||
     toAbsoluteMediaUrl(wallpaper.imageUrl) ||
     toAbsoluteMediaUrl(wallpaper.thumbnail_url) ||
@@ -270,6 +346,16 @@ const getCategoryCount = (category: any, fallback: number) => {
     toNumber(category?.total_wallpapers),
     toNumber(category?._count?.wallpapers),
     fallback,
+  );
+};
+
+const VideoBadge = ({ item }: { item: Wallpaper }) => {
+  if (!isVideoWallpaper(item as Wallpaper & Record<string, any>)) return null;
+
+  return (
+    <BlurView intensity={26} tint='dark' style={styles.videoBadge}>
+      <Ionicons name='videocam' size={14} color={colors.textPrimary} />
+    </BlurView>
   );
 };
 
@@ -316,6 +402,8 @@ const WallpaperTile = ({
             </BlurView>
           ) : null}
 
+          <VideoBadge item={item} />
+
           <View style={styles.wallpaperNameBox}>
             <Text style={styles.wallpaperName} numberOfLines={2}>
               {item.title || 'Wallpaper'}
@@ -339,6 +427,8 @@ const WallpaperTile = ({
               />
             </BlurView>
           ) : null}
+
+          <VideoBadge item={item} />
 
           <View style={styles.wallpaperNameBox}>
             <Text style={styles.wallpaperName} numberOfLines={2}>
@@ -575,6 +665,20 @@ const styles = StyleSheet.create({
 
   lockChip: {
     position: 'absolute',
+    left: 10,
+    top: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorderSoft,
+  },
+
+  videoBadge: {
+    position: 'absolute',
     right: 10,
     top: 10,
     width: 30,
@@ -585,6 +689,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorderSoft,
+    backgroundColor: 'rgba(0,0,0,0.38)',
   },
 
   wallpaperNameBox: {
