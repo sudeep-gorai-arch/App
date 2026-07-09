@@ -26,11 +26,7 @@ import { Category } from '../../services/types';
 import { colors } from '../../styles/colors';
 import { fontFamily } from '../../styles/typography';
 
-import {
-  spacing,
-  radius,
-  SCREEN,
-} from '../../utils/constants';
+import { spacing, radius, SCREEN } from '../../utils/constants';
 
 const flexiWallsLogo = require('../../assets/images/flexiwalls-logo.png');
 
@@ -94,26 +90,17 @@ const toNumber = (value: unknown) => {
 const getCountValue = (item: Category) => {
   const category = item as Category & Record<string, any>;
 
-  return Math.max(
-    toNumber(category.wallpaperCount),
-    toNumber(category.count),
-    toNumber(category.wallpapersCount),
-    toNumber(category.totalWallpapers),
-    toNumber(category.total_wallpapers),
-    toNumber(category._count?.wallpapers),
+  return (
+    toNumber(category.count) ||
+    toNumber(category.wallpaperCount) ||
+    toNumber(category._count?.wallpapers)
   );
 };
 
 const getPremiumCountValue = (item: Category) => {
   const category = item as Category & Record<string, any>;
 
-  return Math.max(
-    toNumber(category.premiumCount),
-    toNumber(category.premium_count),
-    toNumber(category.premiumWallpaperCount),
-    toNumber(category.premium_wallpaper_count),
-    toNumber(category._count?.premiumWallpapers),
-  );
+  return toNumber(category.premiumCount);
 };
 
 const getCreatedTime = (item: Category) => {
@@ -126,27 +113,19 @@ const getCreatedTime = (item: Category) => {
   return Number.isFinite(time) ? time : 0;
 };
 
-const isPremiumCategory = (item: Category) => {
-  const category = item as Category & Record<string, any>;
-
-  return Boolean(
-    category.isPremium ||
-      category.premium ||
-      category.premiumOnly ||
-      getPremiumCountValue(item) > 0,
-  );
-};
-
 const normalizeCategory = (item: Category) => {
   const category = item as Category & Record<string, any>;
 
   return {
     ...category,
+
     id: String(category.id),
+
     name: String(category.name ?? ''),
+
     slug: String(category.slug ?? ''),
+
     thumbnailUrl: getCategoryThumbnailUrl(item),
-    wallpaperCount: getCountValue(item),
   } as Category;
 };
 
@@ -242,9 +221,11 @@ const CategoryTabs = ({
 const CategoryCard = ({
   item,
   onPress,
+  isPremium,
 }: {
   item: Category;
   onPress: () => void;
+  isPremium: boolean;
 }) => {
   const [imageFailed, setImageFailed] = useState(false);
 
@@ -277,7 +258,11 @@ const CategoryCard = ({
               {item.name}
             </Text>
 
-            <Text style={styles.cardCount}>{getCountValue(item)} Wallpapers</Text>
+            <Text style={styles.cardCount}>
+              {`${
+                isPremium ? getPremiumCountValue(item) : getCountValue(item)
+              } Wallpapers`}
+            </Text>
           </View>
         </ImageBackground>
       ) : (
@@ -302,7 +287,11 @@ const CategoryCard = ({
               {item.name}
             </Text>
 
-            <Text style={styles.cardCount}>{getCountValue(item)} Wallpapers</Text>
+            <Text style={styles.cardCount}>
+              {`${
+                isPremium ? getPremiumCountValue(item) : getCountValue(item)
+              } Wallpapers`}
+            </Text>
           </View>
         </View>
       )}
@@ -318,7 +307,7 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [activeTab]);
 
   const visibleCategories = useMemo(() => {
     const list = [...categories];
@@ -331,10 +320,6 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
       return list.sort((a, b) => getCreatedTime(b) - getCreatedTime(a));
     }
 
-    if (activeTab === 'Premium') {
-      return list.filter(isPremiumCategory);
-    }
-
     return list;
   }, [activeTab, categories]);
 
@@ -344,7 +329,17 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
         setLoading(true);
       }
 
-      const response = await getCategories();
+      const response = await getCategories({
+        premiumOnly: activeTab === 'Premium',
+      });
+
+      console.log(
+        response.data.map(c => ({
+          name: c.name,
+          count: c.count,
+          wallpaperCount: c.wallpaperCount,
+        })),
+      );
 
       const apiCategories = Array.isArray(response.data)
         ? response.data.map(normalizeCategory)
@@ -381,6 +376,14 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
       </View>
     );
   }
+
+  console.log(
+    'VISIBLE',
+    visibleCategories.map(c => ({
+      name: c.name,
+      count: getCountValue(c),
+    })),
+  );
 
   return (
     <View style={styles.root}>
@@ -428,7 +431,11 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
             </View>
           }
           renderItem={({ item }) => (
-            <CategoryCard item={item} onPress={() => openCategory(item)} />
+            <CategoryCard
+              item={item}
+              onPress={() => openCategory(item)}
+              isPremium={activeTab === 'Premium'}
+            />
           )}
         />
       </SafeAreaView>

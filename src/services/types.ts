@@ -63,6 +63,8 @@ export interface Category {
 
     wallpaperCount?: number;
 
+    count?: number;
+
     createdAt?: string;
 
     updatedAt?: string;

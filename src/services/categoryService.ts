@@ -5,6 +5,7 @@ export interface CategoryQuery {
   limit?: number;
   offset?: number;
   active?: boolean;
+  premiumOnly?: boolean;
 }
 
 /**
