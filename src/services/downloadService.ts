@@ -1,7 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
-import "react-native-get-random-values";
-import { v4 as uuid } from "uuid";
 import * as Crypto from "expo-crypto";
 
 import API from "./api";
@@ -64,10 +62,10 @@ const normalizeId = (value: unknown) => String(value ?? "").trim();
 const getWallpaperId = (item: any) =>
   normalizeId(
     item?.wallpaperId ||
-      item?.wallpaper_id ||
-      item?.id ||
-      item?.wallpaper?.id ||
-      item?.Wallpaper?.id,
+    item?.wallpaper_id ||
+    item?.id ||
+    item?.wallpaper?.id ||
+    item?.Wallpaper?.id,
   );
 
 const safeJsonParse = (raw: string | null) => {
@@ -196,11 +194,7 @@ const createGuestId = () => {
     // fallback below
   }
 
-  try {
-    return uuid();
-  } catch {
-    return `guest-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  }
+  return `guest-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 };
 
 export const getGuestId = async (): Promise<string> => {

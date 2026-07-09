@@ -14,7 +14,6 @@ import AllWallpapersScreen from '../screens/AllWallpapers/AllWallpapersScreen';
 import WallpaperDetailsScreen from '../screens/WallpaperDetails/WallpaperDetailsScreen';
 import WallpaperCropPreviewScreen from '../screens/WallpaperCropPreview/WallpaperCropPreviewScreen';
 
-import EditPersonalInfoScreen from '../screens/EditPersonalInfo/EditPersonalInfoScreen';
 import HelpSupportScreen from '../screens/HelpSupport/HelpSupportScreen';
 import PrivacyPolicyScreen from '../screens/PrivacyPolicy/PrivacyPolicyScreen';
 import DownloadsScreen from '../screens/Downloads/DownloadsScreen';
@@ -75,7 +74,6 @@ const RootNavigator = () => {
       />
 
       {/* PROFILE OPTIONS */}
-      <Stack.Screen name="EditProfile" component={EditPersonalInfoScreen} />
 
       <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
 
