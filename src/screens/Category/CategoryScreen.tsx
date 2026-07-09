@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,6 +9,8 @@ import {
   ImageBackground,
   ActivityIndicator,
   RefreshControl,
+  Animated,
+  Easing,
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -118,13 +120,9 @@ const normalizeCategory = (item: Category) => {
 
   return {
     ...category,
-
     id: String(category.id),
-
     name: String(category.name ?? ''),
-
     slug: String(category.slug ?? ''),
-
     thumbnailUrl: getCategoryThumbnailUrl(item),
   } as Category;
 };
@@ -302,11 +300,62 @@ const CategoryCard = ({
 const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeTab, setActiveTab] = useState<CategoryTab>('All');
+  const [loadedTab, setLoadedTab] = useState<CategoryTab | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const cardEntranceAnim = useRef(new Animated.Value(0)).current;
+  const requestIdRef = useRef(0);
+
+  const animatedTabsRef = useRef<Record<CategoryTab, boolean>>({
+    All: false,
+    Popular: false,
+    New: false,
+    Premium: false,
+  });
+
+  const loadData = async (isRefresh = false, tabForRequest = activeTab) => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+
+    try {
+      if (!isRefresh) {
+        setLoading(true);
+      }
+
+      const response = await getCategories({
+        premiumOnly: tabForRequest === 'Premium',
+      });
+
+      if (requestId !== requestIdRef.current) {
+        return;
+      }
+
+      const apiCategories = Array.isArray(response.data)
+        ? response.data.map(normalizeCategory)
+        : [];
+
+      setCategories(apiCategories);
+      setLoadedTab(tabForRequest);
+    } catch (error) {
+      if (requestId !== requestIdRef.current) {
+        return;
+      }
+
+      console.log('CATEGORY ERROR', error);
+
+      setCategories([]);
+      setLoadedTab(tabForRequest);
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
+  };
+
   useEffect(() => {
-    loadData();
+    loadData(false, activeTab);
   }, [activeTab]);
 
   const visibleCategories = useMemo(() => {
@@ -323,43 +372,57 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
     return list;
   }, [activeTab, categories]);
 
-  const loadData = async (isRefresh = false) => {
-    try {
-      if (!isRefresh) {
-        setLoading(true);
-      }
-
-      const response = await getCategories({
-        premiumOnly: activeTab === 'Premium',
-      });
-
-      console.log(
-        response.data.map(c => ({
-          name: c.name,
-          count: c.count,
-          wallpaperCount: c.wallpaperCount,
-        })),
-      );
-
-      const apiCategories = Array.isArray(response.data)
-        ? response.data.map(normalizeCategory)
-        : [];
-
-      setCategories(apiCategories);
-    } catch (error) {
-      console.log('CATEGORY ERROR', error);
-
-      setCategories([]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+  useEffect(() => {
+    if (loading || loadedTab !== activeTab) {
+      return;
     }
-  };
+
+    if (animatedTabsRef.current[activeTab]) {
+      cardEntranceAnim.setValue(1);
+      return;
+    }
+
+    animatedTabsRef.current[activeTab] = true;
+
+    if (visibleCategories.length === 0) {
+      cardEntranceAnim.setValue(1);
+      return;
+    }
+
+    cardEntranceAnim.stopAnimation();
+    cardEntranceAnim.setValue(0);
+
+    Animated.timing(cardEntranceAnim, {
+      toValue: 1,
+      duration: 820,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [
+    activeTab,
+    loadedTab,
+    loading,
+    visibleCategories.length,
+    cardEntranceAnim,
+  ]);
 
   const onRefresh = async () => {
     setRefreshing(true);
 
-    await loadData(true);
+    await loadData(true, activeTab);
+  };
+
+  const handleTabChange = (tab: CategoryTab) => {
+    if (tab === activeTab) return;
+
+    if (animatedTabsRef.current[tab]) {
+      cardEntranceAnim.setValue(1);
+    } else {
+      cardEntranceAnim.setValue(0);
+    }
+
+    setLoadedTab(null);
+    setActiveTab(tab);
   };
 
   const openCategory = (item: Category) =>
@@ -369,6 +432,53 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
       premiumOnly: activeTab === 'Premium',
     });
 
+  const renderCategoryCard = ({
+    item,
+    index,
+  }: {
+    item: Category;
+    index: number;
+  }) => {
+    const staggerStart = 0.02 + Math.min(index, 9) * 0.045;
+    const staggerEnd = Math.min(staggerStart + 0.34, 1);
+
+    const opacity = cardEntranceAnim.interpolate({
+      inputRange: [0, staggerStart, staggerEnd, 1],
+      outputRange: [0, 0, 1, 1],
+      extrapolate: 'clamp',
+    });
+
+    const translateY = cardEntranceAnim.interpolate({
+      inputRange: [0, staggerStart, staggerEnd, 1],
+      outputRange: [24, 24, 0, 0],
+      extrapolate: 'clamp',
+    });
+
+    const scale = cardEntranceAnim.interpolate({
+      inputRange: [0, staggerStart, staggerEnd, 1],
+      outputRange: [0.985, 0.985, 1, 1],
+      extrapolate: 'clamp',
+    });
+
+    return (
+      <Animated.View
+        style={[
+          styles.cardAnimWrap,
+          {
+            opacity,
+            transform: [{ translateY }, { scale }],
+          },
+        ]}
+      >
+        <CategoryCard
+          item={item}
+          onPress={() => openCategory(item)}
+          isPremium={activeTab === 'Premium'}
+        />
+      </Animated.View>
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingRoot}>
@@ -376,14 +486,6 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
       </View>
     );
   }
-
-  console.log(
-    'VISIBLE',
-    visibleCategories.map(c => ({
-      name: c.name,
-      count: getCountValue(c),
-    })),
-  );
 
   return (
     <View style={styles.root}>
@@ -416,7 +518,7 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
                 </Text>
               </View>
 
-              <CategoryTabs activeTab={activeTab} onChange={setActiveTab} />
+              <CategoryTabs activeTab={activeTab} onChange={handleTabChange} />
             </View>
           }
           ListEmptyComponent={
@@ -430,13 +532,7 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
               <Text style={styles.emptyText}>No categories found.</Text>
             </View>
           }
-          renderItem={({ item }) => (
-            <CategoryCard
-              item={item}
-              onPress={() => openCategory(item)}
-              isPremium={activeTab === 'Premium'}
-            />
-          )}
+          renderItem={renderCategoryCard}
         />
       </SafeAreaView>
     </View>
@@ -602,6 +698,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     gap: GAP,
     marginBottom: GAP,
+  },
+
+  cardAnimWrap: {
+    width: CARD_W,
+    height: CARD_H,
   },
 
   card: {
