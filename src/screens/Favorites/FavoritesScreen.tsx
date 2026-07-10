@@ -1,9 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -14,36 +9,41 @@ import {
   Image,
   ImageBackground,
   ActivityIndicator,
-} from "react-native";
+  GestureResponderEvent,
+} from 'react-native';
 
-import { SafeAreaView } from "react-native-safe-area-context";
-import { BlurView } from "expo-blur";
-import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
-import MeshBackground from "../../components/MeshBackground";
-import Card from "../../components/Card";
-import PremiumActionButton from "../../components/PremiumActionButton";
+import MeshBackground from '../../components/MeshBackground';
+import Card from '../../components/Card';
+import PremiumActionButton from '../../components/PremiumActionButton';
 
-import API from "../../services/api";
-import { colors, gradients } from "../../styles/colors";
-import { fontFamily } from "../../styles/typography";
+import API from '../../services/api';
+import { colors, gradients } from '../../styles/colors';
+import { fontFamily } from '../../styles/typography';
 
-import { spacing, radius, SCREEN } from "../../utils/constants";
+import { spacing, radius, SCREEN } from '../../utils/constants';
 
-import { getFavorites, removeFavorite } from "../../services/favoriteService";
+import {
+  getFavorites,
+  removeFavorite,
+  getLiveFavorites,
+} from '../../services/favoriteService';
 
-import { Wallpaper } from "../../services/types";
-import { appEvents } from "../../utils/appEvents";
+import { Wallpaper } from '../../services/types';
+import { appEvents } from '../../utils/appEvents';
 
-const flexiWallsLogo = require("../../assets/images/flexiwalls-logo.png");
+const flexiWallsLogo = require('../../assets/images/flexiwalls-logo.png');
 
 const GAP = spacing.lg;
 const CARD_W = (SCREEN.width - spacing.xl * 2 - GAP) / 2;
 const CARD_H = CARD_W * 1.4;
 
-const FILTERS = ["All", "Recent", "Live"] as const;
+const FILTERS = ['All', 'Premium', 'Live'] as const;
 
 type Filter = (typeof FILTERS)[number];
 
@@ -56,66 +56,27 @@ type FavoriteItem = {
   createdAt?: string;
 };
 
-const API_ORIGIN = String(API.defaults.baseURL || "").replace(/\/api\/?$/, "");
+const API_ORIGIN = String(API.defaults.baseURL || '').replace(/\/api\/?$/, '');
 
 const VIDEO_EXTENSION_PATTERN = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
 
-const isBlankishValue = (value: unknown) => {
-  const text = String(value ?? "").trim().toLowerCase();
-
-  return (
-    !text ||
-    text === "null" ||
-    text === "undefined" ||
-    text === "false" ||
-    text === "0"
-  );
-};
-
-const isRealVideoUrlValue = (value: unknown) => {
-  if (isBlankishValue(value)) return false;
-
-  const text = String(value).trim();
-
-  return (
-    VIDEO_EXTENSION_PATTERN.test(text) ||
-    /\/videos?\//i.test(text) ||
-    /video-wallpapers?/i.test(text)
-  );
-};
-
-const getWallpaperMediaType = (item: Record<string, any>) => {
-  return String(item?.mediaType || item?.media_type || item?.type || "")
-    .trim()
-    .toUpperCase();
-};
+const getWallpaperMediaType = (item?: Record<string, any>) =>
+  String(item?.mediaType ?? '').toUpperCase();
 
 const isVideoWallpaper = (item?: Record<string, any> | null) => {
-  if (!item) return false;
+  if (!item) {
+    return false;
+  }
 
-  const mediaType = getWallpaperMediaType(item);
-
-  if (mediaType === "IMAGE") return false;
-  if (mediaType === "VIDEO") return true;
-  if (item?.isVideo === true || item?.is_video === true) return true;
-
-  return (
-    isRealVideoUrlValue(item?.videoUrl) ||
-    isRealVideoUrlValue(item?.video_url) ||
-    isRealVideoUrlValue(item?.videoPath) ||
-    isRealVideoUrlValue(item?.video_path) ||
-    isRealVideoUrlValue(item?.downloadUrl) ||
-    isRealVideoUrlValue(item?.download_url) ||
-    isRealVideoUrlValue(item?.url)
-  );
+  return item.mediaType === 'VIDEO' || !!item.videoUrl;
 };
 
 const toAbsoluteMediaUrl = (value?: string | null) => {
-  if (!value) return "";
+  if (!value) return '';
 
   const url = String(value).trim();
 
-  if (!url) return "";
+  if (!url) return '';
 
   if (/^https?:\/\//i.test(url)) {
     if (!API_ORIGIN) return url;
@@ -126,11 +87,11 @@ const toAbsoluteMediaUrl = (value?: string | null) => {
     );
   }
 
-  if (url.startsWith("//")) {
+  if (url.startsWith('//')) {
     return `https:${url}`;
   }
 
-  if (url.startsWith("/")) {
+  if (url.startsWith('/')) {
     return API_ORIGIN ? `${API_ORIGIN}${url}` : url;
   }
 
@@ -138,313 +99,131 @@ const toAbsoluteMediaUrl = (value?: string | null) => {
 };
 
 const toNumber = (value: unknown) => {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : 0;
-  }
+  const number = Number(value);
 
-  const parsed = Number(String(value ?? "").replace(/[^\d]/g, ""));
-
-  return Number.isFinite(parsed) ? parsed : 0;
+  return Number.isFinite(number) ? number : 0;
 };
 
 const formatCount = (value?: number | string) => {
   const count = toNumber(value);
 
   if (count >= 1000000) {
-    return `${(count / 1000000).toFixed(1).replace(".0", "")}M`;
+    return `${(count / 1000000).toFixed(1).replace('.0', '')}M`;
   }
 
   if (count >= 1000) {
-    return `${(count / 1000).toFixed(1).replace(".0", "")}K`;
+    return `${(count / 1000).toFixed(1).replace('.0', '')}K`;
   }
 
   return String(count);
 };
 
 const getFavoriteCount = (wallpaper: FavoriteWallpaper) => {
-  return Math.max(
-    toNumber(wallpaper.favoriteCount),
-    toNumber(wallpaper.favorite_count),
-    toNumber(wallpaper.favoritesCount),
-    toNumber(wallpaper.favorites_count),
-    toNumber(wallpaper._count?.favorites),
-    toNumber(wallpaper.favorites),
-  );
+  return toNumber(wallpaper.favoriteCount ?? wallpaper._count?.favorites);
 };
 
 const getVariantUrl = (item: any, preferredTypes: string[]) => {
-  const variants = Array.isArray(item?.wallpaperVariants)
-    ? item.wallpaperVariants
-    : Array.isArray(item?.variants)
-      ? item.variants
-      : [];
+  const variants = item?.wallpaperVariants ?? [];
 
   for (const type of preferredTypes) {
-    const found = variants.find(
-      (variant: any) =>
-        String(variant?.type || "").toUpperCase() === type.toUpperCase(),
-    );
+    const variant = variants.find((v: any) => v.type === type);
 
-    const url =
-      found?.url ||
-      found?.path ||
-      found?.imageUrl ||
-      found?.image_url ||
-      found?.thumbnailUrl ||
-      found?.thumbnail_url ||
-      found?.fileUrl ||
-      found?.file_url;
-
-    if (url) return url;
+    if (variant?.url) {
+      return variant.url;
+    }
   }
 
-  const defaultVariant = variants.find((variant: any) => variant?.isDefault);
-
-  return (
-    defaultVariant?.url ||
-    defaultVariant?.path ||
-    defaultVariant?.imageUrl ||
-    defaultVariant?.image_url ||
-    defaultVariant?.thumbnailUrl ||
-    defaultVariant?.thumbnail_url ||
-    defaultVariant?.fileUrl ||
-    defaultVariant?.file_url
-  );
+  return variants.find((v: any) => v.isDefault)?.url;
 };
 
 const getRawImageUrl = (item: any) =>
-  item?.videoPreviewUrl ||
-  item?.video_preview_url ||
-  item?.videoPreviewPath ||
-  item?.video_preview_path ||
-  item?.imageUrl ||
-  item?.image_url ||
-  item?.downloadUrl ||
-  item?.download_url ||
-  item?.displayUrl ||
-  item?.display_url ||
-  item?.displayPath ||
-  item?.display_path ||
-  getVariantUrl(item, ["DISPLAY", "ORIGINAL", "THUMBNAIL"]) ||
-  item?.url ||
-  item?.image ||
-  item?.photoUrl ||
-  item?.photo_url ||
-  item?.mediaUrl ||
-  item?.media_url ||
-  item?.originalUrl ||
-  item?.original_url ||
-  item?.originalPath ||
-  item?.original_path;
+  item?.imageUrl ?? getVariantUrl(item, ['DISPLAY', 'ORIGINAL']);
 
-const getRawThumbnailUrl = (item: any) =>
-  item?.videoThumbnailUrl ||
-  item?.video_thumbnail_url ||
-  item?.videoThumbnailPath ||
-  item?.video_thumbnail_path ||
-  item?.videoPreviewUrl ||
-  item?.video_preview_url ||
-  item?.videoPreviewPath ||
-  item?.video_preview_path ||
-  item?.thumbnailUrl ||
-  item?.thumbnail_url ||
-  item?.thumbnailPath ||
-  item?.thumbnail_path ||
-  item?.displayUrl ||
-  item?.display_url ||
-  getVariantUrl(item, ["THUMBNAIL", "DISPLAY", "ORIGINAL"]) ||
-  item?.thumbnail ||
-  item?.thumbUrl ||
-  item?.thumb_url ||
-  item?.displayPath ||
-  item?.display_path ||
-  item?.imageUrl ||
-  item?.image_url ||
-  item?.downloadUrl ||
-  item?.download_url;
+const getRawThumbnailUrl = (item: any) => item?.thumbnailUrl ?? item?.imageUrl;
 
 const normalizeWallpaper = (
-  wallpaperInput: FavoriteWallpaper,
+  wallpaper: FavoriteWallpaper,
   index: number,
 ): FavoriteWallpaper => {
-  const wallpaper = wallpaperInput as FavoriteWallpaper;
-
-  const id = String(
-    wallpaper.id ||
-      wallpaper._id ||
-      wallpaper.wallpaperId ||
-      wallpaper.wallpaper_id ||
-      `wallpaper-${index}`,
-  );
-
   const favoriteCount = getFavoriteCount(wallpaper);
 
   return {
     ...wallpaper,
 
-    id,
+    id: String(wallpaper.id ?? `wallpaper-${index}`),
 
-    title: String(wallpaper.title || wallpaper.name || "Wallpaper"),
+    title: wallpaper.title ?? 'Wallpaper',
 
     imageUrl: toAbsoluteMediaUrl(getRawImageUrl(wallpaper)),
 
     thumbnailUrl: toAbsoluteMediaUrl(getRawThumbnailUrl(wallpaper)),
 
-    quality: wallpaper.quality || "",
+    likes: toNumber(wallpaper.likes),
 
-    likes: toNumber(
-      wallpaper.likes ?? wallpaper.likeCount ?? wallpaper.like_count,
-    ),
-
-    downloadCount: toNumber(
-      wallpaper.downloadCount ??
-        wallpaper.download_count ??
-        wallpaper.downloads ??
-        0,
-    ),
+    downloadCount: toNumber(wallpaper.downloadCount),
 
     favoriteCount,
 
     favoritesCount: favoriteCount,
 
-    isPremium: Boolean(
-      wallpaper.isPremium ||
-        wallpaper.is_premium ||
-        wallpaper.premium ||
-        wallpaper.premiumOnly,
-    ),
+    quality: wallpaper.quality ?? '',
+
+    isPremium: wallpaper.isPremium ?? false,
 
     category: wallpaper.category,
 
-    categoryId: wallpaper.categoryId || wallpaper.category_id,
+    categoryId: wallpaper.categoryId,
 
-    createdAt: wallpaper.createdAt || wallpaper.created_at || "",
+    createdAt: wallpaper.createdAt ?? '',
 
-    updatedAt:
-      wallpaper.updatedAt ||
-      wallpaper.updated_at ||
-      wallpaper.createdAt ||
-      wallpaper.created_at ||
-      "",
+    updatedAt: wallpaper.updatedAt ?? wallpaper.createdAt ?? '',
 
     isFavorite: true,
-  } as FavoriteWallpaper;
+  };
 };
 
 const extractFavoriteArray = (payload: any): any[] => {
-  if (Array.isArray(payload?.data?.data?.favorites)) {
-    return payload.data.data.favorites;
-  }
-
-  if (Array.isArray(payload?.data?.data?.items)) {
-    return payload.data.data.items;
-  }
-
-  if (Array.isArray(payload?.data?.data)) {
-    return payload.data.data;
-  }
-
-  if (Array.isArray(payload?.data?.favorites)) {
-    return payload.data.favorites;
-  }
-
-  if (Array.isArray(payload?.data?.items)) {
-    return payload.data.items;
-  }
-
-  if (Array.isArray(payload?.data)) {
-    return payload.data;
-  }
-
-  if (Array.isArray(payload?.favorites)) {
-    return payload.favorites;
-  }
-
-  if (Array.isArray(payload?.items)) {
-    return payload.items;
-  }
-
-  if (Array.isArray(payload)) {
-    return payload;
-  }
-
-  return [];
+  return Array.isArray(payload?.data) ? payload.data : [];
 };
 
 const normalizeFavoriteItem = (
   item: any,
   index: number,
 ): FavoriteItem | null => {
-  const rawWallpaper =
-    item?.wallpaper ||
-    item?.Wallpaper ||
-    item?.wallpaperData ||
-    item?.wallpaper_data ||
-    item?.data?.wallpaper ||
-    item?.data?.Wallpaper ||
-    item?.data ||
-    item;
+  const wallpaper = normalizeWallpaper(item, index);
 
-  if (!rawWallpaper) return null;
-
-  const wallpaper = normalizeWallpaper(rawWallpaper, index);
-
-  if (!wallpaper?.id) return null;
-
-  const favoriteId = String(
-    item?.id ||
-      item?.favoriteId ||
-      item?.favorite_id ||
-      `${wallpaper.id}-${index}`,
-  );
+  if (!wallpaper.id) {
+    return null;
+  }
 
   return {
-    id: favoriteId,
-    favoriteKey: `${favoriteId}-${wallpaper.id}`,
+    id: wallpaper.id,
+    favoriteKey: wallpaper.id,
     wallpaper,
-    createdAt: item?.createdAt || item?.created_at || wallpaper.createdAt,
+    createdAt: wallpaper.createdAt,
   };
 };
 
 const extractFavoriteWallpapers = (payload: any): FavoriteItem[] => {
-  const list = extractFavoriteArray(payload);
   const seen = new Set<string>();
 
-  return list
+  return extractFavoriteArray(payload)
     .map(normalizeFavoriteItem)
-    .filter((item): item is FavoriteItem => Boolean(item?.wallpaper?.id))
-    .filter((item) => {
-      const wallpaperId = String(item.wallpaper.id);
+    .filter((item): item is FavoriteItem => !!item)
+    .filter(item => {
+      if (seen.has(item.wallpaper.id)) {
+        return false;
+      }
 
-      if (seen.has(wallpaperId)) return false;
-
-      seen.add(wallpaperId);
+      seen.add(item.wallpaper.id);
       return true;
     });
 };
 
-const getWallpaperImage = (wallpaper: FavoriteWallpaper) => {
-  return (
-    toAbsoluteMediaUrl(wallpaper.thumbnailUrl) ||
-    toAbsoluteMediaUrl(wallpaper.imageUrl) ||
-    toAbsoluteMediaUrl(getRawThumbnailUrl(wallpaper)) ||
-    toAbsoluteMediaUrl(getRawImageUrl(wallpaper)) ||
-    ""
-  );
-};
+const getWallpaperImage = (wallpaper: FavoriteWallpaper) =>
+  toAbsoluteMediaUrl(wallpaper.thumbnailUrl || wallpaper.imageUrl);
 
-const getWallpaperEventId = (
-  wallpaper: FavoriteWallpaper | Record<string, any>,
-) => {
-  return String(
-    wallpaper?.id ||
-      wallpaper?._id ||
-      wallpaper?.wallpaperId ||
-      wallpaper?.wallpaper_id ||
-      wallpaper?.uuid ||
-      "",
-  );
-};
+const getWallpaperEventId = (wallpaper: FavoriteWallpaper) => wallpaper.id;
 
 const createFavoriteItemFromWallpaper = (
   wallpaperInput: FavoriteWallpaper,
@@ -454,44 +233,28 @@ const createFavoriteItemFromWallpaper = (
     {
       ...wallpaperInput,
       isFavorite: true,
-      is_favorite: true,
     },
     index,
   );
 
-  if (!wallpaper?.id) return null;
-
   return {
-    id: `event-${wallpaper.id}`,
-    favoriteKey: `event-${wallpaper.id}-${wallpaper.id}`,
+    id: wallpaper.id,
+    favoriteKey: wallpaper.id,
     wallpaper,
-    createdAt:
-      wallpaper.createdAt || wallpaper.created_at || new Date().toISOString(),
+    createdAt: wallpaper.createdAt || new Date().toISOString(),
   };
 };
 
 const patchFavoriteWallpaper = (
   wallpaper: FavoriteWallpaper,
-  patch: Record<string, any>,
+  patch: Partial<FavoriteWallpaper>,
   index = 0,
 ) => {
-  const nextFavoriteCount =
-    patch.favoriteCount ??
-    patch.favorite_count ??
-    patch.favoritesCount ??
-    patch.favorites_count ??
-    getFavoriteCount(wallpaper);
-
   return normalizeWallpaper(
     {
       ...wallpaper,
       ...patch,
-      favoriteCount: nextFavoriteCount,
-      favorite_count: nextFavoriteCount,
-      favoritesCount: nextFavoriteCount,
-      favorites_count: nextFavoriteCount,
       isFavorite: true,
-      is_favorite: true,
     },
     index,
   );
@@ -514,7 +277,7 @@ const FavoritesTopHeader = ({ navigation }: { navigation: any }) => {
           />
 
           <Pressable
-            onPress={() => navigation.navigate("Search")}
+            onPress={() => navigation.navigate('Search')}
             hitSlop={8}
             style={({ pressed }) => [
               styles.favoritesRightButton,
@@ -536,21 +299,17 @@ const FavoritesTopHeader = ({ navigation }: { navigation: any }) => {
 };
 
 const QualityChip = ({ wallpaper }: { wallpaper: FavoriteWallpaper }) => {
-  if (isVideoWallpaper(wallpaper)) {
-    return (
-      <BlurView
-        intensity={26}
-        tint="dark"
-        style={[styles.qualityChip, styles.videoQualityChip]}
-      >
-        <Ionicons name="videocam" size={14} color={colors.textPrimary} />
-      </BlurView>
-    );
-  }
-
-  return (
+  return isVideoWallpaper(wallpaper) ? (
+    <BlurView
+      intensity={26}
+      tint="dark"
+      style={[styles.qualityChip, styles.videoQualityChip]}
+    >
+      <Ionicons name="videocam" size={14} color={colors.textPrimary} />
+    </BlurView>
+  ) : (
     <BlurView intensity={26} tint="dark" style={styles.qualityChip}>
-      <Text style={styles.qualityText}>{wallpaper.quality || "HD"}</Text>
+      <Text style={styles.qualityText}>{wallpaper.quality || 'HD'}</Text>
     </BlurView>
   );
 };
@@ -566,6 +325,43 @@ const FavoriteCard = ({
 }) => {
   const wallpaper = item.wallpaper;
   const image = getWallpaperImage(wallpaper);
+
+  const handleRemove = (event: GestureResponderEvent) => {
+    event.stopPropagation();
+    onRemove(wallpaper.id);
+  };
+
+  const CardContent = () => (
+    <>
+      <QualityChip wallpaper={wallpaper} />
+
+      <Pressable hitSlop={8} onPress={handleRemove} style={styles.heartWrap}>
+        <BlurView intensity={30} tint="dark" style={styles.heartChip}>
+          <Ionicons name="heart" size={18} color={colors.heart} />
+        </BlurView>
+      </Pressable>
+
+      <View style={styles.cardMeta}>
+        <Text style={styles.cardTitle} numberOfLines={1}>
+          {wallpaper.title}
+        </Text>
+
+        <View style={styles.cardMetaRow}>
+          <Text style={styles.cardCategory} numberOfLines={1}>
+            {wallpaper.category?.name ?? 'Wallpaper'}
+          </Text>
+
+          <View style={styles.likeRow}>
+            <Ionicons name="heart" size={12} color={colors.textSecondary} />
+
+            <Text style={styles.likeText}>
+              {formatCount(wallpaper.favoriteCount)}
+            </Text>
+          </View>
+        </View>
+      </View>
+    </>
+  );
 
   return (
     <Pressable
@@ -592,9 +388,9 @@ const FavoriteCard = ({
         >
           <LinearGradient
             colors={[
-              "rgba(8,6,20,0.05)",
-              "rgba(8,6,20,0.2)",
-              "rgba(8,6,20,0.82)",
+              'rgba(8,6,20,0.05)',
+              'rgba(8,6,20,0.2)',
+              'rgba(8,6,20,0.82)',
             ]}
             style={[
               StyleSheet.absoluteFill,
@@ -604,40 +400,7 @@ const FavoriteCard = ({
             ]}
           />
 
-          <QualityChip wallpaper={wallpaper} />
-
-          <Pressable
-            hitSlop={8}
-            onPress={(event) => {
-              event.stopPropagation();
-              onRemove(wallpaper.id);
-            }}
-            style={styles.heartWrap}
-          >
-            <BlurView intensity={30} tint="dark" style={styles.heartChip}>
-              <Ionicons name="heart" size={18} color={colors.heart} />
-            </BlurView>
-          </Pressable>
-
-          <View style={styles.cardMeta}>
-            <Text style={styles.cardTitle} numberOfLines={1}>
-              {wallpaper.title || "Wallpaper"}
-            </Text>
-
-            <View style={styles.cardMetaRow}>
-              <Text style={styles.cardCategory} numberOfLines={1}>
-                {wallpaper.category?.name ?? "Wallpaper"}
-              </Text>
-
-              <View style={styles.likeRow}>
-                <Ionicons name="heart" size={12} color={colors.textSecondary} />
-
-                <Text style={styles.likeText}>
-                  {formatCount(getFavoriteCount(wallpaper))}
-                </Text>
-              </View>
-            </View>
-          </View>
+          <CardContent />
         </ImageBackground>
       ) : (
         <View style={styles.cardPlaceholder}>
@@ -647,75 +410,50 @@ const FavoriteCard = ({
             color={colors.textSecondary}
           />
 
-          <QualityChip wallpaper={wallpaper} />
-
-          <Pressable
-            hitSlop={8}
-            onPress={(event) => {
-              event.stopPropagation();
-              onRemove(wallpaper.id);
-            }}
-            style={styles.heartWrap}
-          >
-            <BlurView intensity={30} tint="dark" style={styles.heartChip}>
-              <Ionicons name="heart" size={18} color={colors.heart} />
-            </BlurView>
-          </Pressable>
-
-          <View style={styles.cardMeta}>
-            <Text style={styles.cardTitle} numberOfLines={1}>
-              {wallpaper.title || "Wallpaper"}
-            </Text>
-
-            <View style={styles.cardMetaRow}>
-              <Text style={styles.cardCategory} numberOfLines={1}>
-                {wallpaper.category?.name ?? "Wallpaper"}
-              </Text>
-
-              <View style={styles.likeRow}>
-                <Ionicons name="heart" size={12} color={colors.textSecondary} />
-
-                <Text style={styles.likeText}>
-                  {formatCount(getFavoriteCount(wallpaper))}
-                </Text>
-              </View>
-            </View>
-          </View>
+          <CardContent />
         </View>
       )}
     </Pressable>
   );
 };
 
-const EmptyState = () => (
-  <View style={styles.emptyWrap}>
-    <Card
-      padding={spacing.xxl}
-      style={{
-        alignItems: "center",
-      }}
-      glowBorder
-    >
-      <View style={styles.emptyIcon}>
-        <Ionicons name="heart-outline" size={34} color={colors.textPrimary} />
-      </View>
+const EmptyState = React.memo(() => {
+  return (
+    <View style={styles.emptyWrap}>
+      <Card
+        padding={spacing.xxl}
+        glowBorder
+        style={{
+          alignItems: 'center',
+        }}
+      >
+        <View style={styles.emptyIcon}>
+          <Ionicons name="heart-outline" size={34} color={colors.textPrimary} />
+        </View>
 
-      <Text style={styles.emptyTitle}>No favorites yet</Text>
+        <Text style={styles.emptyTitle}>No favorites yet</Text>
 
-      <Text style={styles.emptySubtitle}>
-        Tap the heart on any wallpaper to save it here.
-      </Text>
-    </Card>
-  </View>
-);
+        <Text style={styles.emptySubtitle}>
+          Tap the heart on any wallpaper to save it here.
+        </Text>
+      </Card>
+    </View>
+  );
+});
+
+EmptyState.displayName = 'EmptyState';
 
 const FavoritesScreen = () => {
   const navigation = useNavigation<any>();
 
-  const [items, setItems] = useState<FavoriteItem[]>([]);
-  const [filter, setFilter] = useState<Filter>("All");
+  const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
+  const [liveFavorites, setLiveFavorites] = useState<FavoriteItem[]>([]);
+
   const [loading, setLoading] = useState(true);
+
   const [refreshing, setRefreshing] = useState(false);
+
+  const [filter, setFilter] = useState<'All' | 'Premium' | 'Live'>('All');
 
   useFocusEffect(
     useCallback(() => {
@@ -724,21 +462,35 @@ const FavoritesScreen = () => {
     }, []),
   );
 
-  const loadFavorites = async (isRefresh = false) => {
+  const loadFavorites = async (showLoader = true) => {
     try {
-      if (!isRefresh) {
+      if (showLoader) {
         setLoading(true);
       }
 
       const response = await getFavorites();
 
-      setItems(extractFavoriteWallpapers(response));
-    } catch (error) {
-      console.log("FAVORITES ERROR", error);
-      setItems([]);
+      setFavorites(extractFavoriteWallpapers(response));
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const loadLiveFavorites = async () => {
+    const response = await getLiveFavorites();
+
+    const items = extractFavoriteWallpapers(response);
+
+    setLiveFavorites(items);
+  };
+
+  const onFilterChange = async (next: Filter) => {
+    setFilter(next);
+
+    if (next === 'Live') {
+    
+      await loadLiveFavorites();
     }
   };
 
@@ -749,9 +501,9 @@ const FavoritesScreen = () => {
   };
 
   useEffect(() => {
-    const unsubscribeFavorites = appEvents.on("favoritesChanged", (payload) => {
+    const unsubscribeFavorites = appEvents.on('favoritesChanged', payload => {
       const wallpaperId = String(
-        payload.wallpaperId || payload.wallpaper?.id || "",
+        payload.wallpaperId || payload.wallpaper?.id || '',
       );
 
       if (!wallpaperId) {
@@ -759,17 +511,17 @@ const FavoritesScreen = () => {
       }
 
       if (!payload.isFavorite) {
-        setItems((current) =>
+        setFavorites(current =>
           current.filter(
-            (item) => getWallpaperEventId(item.wallpaper) !== wallpaperId,
+            item => getWallpaperEventId(item.wallpaper) !== wallpaperId,
           ),
         );
         return;
       }
 
-      setItems((current) => {
+      setFavorites(current => {
         const existingIndex = current.findIndex(
-          (item) => getWallpaperEventId(item.wallpaper) === wallpaperId,
+          item => getWallpaperEventId(item.wallpaper) === wallpaperId,
         );
 
         const existingItem =
@@ -824,16 +576,16 @@ const FavoritesScreen = () => {
       });
     });
 
-    const unsubscribeWallpaper = appEvents.on("wallpaperChanged", (payload) => {
+    const unsubscribeWallpaper = appEvents.on('wallpaperChanged', payload => {
       const wallpaperId = String(
-        payload.wallpaperId || payload.wallpaper?.id || "",
+        payload.wallpaperId || payload.wallpaper?.id || '',
       );
 
       if (!wallpaperId || !payload.wallpaper) {
         return;
       }
 
-      setItems((current) =>
+      setFavorites(current =>
         current.map((item, index) => {
           if (getWallpaperEventId(item.wallpaper) !== wallpaperId) {
             return item;
@@ -851,7 +603,7 @@ const FavoritesScreen = () => {
       );
     });
 
-    const unsubscribeWallpapers = appEvents.on("wallpapersChanged", () => {
+    const unsubscribeWallpapers = appEvents.on('wallpapersChanged', () => {
       loadFavorites();
     });
 
@@ -864,9 +616,9 @@ const FavoritesScreen = () => {
   }, []);
 
   const remove = async (wallpaperId: string) => {
-    const previousItems = items;
-    const removedItem = items.find(
-      (item) => getWallpaperEventId(item.wallpaper) === wallpaperId,
+    const previousItems = favorites;
+    const removedItem = favorites.find(
+      item => getWallpaperEventId(item.wallpaper) === wallpaperId,
     );
 
     if (!removedItem) {
@@ -879,13 +631,11 @@ const FavoritesScreen = () => {
       getFavoriteCount(rollbackWallpaper) - 1,
     );
 
-    setItems((prev) =>
-      prev.filter(
-        (item) => getWallpaperEventId(item.wallpaper) !== wallpaperId,
-      ),
+    setFavorites(prev =>
+      prev.filter(item => getWallpaperEventId(item.wallpaper) !== wallpaperId),
     );
 
-    appEvents.emit("favoritesChanged", {
+    appEvents.emit('favoritesChanged', {
       wallpaperId,
       isFavorite: false,
       favoriteCount: nextFavoriteCount,
@@ -910,7 +660,7 @@ const FavoritesScreen = () => {
         data?.favorites_count ??
         nextFavoriteCount;
 
-      appEvents.emit("favoritesChanged", {
+      appEvents.emit('favoritesChanged', {
         wallpaperId,
         isFavorite: false,
         favoriteCount: toNumber(confirmedFavoriteCount),
@@ -925,11 +675,11 @@ const FavoritesScreen = () => {
         },
       });
     } catch (error) {
-      console.log("REMOVE FAVORITE ERROR", error);
+      console.log('REMOVE FAVORITE ERROR', error);
 
-      setItems(previousItems);
+      setFavorites(previousItems);
 
-      appEvents.emit("favoritesChanged", {
+      appEvents.emit('favoritesChanged', {
         wallpaperId,
         isFavorite: true,
         favoriteCount: getFavoriteCount(rollbackWallpaper),
@@ -942,39 +692,38 @@ const FavoritesScreen = () => {
     }
   };
 
+  const isPremiumWallpaper = (wallpaper: FavoriteWallpaper) => {
+    return (
+      wallpaper?.isPremium === true ||
+      wallpaper?.is_premium === true ||
+      wallpaper?.premium === true ||
+      wallpaper?.premiumOnly === true
+    );
+  };
+
   const data = useMemo(() => {
-    const copy = items.filter((item) => item?.wallpaper?.id);
+    switch (filter) {
+      case 'Premium':
+        return favorites.filter(item => isPremiumWallpaper(item.wallpaper));
 
-    if (filter === "Recent") {
-      return copy.sort((a, b) => {
-        const bTime = new Date(b.createdAt || "").getTime();
-        const aTime = new Date(a.createdAt || "").getTime();
+      case 'Live':
+        return liveFavorites;
 
-        return (
-          (Number.isFinite(bTime) ? bTime : 0) -
-          (Number.isFinite(aTime) ? aTime : 0)
-        );
-      });
+      case 'All':
+      default:
+        return favorites;
     }
-
-    if (filter === "Live") {
-      return copy.sort(
-        (a, b) => getFavoriteCount(b.wallpaper) - getFavoriteCount(a.wallpaper),
-      );
-    }
-
-    return copy;
-  }, [items, filter]);
+  }, [filter, favorites, liveFavorites]);
 
   const openWallpaper = (wallpaper: FavoriteWallpaper) => {
     const parentNavigation = navigation.getParent?.();
 
     if (parentNavigation) {
-      parentNavigation.navigate("WallpaperDetails", { wallpaper });
+      parentNavigation.navigate('WallpaperDetails', { wallpaper });
       return;
     }
 
-    navigation.navigate("WallpaperDetails", { wallpaper });
+    navigation.navigate('WallpaperDetails', { wallpaper });
   };
 
   if (loading) {
@@ -989,7 +738,7 @@ const FavoritesScreen = () => {
     <View style={styles.root}>
       <MeshBackground variant="profile" />
 
-      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <FlatList
           data={data}
           keyExtractor={(item, index) =>
@@ -1023,14 +772,14 @@ const FavoritesScreen = () => {
               </View>
 
               <BlurView intensity={30} tint="dark" style={styles.filterBar}>
-                {FILTERS.map((f) => {
+                {FILTERS.map(f => {
                   const active = f === filter;
 
                   return (
                     <Pressable
                       key={f}
                       style={styles.filterItem}
-                      onPress={() => setFilter(f)}
+                      onPress={() => onFilterChange(f)}
                     >
                       {active ? (
                         <LinearGradient
@@ -1073,8 +822,8 @@ const styles = StyleSheet.create({
   },
 
   loadingRoot: {
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   favoritesHeader: {
@@ -1085,10 +834,10 @@ const styles = StyleSheet.create({
 
   favoritesActionRow: {
     height: 72,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    overflow: "visible",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    overflow: 'visible',
     marginBottom: -8,
   },
 
@@ -1100,8 +849,8 @@ const styles = StyleSheet.create({
   },
 
   favoritesRightActions: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
     zIndex: 5,
   },
@@ -1110,17 +859,17 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "visible",
-    backgroundColor: "transparent",
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+    backgroundColor: 'transparent',
   },
 
   favoritesRightButton: {
     width: 46,
     height: 46,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     zIndex: 5,
   },
 
@@ -1128,9 +877,9 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
     backgroundColor: colors.glassFill,
@@ -1171,13 +920,13 @@ const styles = StyleSheet.create({
   },
 
   filterBar: {
-    flexDirection: "row",
+    flexDirection: 'row',
     marginHorizontal: spacing.xl,
     marginTop: spacing.sm,
     marginBottom: spacing.sm,
     padding: 5,
     borderRadius: radius.pill,
-    overflow: "hidden",
+    overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
     backgroundColor: colors.glassFillSoft,
@@ -1185,15 +934,15 @@ const styles = StyleSheet.create({
 
   filterItem: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   filterActive: {
-    width: "100%",
+    width: '100%',
     paddingVertical: 10,
     borderRadius: radius.pill,
-    alignItems: "center",
+    alignItems: 'center',
   },
 
   filterText: {
@@ -1213,7 +962,7 @@ const styles = StyleSheet.create({
     width: CARD_W,
     height: CARD_H,
     borderRadius: radius.lg,
-    overflow: "hidden",
+    overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
     backgroundColor: colors.glassFillSoft,
@@ -1226,21 +975,21 @@ const styles = StyleSheet.create({
   cardPlaceholder: {
     flex: 1,
     borderRadius: radius.lg,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.glassFillSoft,
   },
 
   qualityChip: {
-    position: "absolute",
+    position: 'absolute',
     top: 10,
     left: 10,
     paddingHorizontal: 9,
     paddingVertical: 4,
     borderRadius: 9,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   videoQualityChip: {
@@ -1258,7 +1007,7 @@ const styles = StyleSheet.create({
   },
 
   heartWrap: {
-    position: "absolute",
+    position: 'absolute',
     top: 10,
     right: 10,
   },
@@ -1267,15 +1016,15 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorderSoft,
   },
 
   cardMeta: {
-    position: "absolute",
+    position: 'absolute',
     left: 12,
     right: 12,
     bottom: 12,
@@ -1288,9 +1037,9 @@ const styles = StyleSheet.create({
   },
 
   cardMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginTop: 3,
     gap: 8,
   },
@@ -1303,8 +1052,8 @@ const styles = StyleSheet.create({
   },
 
   likeRow: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 3,
   },
 
@@ -1323,8 +1072,8 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
     backgroundColor: colors.glassFillSoft,
@@ -1341,7 +1090,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
     fontSize: 14,
-    textAlign: "center",
+    textAlign: 'center',
     marginTop: 6,
   },
 });
