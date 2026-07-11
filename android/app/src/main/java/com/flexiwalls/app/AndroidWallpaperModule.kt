@@ -22,6 +22,7 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -55,6 +56,10 @@ class AndroidWallpaperModule(
     const val VIDEO_CROP_HEIGHT = "video_crop_height"
 
     private const val VIDEO_WALLPAPER_DIR = "video_wallpapers"
+    private const val VIDEO_WALLPAPER_CACHE_DIR = "cache"
+    private const val MAX_UNREFERENCED_CACHE_FILES = 6
+
+    private val VIDEO_CACHE_LOCK = Any()
   }
 
   override fun getName(): String {
@@ -126,6 +131,31 @@ class AndroidWallpaperModule(
   }
 
   @ReactMethod
+  fun prepareVideoWallpaper(
+    videoUrl: String,
+    promise: Promise
+  ) {
+    Thread {
+      try {
+        val cleanedUrl = videoUrl.trim()
+
+        if (cleanedUrl.isEmpty()) {
+          throw Exception("Video wallpaper URL is missing")
+        }
+
+        val preparedFile = getOrPrepareVideoFile(cleanedUrl)
+        promise.resolve(preparedFile.absolutePath)
+      } catch (error: Exception) {
+        promise.reject(
+          "PREPARE_VIDEO_WALLPAPER_FAILED",
+          error.message ?: "Could not prepare video wallpaper",
+          error
+        )
+      }
+    }.start()
+  }
+
+  @ReactMethod
   fun applyVideoWallpaper(
     videoUrl: String,
     target: String,
@@ -144,10 +174,10 @@ class AndroidWallpaperModule(
         val normalizedTarget = normalizeVideoTarget(target)
         val prefsName = getVideoPrefsName(normalizedTarget)
 
-        val localVideoFile = copyVideoToPrivateStorage(
-          value = cleanedUrl,
-          target = normalizedTarget
-        )
+        // Reuse the background-prepared file. When preparation is still running,
+        // this waits for the same synchronized operation instead of downloading
+        // another copy of the video.
+        val localVideoFile = getOrPrepareVideoFile(cleanedUrl)
 
         saveVideoWallpaperConfig(
           prefsName = prefsName,
@@ -331,71 +361,148 @@ class AndroidWallpaperModule(
       .putFloat(VIDEO_CROP_HEIGHT, cropHeight.toFloat())
   }
 
-  private fun copyVideoToPrivateStorage(
-    value: String,
-    target: String
-  ): File {
-    val extension = getVideoExtension(value)
-    val normalizedTarget = normalizeVideoTarget(target)
+  private fun getOrPrepareVideoFile(value: String): File {
+    synchronized(VIDEO_CACHE_LOCK) {
+      val cleanedValue = value.trim()
 
-    val directory = File(reactContext.filesDir, VIDEO_WALLPAPER_DIR)
-
-    if (!directory.exists()) {
-      directory.mkdirs()
-    }
-
-    cleanPreviousTargetVideos(directory, normalizedTarget, extension)
-
-    val outputFile = File(
-      directory,
-      "current_video_wallpaper_$normalizedTarget.$extension"
-    )
-
-    openInputStream(value, "Video").use { input ->
-      FileOutputStream(outputFile, false).use { output ->
-        val buffer = ByteArray(256 * 1024)
-
-        while (true) {
-          val read = input.read(buffer)
-
-          if (read <= 0) break
-
-          output.write(buffer, 0, read)
-        }
-
-        output.flush()
+      if (cleanedValue.isEmpty()) {
+        throw Exception("Video wallpaper URL is missing")
       }
-    }
 
-    if (!outputFile.exists() || outputFile.length() <= 0L) {
-      throw Exception("Downloaded video wallpaper is empty")
-    }
+      val cacheDirectory = File(
+        File(reactContext.filesDir, VIDEO_WALLPAPER_DIR),
+        VIDEO_WALLPAPER_CACHE_DIR
+      )
 
-    return outputFile
-  }
+      if (!cacheDirectory.exists() && !cacheDirectory.mkdirs()) {
+        throw Exception("Could not create video wallpaper cache")
+      }
 
-  private fun cleanPreviousTargetVideos(
-    directory: File,
-    target: String,
-    keepExtension: String
-  ) {
-    val possibleExtensions = listOf("mp4", "webm", "mov", "m4v")
+      val extension = getVideoExtension(cleanedValue)
+      val cacheKey = sha256(cleanedValue)
+      val outputFile = File(cacheDirectory, "video_$cacheKey.$extension")
 
-    possibleExtensions.forEach { extension ->
-      if (extension == keepExtension) return@forEach
+      if (outputFile.exists() && outputFile.length() > 0L) {
+        outputFile.setLastModified(System.currentTimeMillis())
+        return outputFile
+      }
+
+      val temporaryFile = File(
+        cacheDirectory,
+        "video_$cacheKey.$extension.part"
+      )
+
+      if (temporaryFile.exists()) {
+        temporaryFile.delete()
+      }
 
       try {
-        val oldFile = File(
-          directory,
-          "current_video_wallpaper_${normalizeVideoTarget(target)}.$extension"
-        )
+        openInputStream(cleanedValue, "Video").use { input ->
+          FileOutputStream(temporaryFile, false).use { output ->
+            val buffer = ByteArray(256 * 1024)
 
-        if (oldFile.exists()) {
-          oldFile.delete()
+            while (true) {
+              val read = input.read(buffer)
+
+              if (read <= 0) break
+
+              output.write(buffer, 0, read)
+            }
+
+            output.flush()
+          }
         }
-      } catch (_: Exception) {
-        // ignore cleanup error
+
+        if (!temporaryFile.exists() || temporaryFile.length() <= 0L) {
+          throw Exception("Downloaded video wallpaper is empty")
+        }
+
+        if (outputFile.exists() && !outputFile.delete()) {
+          throw Exception("Could not replace cached video wallpaper")
+        }
+
+        if (!temporaryFile.renameTo(outputFile)) {
+          temporaryFile.copyTo(outputFile, overwrite = true)
+          temporaryFile.delete()
+        }
+
+        if (!outputFile.exists() || outputFile.length() <= 0L) {
+          throw Exception("Prepared video wallpaper is empty")
+        }
+
+        outputFile.setLastModified(System.currentTimeMillis())
+        pruneVideoCache(cacheDirectory, outputFile)
+
+        return outputFile
+      } catch (error: Exception) {
+        try {
+          if (temporaryFile.exists()) {
+            temporaryFile.delete()
+          }
+        } catch (_: Exception) {
+          // ignore temporary-file cleanup error
+        }
+
+        throw error
       }
+    }
+  }
+
+  private fun pruneVideoCache(directory: File, keepFile: File) {
+    try {
+      val activePaths = getActiveVideoWallpaperPaths()
+      val cachedFiles = directory
+        .listFiles()
+        ?.filter { file ->
+          file.isFile &&
+            file.length() > 0L &&
+            !file.name.endsWith(".part")
+        }
+        ?.sortedByDescending { it.lastModified() }
+        ?: return
+
+      var unreferencedKept = 0
+
+      cachedFiles.forEach { file ->
+        val isProtected =
+          file.absolutePath == keepFile.absolutePath ||
+            activePaths.contains(file.absolutePath)
+
+        if (isProtected) {
+          return@forEach
+        }
+
+        if (unreferencedKept < MAX_UNREFERENCED_CACHE_FILES) {
+          unreferencedKept += 1
+          return@forEach
+        }
+
+        file.delete()
+      }
+    } catch (_: Exception) {
+      // Cache pruning must never block wallpaper preparation.
+    }
+  }
+
+  private fun getActiveVideoWallpaperPaths(): Set<String> {
+    return listOf(
+      VIDEO_WALLPAPER_PREFS_HOME,
+      VIDEO_WALLPAPER_PREFS_LOCK,
+      VIDEO_WALLPAPER_PREFS_BOTH
+    ).mapNotNull { prefsName ->
+      reactContext
+        .getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+        .getString(VIDEO_WALLPAPER_PATH, null)
+        ?.takeIf { it.isNotBlank() }
+    }.toSet()
+  }
+
+  private fun sha256(value: String): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+      .digest(value.toByteArray(Charsets.UTF_8))
+
+    return digest.joinToString(separator = "") { byte ->
+      "%02x".format(byte.toInt() and 0xff)
     }
   }
 

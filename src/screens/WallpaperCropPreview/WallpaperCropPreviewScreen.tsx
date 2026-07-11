@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -33,6 +33,7 @@ import {
 import {
   applyVideoWallpaperToAndroid,
   applyWallpaperToAndroid,
+  prepareVideoWallpaperForAndroid,
   WallpaperApplyTarget,
 } from '../../services/applyWallpaperService';
 
@@ -167,6 +168,8 @@ const buildVideoCropConfig = (cropValue?: CropPreviewFrameValue | null) => {
 const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
   const scrollRef = useRef<ScrollView | null>(null);
   const latestCropRef = useRef<CropPreviewFrameValue | null>(null);
+  const videoPreparationRef = useRef<Promise<string> | null>(null);
+  const preparedVideoUrlRef = useRef('');
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const imageUrl = String(route.params?.imageUrl || '').trim();
@@ -234,6 +237,35 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
 
   const activeVideoTargetLabel = getVideoTargetLabel(videoTarget);
 
+  useEffect(() => {
+    if (!isVideo || !videoUrl) {
+      videoPreparationRef.current = null;
+      preparedVideoUrlRef.current = '';
+      return;
+    }
+
+    if (
+      preparedVideoUrlRef.current === videoUrl &&
+      videoPreparationRef.current
+    ) {
+      return;
+    }
+
+    preparedVideoUrlRef.current = videoUrl;
+
+    const preparation = prepareVideoWallpaperForAndroid(videoUrl).catch(
+      error => {
+        console.log('Video wallpaper background preparation failed:', error);
+        throw error;
+      },
+    );
+
+    // Attach a handled branch immediately. The original promise is retained so
+    // Next can still detect a failure and let apply retry the native download.
+    preparation.catch(() => undefined);
+    videoPreparationRef.current = preparation;
+  }, [isVideo, videoUrl]);
+
   const onCropChange = (value: CropPreviewFrameValue) => {
     latestCropRef.current = value;
 
@@ -275,7 +307,7 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
       setTimeout(() => {
         setAndroidUtilityNoticeVisible(false);
         resolve();
-      }, 950);
+      }, 220);
     });
   };
 
@@ -316,6 +348,17 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
 
       if (isVideo) {
         const videoCropConfig = buildVideoCropConfig(cropValue);
+
+        // Usually already finished while the user was cropping. If Next is
+        // pressed immediately, wait for that same native preparation operation.
+        try {
+          await videoPreparationRef.current;
+        } catch (preparationError) {
+          console.log(
+            'Background preparation was unavailable; apply will retry:',
+            preparationError,
+          );
+        }
 
         await showAndroidUtilityNotice();
 

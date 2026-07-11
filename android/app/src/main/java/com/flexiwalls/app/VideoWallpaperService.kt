@@ -41,6 +41,9 @@ open class VideoWallpaperService : WallpaperService() {
     private var surfaceHeight = 0
     private var visibleNow = false
     private var renderThread: VideoRenderThread? = null
+    private var rendererWidth = 0
+    private var rendererHeight = 0
+    private var rendererConfig: VideoWallpaperConfig? = null
 
     override fun onCreate(surfaceHolder: SurfaceHolder?) {
       super.onCreate(surfaceHolder)
@@ -67,7 +70,11 @@ open class VideoWallpaperService : WallpaperService() {
       surfaceHolderRef = holder
       surfaceReady = true
 
-      startRendererIfPossible()
+      // onSurfaceChanged normally follows immediately. Waiting for its real
+      // dimensions avoids creating and then immediately replacing the renderer.
+      if (surfaceWidth > 0 && surfaceHeight > 0) {
+        startRendererIfPossible()
+      }
     }
 
     override fun onSurfaceChanged(
@@ -80,11 +87,14 @@ open class VideoWallpaperService : WallpaperService() {
 
       surfaceHolderRef = holder
       surfaceReady = true
+
+      val sizeChanged = surfaceWidth != width || surfaceHeight != height
+
       surfaceWidth = width
       surfaceHeight = height
 
-      if (visibleNow) {
-        restartRenderer()
+      if (visibleNow && (renderThread == null || sizeChanged)) {
+        startRendererIfPossible()
       }
     }
 
@@ -124,26 +134,28 @@ open class VideoWallpaperService : WallpaperService() {
         return
       }
 
-      val displayMetrics = resources.displayMetrics
-
-      val resolvedWidth = if (surfaceWidth > 0) {
-        surfaceWidth
-      } else {
-        displayMetrics.widthPixels
-      }
-
-      val resolvedHeight = if (surfaceHeight > 0) {
-        surfaceHeight
-      } else {
-        displayMetrics.heightPixels
-      }
+      val resolvedWidth = surfaceWidth
+      val resolvedHeight = surfaceHeight
 
       if (resolvedWidth <= 0 || resolvedHeight <= 0) {
         Log.e(TAG, "Invalid wallpaper surface size for ${getServiceLogName()}")
         return
       }
 
+      if (
+        renderThread != null &&
+        rendererWidth == resolvedWidth &&
+        rendererHeight == resolvedHeight &&
+        rendererConfig == config
+      ) {
+        return
+      }
+
       stopRenderer()
+
+      rendererWidth = resolvedWidth
+      rendererHeight = resolvedHeight
+      rendererConfig = config
 
       renderThread = VideoRenderThread(
         outputSurface = surface,
@@ -156,15 +168,13 @@ open class VideoWallpaperService : WallpaperService() {
       }
     }
 
-    private fun restartRenderer() {
-      stopRenderer()
-      startRendererIfPossible()
-    }
-
     private fun stopRenderer() {
       val thread = renderThread ?: return
 
       renderThread = null
+      rendererWidth = 0
+      rendererHeight = 0
+      rendererConfig = null
       thread.requestStop()
 
       if (Thread.currentThread() !== thread) {

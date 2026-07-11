@@ -42,6 +42,8 @@ type AndroidWallpaperModuleType = {
     cropRect?: WallpaperCropRect | null,
   ) => Promise<boolean>;
 
+  prepareVideoWallpaper?: (videoUrl: string) => Promise<string>;
+
   applyVideoWallpaper?: (
     videoUrl: string,
     target: WallpaperApplyTarget,
@@ -190,6 +192,30 @@ export const applyWallpaperToAndroid = async (
     target,
     sanitizeCropRect(cropRect),
   );
+};
+
+export const prepareVideoWallpaperForAndroid = async (
+  videoUrl: string,
+) => {
+  if (Platform.OS !== 'android') {
+    throw new Error('Video wallpaper preparation is only available on Android.');
+  }
+
+  const cleanedVideoUrl = String(videoUrl || '').trim();
+
+  if (!cleanedVideoUrl) {
+    throw new Error('Video wallpaper URL is missing.');
+  }
+
+  const AndroidWallpaperModule = getAndroidWallpaperModule();
+
+  if (!AndroidWallpaperModule.prepareVideoWallpaper) {
+    throw new Error(
+      'Native video wallpaper preparation method is not available. Rebuild the Android app.',
+    );
+  }
+
+  return AndroidWallpaperModule.prepareVideoWallpaper(cleanedVideoUrl);
 };
 
 export const applyVideoWallpaperToAndroid = async (
