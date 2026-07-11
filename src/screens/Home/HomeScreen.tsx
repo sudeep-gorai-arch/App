@@ -11,6 +11,9 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   Animated,
+  Easing,
+  StyleProp,
+  ViewStyle,
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -25,6 +28,7 @@ import PremiumActionButton from "../../components/PremiumActionButton";
 import LiquidAppLoader from "../../components/LiquidAppLoader";
 
 import { colors } from "../../styles/colors";
+import { typography, fontFamily } from "../../styles/typography";
 import { spacing, radius, SCREEN } from "../../utils/constants";
 
 import API from "../../services/api";
@@ -47,6 +51,10 @@ const HOME_WALLPAPER_LIMIT = 10;
 const HOME_IMAGE_PREFETCH_LIMIT = 8;
 const HOME_LOADER_MIN_TIME = 2200;
 const HOME_IMAGE_PREFETCH_TIMEOUT = 3200;
+
+const CARD_ENTRANCE_DURATION = 460;
+const CARD_ENTRANCE_STAGGER = 65;
+const HERO_ENTRANCE_STAGGER = 45;
 
 const GRID_GAP = spacing.md;
 const CARD_W = (SCREEN.width - spacing.xl * 2 - GRID_GAP) / 2;
@@ -328,6 +336,60 @@ const patchWallpaperList = (
   return changed ? nextItems : items;
 };
 
+const FadeZoomIn = ({
+  children,
+  animationKey,
+  delay = 0,
+  initialScale = 0.94,
+  style,
+}: {
+  children: React.ReactNode;
+  animationKey: number;
+  delay?: number;
+  initialScale?: number;
+  style?: StyleProp<ViewStyle>;
+}) => {
+  const progress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    progress.stopAnimation();
+    progress.setValue(0);
+
+    const animation = Animated.timing(progress, {
+      toValue: 1,
+      duration: CARD_ENTRANCE_DURATION,
+      delay,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+
+    animation.start();
+
+    return () => {
+      animation.stop();
+    };
+  }, [animationKey, delay, progress]);
+
+  const scale = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [initialScale, 1],
+  });
+
+  return (
+    <Animated.View
+      style={[
+        style,
+        {
+          opacity: progress,
+          transform: [{ scale }],
+        },
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
+};
+
 const QualityBadge = ({ item }: { item: Wallpaper }) => {
   if (isVideoWallpaper(item)) {
     return (
@@ -513,6 +575,7 @@ const HeroSmoothCarousel = ({
   onMomentumEnd,
   onPressItem,
   onExploreCategory,
+  animationKey,
 }: {
   data: Wallpaper[];
   scrollX: Animated.Value;
@@ -520,6 +583,7 @@ const HeroSmoothCarousel = ({
   onMomentumEnd: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   onPressItem: (item: Wallpaper) => void;
   onExploreCategory: (item: Wallpaper) => void;
+  animationKey: number;
 }) => {
   if (!data.length) return null;
 
@@ -582,11 +646,18 @@ const HeroSmoothCarousel = ({
                 },
               ]}
             >
-              <HeroCard
-                item={item}
-                onPress={() => onPressItem(item)}
-                onExploreCategory={() => onExploreCategory(item)}
-              />
+              <FadeZoomIn
+                animationKey={animationKey}
+                delay={index * HERO_ENTRANCE_STAGGER}
+                initialScale={0.96}
+                style={styles.heroEntranceCard}
+              >
+                <HeroCard
+                  item={item}
+                  onPress={() => onPressItem(item)}
+                  onExploreCategory={() => onExploreCategory(item)}
+                />
+              </FadeZoomIn>
             </Animated.View>
           );
         }}
@@ -681,10 +752,12 @@ const AllWallpapersPreview = ({
   data,
   onPressItem,
   onViewAll,
+  animationKey,
 }: {
   data: Wallpaper[];
   onPressItem: (item: Wallpaper) => void;
   onViewAll: () => void;
+  animationKey: number;
 }) => {
   return (
     <View style={styles.allSection}>
@@ -699,12 +772,18 @@ const AllWallpapersPreview = ({
 
       {data.length ? (
         <View style={styles.grid}>
-          {data.map((item) => (
-            <WallpaperCard
+          {data.map((item, index) => (
+            <FadeZoomIn
               key={item.id}
-              item={item}
-              onPress={() => onPressItem(item)}
-            />
+              animationKey={animationKey}
+              delay={120 + index * CARD_ENTRANCE_STAGGER}
+              style={styles.wallpaperEntranceCard}
+            >
+              <WallpaperCard
+                item={item}
+                onPress={() => onPressItem(item)}
+              />
+            </FadeZoomIn>
           ))}
         </View>
       ) : (
@@ -742,6 +821,7 @@ const HomeScreen = () => {
   const [homeWallpapers, setHomeWallpapers] = useState<Wallpaper[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [entranceAnimationKey, setEntranceAnimationKey] = useState(0);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -888,6 +968,8 @@ const HomeScreen = () => {
 
   useFocusEffect(
     useCallback(() => {
+      setEntranceAnimationKey((current) => current + 1);
+
       if (hasLoadedOnce.current) {
         loadHome(true);
         return;
@@ -948,12 +1030,14 @@ const HomeScreen = () => {
             onMomentumEnd={onHeroScrollEnd}
             onPressItem={openWallpaper}
             onExploreCategory={openWallpaperCategory}
+            animationKey={entranceAnimationKey}
           />
 
           <AllWallpapersPreview
             data={homeWallpapers}
             onPressItem={openWallpaper}
             onViewAll={() => navigation.navigate("AllWallpapers")}
+            animationKey={entranceAnimationKey}
           />
         </ScrollView>
       </SafeAreaView>
@@ -1043,6 +1127,11 @@ const styles = StyleSheet.create({
     height: HERO_H,
   },
 
+  heroEntranceCard: {
+    width: HERO_W,
+    height: HERO_H,
+  },
+
   heroCarouselDots: {
     flexDirection: "row",
     justifyContent: "center",
@@ -1101,14 +1190,14 @@ const styles = StyleSheet.create({
 
   qualityText: {
     color: colors.textPrimary,
-    fontWeight: "800",
+    fontFamily: fontFamily.semiBold,
     fontSize: 14,
     lineHeight: 16,
   },
 
   qualitySub: {
     color: colors.textSecondary,
-    fontWeight: "700",
+    fontFamily: fontFamily.semiBold,
     fontSize: 8,
     letterSpacing: 1,
   },
@@ -1129,7 +1218,7 @@ const styles = StyleSheet.create({
   tagText: {
     color: colors.textPrimary,
     fontSize: 11,
-    fontWeight: "700",
+    fontFamily: fontFamily.semiBold,
     letterSpacing: 1.5,
     textTransform: "uppercase",
   },
@@ -1138,14 +1227,14 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 30,
     lineHeight: 36,
-    fontWeight: "800",
+    fontFamily: fontFamily.semiBold,
     letterSpacing: -0.5,
   },
 
   heroSubtitle: {
     color: colors.textSecondary,
     fontSize: 15,
-    fontWeight: "600",
+    fontFamily: fontFamily.semiBold,
     marginTop: 4,
     maxWidth: "78%",
   },
@@ -1165,7 +1254,7 @@ const styles = StyleSheet.create({
 
   likeText: {
     color: colors.textPrimary,
-    fontWeight: "700",
+    fontFamily: fontFamily.semiBold,
     fontSize: 14,
   },
 
@@ -1192,15 +1281,13 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     color: colors.textPrimary,
-    fontSize: 24,
-    fontWeight: "800",
-    letterSpacing: -0.3,
+    ...typography.sectionTitle,
   },
 
   sectionSubtitle: {
     color: colors.textSecondary,
     fontSize: 13,
-    fontWeight: "600",
+    fontFamily: fontFamily.semiBold,
     marginTop: 3,
   },
 
@@ -1213,6 +1300,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: GRID_GAP,
+  },
+
+  wallpaperEntranceCard: {
+    width: CARD_W,
+    height: CARD_H,
   },
 
   wallpaperCard: {
@@ -1245,7 +1337,7 @@ const styles = StyleSheet.create({
 
   missingImageText: {
     color: colors.textSecondary,
-    fontWeight: "700",
+    fontFamily: fontFamily.semiBold,
     fontSize: 12,
     textAlign: "center",
   },
@@ -1276,7 +1368,7 @@ const styles = StyleSheet.create({
 
   qualityChipText: {
     color: colors.textPrimary,
-    fontWeight: "700",
+    fontFamily: fontFamily.semiBold,
     fontSize: 11,
   },
 
@@ -1286,7 +1378,7 @@ const styles = StyleSheet.create({
 
   wallpaperTitle: {
     color: colors.textPrimary,
-    fontWeight: "700",
+    fontFamily: fontFamily.semiBold,
     fontSize: 13,
     marginBottom: 6,
   },
@@ -1304,7 +1396,7 @@ const styles = StyleSheet.create({
 
   wallpaperMetaText: {
     color: colors.textPrimary,
-    fontWeight: "700",
+    fontFamily: fontFamily.semiBold,
     fontSize: 11,
   },
 
@@ -1322,7 +1414,7 @@ const styles = StyleSheet.create({
 
   emptyText: {
     color: colors.textSecondary,
-    fontWeight: "700",
+    fontFamily: fontFamily.semiBold,
     fontSize: 14,
   },
 
@@ -1348,7 +1440,7 @@ const styles = StyleSheet.create({
 
   viewAllText: {
     color: colors.textPrimary,
-    fontWeight: "700",
+    fontFamily: fontFamily.semiBold,
     fontSize: 14,
   },
 });

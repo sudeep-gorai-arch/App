@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Easing,
   Image,
   ImageBackground,
   NativeScrollEvent,
@@ -956,6 +957,8 @@ const TopPickCard = ({
 
 const TrendingScreen = ({ navigation }: { navigation: any }) => {
   const scrollX = useRef(new Animated.Value(0)).current;
+  const sliderEntryAnim = useRef(new Animated.Value(0)).current;
+  const lowerSectionEntryAnim = useRef(new Animated.Value(0)).current;
   const hasLoadedOnce = useRef(false);
 
   const [activeTrend, setActiveTrend] = useState(0);
@@ -968,6 +971,30 @@ const TrendingScreen = ({ navigation }: { navigation: any }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [topPicksLoading, setTopPicksLoading] = useState(false);
+
+  const playEntranceAnimations = useCallback(() => {
+    sliderEntryAnim.stopAnimation();
+    lowerSectionEntryAnim.stopAnimation();
+
+    sliderEntryAnim.setValue(0);
+    lowerSectionEntryAnim.setValue(0);
+
+    Animated.parallel([
+      Animated.timing(sliderEntryAnim, {
+        toValue: 1,
+        duration: 480,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(lowerSectionEntryAnim, {
+        toValue: 1,
+        duration: 560,
+        delay: 120,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [lowerSectionEntryAnim, sliderEntryAnim]);
 
   const loadTrendingPage = async (isRefresh = false) => {
     try {
@@ -1108,15 +1135,40 @@ const TrendingScreen = ({ navigation }: { navigation: any }) => {
 
   useFocusEffect(
     useCallback(() => {
-      if (hasLoadedOnce.current) {
-        loadTrendingPage(true);
-        return;
+      let cancelled = false;
+      let frameId: number | null = null;
+
+      const startEntranceAnimations = () => {
+        frameId = requestAnimationFrame(() => {
+          if (!cancelled) {
+            playEntranceAnimations();
+          }
+        });
+      };
+
+      if (!hasLoadedOnce.current) {
+        hasLoadedOnce.current = true;
+
+        loadTrendingPage().finally(() => {
+          startEntranceAnimations();
+        });
+      } else {
+        startEntranceAnimations();
       }
 
-      hasLoadedOnce.current = true;
-      loadTrendingPage();
+      return () => {
+        cancelled = true;
+
+        if (frameId !== null) {
+          cancelAnimationFrame(frameId);
+        }
+
+        sliderEntryAnim.stopAnimation();
+        lowerSectionEntryAnim.stopAnimation();
+      };
+      // Keep backend data mounted when returning to this screen.
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []),
+    }, [playEntranceAnimations]),
   );
 
   const onRefresh = async () => {
@@ -1190,31 +1242,45 @@ const TrendingScreen = ({ navigation }: { navigation: any }) => {
             </Text>
           </View>
 
-          <TrendingStackSlider
-            data={trending}
-            scrollX={scrollX}
-            activeIndex={activeTrend}
-            onMomentumEnd={onTrendScrollEnd}
-            onPressItem={openWallpaper}
-          />
+          <Animated.View
+            style={{
+              opacity: sliderEntryAnim,
+              transform: [
+                {
+                  scale: sliderEntryAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.94, 1],
+                  }),
+                },
+              ],
+            }}
+          >
+            <TrendingStackSlider
+              data={trending}
+              scrollX={scrollX}
+              activeIndex={activeTrend}
+              onMomentumEnd={onTrendScrollEnd}
+              onPressItem={openWallpaper}
+            />
 
-          {!trending.length ? (
-            <View style={styles.emptyStateBox}>
-              <Ionicons
-                name="trending-up-outline"
-                size={28}
-                color={colors.textSecondary}
-              />
+            {!trending.length ? (
+              <View style={styles.emptyStateBox}>
+                <Ionicons
+                  name="trending-up-outline"
+                  size={28}
+                  color={colors.textSecondary}
+                />
 
-              <Text style={styles.emptyStateTitle}>
-                No trending wallpapers found.
-              </Text>
+                <Text style={styles.emptyStateTitle}>
+                  No trending wallpapers found.
+                </Text>
 
-              <Text style={styles.emptyStateText}>
-                Upload wallpapers or check the trending API response.
-              </Text>
-            </View>
-          ) : null}
+                <Text style={styles.emptyStateText}>
+                  Upload wallpapers or check the trending API response.
+                </Text>
+              </View>
+            ) : null}
+          </Animated.View>
 
           <View style={styles.weekHeader}>
             <Text style={styles.weekTitle}>Top Picks of this week</Text>
@@ -1232,36 +1298,50 @@ const TrendingScreen = ({ navigation }: { navigation: any }) => {
             onSelect={loadTopPicksByCategory}
           />
 
-          {topPicksLoading ? (
-            <View style={styles.topPicksLoading}>
-              <ActivityIndicator size="small" color={colors.textPrimary} />
-            </View>
-          ) : topPicks.length ? (
-            <View style={styles.topGrid}>
-              {topPicks.map((item, index) => (
-                <TopPickCard
-                  key={getWallpaperId(item, index)}
-                  item={item}
-                  index={index}
-                  onPress={() => openWallpaper(item)}
+          <Animated.View
+            style={{
+              opacity: lowerSectionEntryAnim,
+              transform: [
+                {
+                  translateY: lowerSectionEntryAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [34, 0],
+                  }),
+                },
+              ],
+            }}
+          >
+            {topPicksLoading ? (
+              <View style={styles.topPicksLoading}>
+                <ActivityIndicator size="small" color={colors.textPrimary} />
+              </View>
+            ) : topPicks.length ? (
+              <View style={styles.topGrid}>
+                {topPicks.map((item, index) => (
+                  <TopPickCard
+                    key={getWallpaperId(item, index)}
+                    item={item}
+                    index={index}
+                    onPress={() => openWallpaper(item)}
+                  />
+                ))}
+              </View>
+            ) : (
+              <View style={styles.emptyStateBox}>
+                <Ionicons
+                  name="download-outline"
+                  size={28}
+                  color={colors.textSecondary}
                 />
-              ))}
-            </View>
-          ) : (
-            <View style={styles.emptyStateBox}>
-              <Ionicons
-                name="download-outline"
-                size={28}
-                color={colors.textSecondary}
-              />
 
-              <Text style={styles.emptyStateTitle}>No top picks found.</Text>
+                <Text style={styles.emptyStateTitle}>No top picks found.</Text>
 
-              <Text style={styles.emptyStateText}>
-                Weekly top wallpapers will appear here from the backend.
-              </Text>
-            </View>
-          )}
+                <Text style={styles.emptyStateText}>
+                  Weekly top wallpapers will appear here from the backend.
+                </Text>
+              </View>
+            )}
+          </Animated.View>
         </ScrollView>
       </SafeAreaView>
     </View>

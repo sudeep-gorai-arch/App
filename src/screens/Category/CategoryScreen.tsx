@@ -35,6 +35,7 @@ const flexiWallsLogo = require('../../assets/images/flexiwalls-logo.png');
 type Nav = { navigate: (name: string, params?: any) => void };
 
 type CategoryTab = 'All' | 'Popular' | 'New' | 'Premium';
+type CategoryDataSet = 'standard' | 'premium';
 
 const CATEGORY_TABS: CategoryTab[] = ['All', 'Popular', 'New', 'Premium'];
 
@@ -298,14 +299,24 @@ const CategoryCard = ({
 };
 
 const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [standardCategories, setStandardCategories] = useState<Category[]>([]);
+  const [premiumCategories, setPremiumCategories] = useState<Category[]>([]);
   const [activeTab, setActiveTab] = useState<CategoryTab>('All');
-  const [loadedTab, setLoadedTab] = useState<CategoryTab | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [standardLoaded, setStandardLoaded] = useState(false);
+  const [premiumLoaded, setPremiumLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingBySet, setLoadingBySet] = useState<
+    Record<CategoryDataSet, boolean>
+  >({
+    standard: true,
+    premium: false,
+  });
 
   const cardEntranceAnim = useRef(new Animated.Value(0)).current;
-  const requestIdRef = useRef(0);
+  const requestIdsRef = useRef<Record<CategoryDataSet, number>>({
+    standard: 0,
+    premium: 0,
+  });
 
   const animatedTabsRef = useRef<Record<CategoryTab, boolean>>({
     All: false,
@@ -314,20 +325,30 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
     Premium: false,
   });
 
-  const loadData = async (isRefresh = false, tabForRequest = activeTab) => {
-    const requestId = requestIdRef.current + 1;
-    requestIdRef.current = requestId;
+  const setDataSetLoading = (dataSet: CategoryDataSet, value: boolean) => {
+    setLoadingBySet(current => ({
+      ...current,
+      [dataSet]: value,
+    }));
+  };
+
+  const loadData = async (
+    dataSet: CategoryDataSet,
+    isRefresh = false,
+  ) => {
+    const requestId = requestIdsRef.current[dataSet] + 1;
+    requestIdsRef.current[dataSet] = requestId;
+
+    if (!isRefresh) {
+      setDataSetLoading(dataSet, true);
+    }
 
     try {
-      if (!isRefresh) {
-        setLoading(true);
-      }
-
       const response = await getCategories({
-        premiumOnly: tabForRequest === 'Premium',
+        premiumOnly: dataSet === 'premium',
       });
 
-      if (requestId !== requestIdRef.current) {
+      if (requestId !== requestIdsRef.current[dataSet]) {
         return;
       }
 
@@ -335,31 +356,58 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
         ? response.data.map(normalizeCategory)
         : [];
 
-      setCategories(apiCategories);
-      setLoadedTab(tabForRequest);
+      if (dataSet === 'premium') {
+        setPremiumCategories(apiCategories);
+        setPremiumLoaded(true);
+      } else {
+        setStandardCategories(apiCategories);
+        setStandardLoaded(true);
+      }
     } catch (error) {
-      if (requestId !== requestIdRef.current) {
+      if (requestId !== requestIdsRef.current[dataSet]) {
         return;
       }
 
       console.log('CATEGORY ERROR', error);
 
-      setCategories([]);
-      setLoadedTab(tabForRequest);
+      // Keep previously loaded cards visible when a pull-to-refresh fails.
+      if (dataSet === 'premium') {
+        if (!isRefresh) {
+          setPremiumCategories([]);
+        }
+
+        setPremiumLoaded(true);
+      } else {
+        if (!isRefresh) {
+          setStandardCategories([]);
+        }
+
+        setStandardLoaded(true);
+      }
     } finally {
-      if (requestId === requestIdRef.current) {
-        setLoading(false);
-        setRefreshing(false);
+      if (requestId === requestIdsRef.current[dataSet]) {
+        setDataSetLoading(dataSet, false);
       }
     }
   };
 
   useEffect(() => {
-    loadData(false, activeTab);
-  }, [activeTab]);
+    void loadData('standard');
+  }, []);
+
+  const activeDataSet: CategoryDataSet =
+    activeTab === 'Premium' ? 'premium' : 'standard';
+
+  const activeDataLoaded =
+    activeDataSet === 'premium' ? premiumLoaded : standardLoaded;
+
+  const activeDataLoading = loadingBySet[activeDataSet];
+
+  const sourceCategories =
+    activeDataSet === 'premium' ? premiumCategories : standardCategories;
 
   const visibleCategories = useMemo(() => {
-    const list = [...categories];
+    const list = [...sourceCategories];
 
     if (activeTab === 'Popular') {
       return list.sort((a, b) => getCountValue(b) - getCountValue(a));
@@ -370,10 +418,10 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
     }
 
     return list;
-  }, [activeTab, categories]);
+  }, [activeTab, sourceCategories]);
 
   useEffect(() => {
-    if (loading || loadedTab !== activeTab) {
+    if (!activeDataLoaded || activeDataLoading) {
       return;
     }
 
@@ -399,17 +447,21 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
       useNativeDriver: true,
     }).start();
   }, [
+    activeDataLoaded,
+    activeDataLoading,
     activeTab,
-    loadedTab,
-    loading,
-    visibleCategories.length,
     cardEntranceAnim,
+    visibleCategories.length,
   ]);
 
   const onRefresh = async () => {
     setRefreshing(true);
 
-    await loadData(true, activeTab);
+    try {
+      await loadData(activeDataSet, true);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleTabChange = (tab: CategoryTab) => {
@@ -421,8 +473,13 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
       cardEntranceAnim.setValue(0);
     }
 
-    setLoadedTab(null);
     setActiveTab(tab);
+
+    // All, Popular and New share one cached response. Premium is fetched only
+    // the first time it is opened and is then cached as well.
+    if (tab === 'Premium' && !premiumLoaded && !loadingBySet.premium) {
+      void loadData('premium');
+    }
   };
 
   const openCategory = (item: Category) =>
@@ -479,7 +536,10 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
     );
   };
 
-  if (loading) {
+  const isInitialLoading = !standardLoaded && loadingBySet.standard;
+  const showCardsLoader = !activeDataLoaded || activeDataLoading;
+
+  if (isInitialLoading) {
     return (
       <View style={styles.loadingRoot}>
         <ActivityIndicator size="large" color={colors.textPrimary} />
@@ -493,7 +553,8 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
 
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <FlatList
-          data={visibleCategories}
+          data={showCardsLoader ? [] : visibleCategories}
+          extraData={activeTab}
           keyExtractor={item => item.id}
           numColumns={2}
           showsVerticalScrollIndicator={false}
@@ -522,15 +583,24 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
             </View>
           }
           ListEmptyComponent={
-            <View style={styles.emptyBox}>
-              <Ionicons
-                name="grid-outline"
-                size={28}
-                color={colors.textSecondary}
-              />
+            showCardsLoader ? (
+              <View style={styles.cardsLoadingBox}>
+                <ActivityIndicator size="small" color={colors.textPrimary} />
+                <Text style={styles.cardsLoadingText}>
+                  Loading categories...
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.emptyBox}>
+                <Ionicons
+                  name="grid-outline"
+                  size={28}
+                  color={colors.textSecondary}
+                />
 
-              <Text style={styles.emptyText}>No categories found.</Text>
-            </View>
+                <Text style={styles.emptyText}>No categories found.</Text>
+              </View>
+            )
           }
           renderItem={renderCategoryCard}
         />
@@ -751,6 +821,20 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.semiBold,
     fontSize: 11,
     marginTop: 1,
+  },
+
+  cardsLoadingBox: {
+    marginHorizontal: spacing.xl,
+    height: 150,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+
+  cardsLoadingText: {
+    color: colors.textSecondary,
+    fontFamily: fontFamily.semiBold,
+    fontSize: 13,
   },
 
   emptyBox: {

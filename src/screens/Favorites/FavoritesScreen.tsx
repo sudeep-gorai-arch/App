@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   StyleSheet,
   View,
@@ -9,17 +15,18 @@ import {
   Image,
   ImageBackground,
   ActivityIndicator,
+  Animated,
+  Easing,
   GestureResponderEvent,
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
 import MeshBackground from '../../components/MeshBackground';
-import Card from '../../components/Card';
 import PremiumActionButton from '../../components/PremiumActionButton';
 
 import API from '../../services/api';
@@ -417,26 +424,284 @@ const FavoriteCard = ({
   );
 };
 
+const CARD_FADE_ZOOM_DURATION = 320;
+const CARD_STAGGER_DELAY = 45;
+const MAX_STAGGERED_CARD_INDEX = 8;
+
+const AnimatedFavoriteCard = React.memo(
+  ({
+    item,
+    index,
+    animationKey,
+    onRemove,
+    onPress,
+  }: {
+    item: FavoriteItem;
+    index: number;
+    animationKey: number;
+    onRemove: (wallpaperId: string) => void;
+    onPress: (wallpaper: FavoriteWallpaper) => void;
+  }) => {
+    const opacity = useRef(new Animated.Value(0)).current;
+    const scale = useRef(new Animated.Value(0.92)).current;
+
+    useEffect(() => {
+      opacity.setValue(0);
+      scale.setValue(0.92);
+
+      const delay = Math.min(index, MAX_STAGGERED_CARD_INDEX) * CARD_STAGGER_DELAY;
+
+      const animation = Animated.sequence([
+        Animated.delay(delay),
+        Animated.parallel([
+          Animated.timing(opacity, {
+            toValue: 1,
+            duration: CARD_FADE_ZOOM_DURATION,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(scale, {
+            toValue: 1,
+            duration: CARD_FADE_ZOOM_DURATION,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]),
+      ]);
+
+      animation.start();
+
+      return () => {
+        animation.stop();
+      };
+    }, [animationKey, index, opacity, scale]);
+
+    return (
+      <Animated.View
+        style={[
+          styles.animatedCardWrap,
+          {
+            opacity,
+            transform: [{ scale }],
+          },
+        ]}
+      >
+        <FavoriteCard item={item} onRemove={onRemove} onPress={onPress} />
+      </Animated.View>
+    );
+  },
+);
+
+AnimatedFavoriteCard.displayName = 'AnimatedFavoriteCard';
+
+const EMPTY_HEART_SIZE = 58;
+
 const EmptyState = React.memo(() => {
+  // The icon and label fade in together without any slide movement.
+  const contentOpacity = useRef(new Animated.Value(0)).current;
+
+  const wholeHeartOpacity = useRef(new Animated.Value(1)).current;
+  const wholeHeartTranslateX = useRef(new Animated.Value(0)).current;
+  const wholeHeartRotate = useRef(new Animated.Value(0)).current;
+
+  const brokenHeartOpacity = useRef(new Animated.Value(0)).current;
+  const brokenHeartScale = useRef(new Animated.Value(0.92)).current;
+
+  const crackFlashOpacity = useRef(new Animated.Value(0)).current;
+  const crackFlashScale = useRef(new Animated.Value(0.7)).current;
+
+  useEffect(() => {
+    contentOpacity.setValue(0);
+
+    wholeHeartOpacity.setValue(1);
+    wholeHeartTranslateX.setValue(0);
+    wholeHeartRotate.setValue(0);
+
+    brokenHeartOpacity.setValue(0);
+    brokenHeartScale.setValue(0.92);
+
+    crackFlashOpacity.setValue(0);
+    crackFlashScale.setValue(0.7);
+
+    const animation = Animated.sequence([
+      // Heart/text appear while the crack shake begins immediately.
+      Animated.parallel([
+        Animated.timing(contentOpacity, {
+          toValue: 1,
+          duration: 280,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.sequence([
+          Animated.parallel([
+            Animated.timing(wholeHeartTranslateX, {
+              toValue: -4,
+              duration: 55,
+              useNativeDriver: true,
+            }),
+            Animated.timing(wholeHeartRotate, {
+              toValue: -1,
+              duration: 55,
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.parallel([
+            Animated.timing(wholeHeartTranslateX, {
+              toValue: 4,
+              duration: 65,
+              useNativeDriver: true,
+            }),
+            Animated.timing(wholeHeartRotate, {
+              toValue: 1,
+              duration: 65,
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.parallel([
+            Animated.timing(wholeHeartTranslateX, {
+              toValue: -2,
+              duration: 50,
+              useNativeDriver: true,
+            }),
+            Animated.timing(wholeHeartRotate, {
+              toValue: -0.5,
+              duration: 50,
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.parallel([
+            Animated.timing(wholeHeartTranslateX, {
+              toValue: 0,
+              duration: 50,
+              useNativeDriver: true,
+            }),
+            Animated.timing(wholeHeartRotate, {
+              toValue: 0,
+              duration: 50,
+              useNativeDriver: true,
+            }),
+          ]),
+        ]),
+      ]),
+
+      Animated.parallel([
+        Animated.timing(wholeHeartOpacity, {
+          toValue: 0,
+          duration: 90,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(brokenHeartOpacity, {
+          toValue: 1,
+          duration: 130,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(brokenHeartScale, {
+          toValue: 1,
+          duration: 170,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.sequence([
+          Animated.parallel([
+            Animated.timing(crackFlashOpacity, {
+              toValue: 0.75,
+              duration: 45,
+              useNativeDriver: true,
+            }),
+            Animated.timing(crackFlashScale, {
+              toValue: 1,
+              duration: 70,
+              easing: Easing.out(Easing.cubic),
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.timing(crackFlashOpacity, {
+            toValue: 0,
+            duration: 100,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]),
+      ]),
+    ]);
+
+    animation.start();
+
+    return () => {
+      animation.stop();
+    };
+  }, [
+    brokenHeartOpacity,
+    brokenHeartScale,
+    contentOpacity,
+    crackFlashOpacity,
+    crackFlashScale,
+    wholeHeartOpacity,
+    wholeHeartRotate,
+    wholeHeartTranslateX,
+  ]);
+
+  const wholeHeartRotation = wholeHeartRotate.interpolate({
+    inputRange: [-1, 0, 1],
+    outputRange: ['-5deg', '0deg', '5deg'],
+  });
+
   return (
     <View style={styles.emptyWrap}>
-      <Card
-        padding={spacing.xxl}
-        glowBorder
-        style={{
-          alignItems: 'center',
-        }}
+      <Animated.View
+        style={[styles.emptyContent, { opacity: contentOpacity }]}
       >
-        <View style={styles.emptyIcon}>
-          <Ionicons name="heart-outline" size={34} color={colors.textPrimary} />
+        <View style={styles.emptyHeartStage}>
+          <Animated.View
+            style={[
+              styles.emptyHeartLayer,
+              {
+                opacity: wholeHeartOpacity,
+                transform: [
+                  { translateX: wholeHeartTranslateX },
+                  { rotate: wholeHeartRotation },
+                ],
+              },
+            ]}
+          >
+            <Ionicons name="heart" size={EMPTY_HEART_SIZE} color="#FFFFFF" />
+          </Animated.View>
+
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.emptyHeartCrackFlash,
+              {
+                opacity: crackFlashOpacity,
+                transform: [
+                  { rotate: '-16deg' },
+                  { scale: crackFlashScale },
+                ],
+              },
+            ]}
+          />
+
+          <Animated.View
+            style={[
+              styles.emptyHeartLayer,
+              {
+                opacity: brokenHeartOpacity,
+                transform: [{ scale: brokenHeartScale }],
+              },
+            ]}
+          >
+            <MaterialCommunityIcons
+              name="heart-broken"
+              size={EMPTY_HEART_SIZE}
+              color="#FFFFFF"
+            />
+          </Animated.View>
         </View>
 
         <Text style={styles.emptyTitle}>No favorites yet</Text>
-
-        <Text style={styles.emptySubtitle}>
-          Tap the heart on any wallpaper to save it here.
-        </Text>
-      </Card>
+      </Animated.View>
     </View>
   );
 });
@@ -454,15 +719,24 @@ const FavoritesScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
 
   const [filter, setFilter] = useState<'All' | 'Premium' | 'Live'>('All');
+  const [emptyAnimationKey, setEmptyAnimationKey] = useState(0);
+  const [cardsAnimationKey, setCardsAnimationKey] = useState(0);
+
+  // Keep the header, title and filters mounted after the first successful load.
+  // Later visits refresh only the wallpaper data in the background.
+  const hasLoadedOnce = useRef(false);
 
   useFocusEffect(
     useCallback(() => {
-      loadFavorites();
+      setEmptyAnimationKey(current => current + 1);
+      setCardsAnimationKey(current => current + 1);
+
+      void loadFavorites(!hasLoadedOnce.current);
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []),
   );
 
-  const loadFavorites = async (showLoader = true) => {
+  const loadFavorites = async (showLoader = false) => {
     try {
       if (showLoader) {
         setLoading(true);
@@ -471,8 +745,12 @@ const FavoritesScreen = () => {
       const response = await getFavorites();
 
       setFavorites(extractFavoriteWallpapers(response));
+      hasLoadedOnce.current = true;
     } finally {
-      setLoading(false);
+      if (showLoader) {
+        setLoading(false);
+      }
+
       setRefreshing(false);
     }
   };
@@ -486,10 +764,14 @@ const FavoritesScreen = () => {
   };
 
   const onFilterChange = async (next: Filter) => {
+    if (next === filter) {
+      return;
+    }
+
     setFilter(next);
+    setCardsAnimationKey(current => current + 1);
 
     if (next === 'Live') {
-    
       await loadLiveFavorites();
     }
   };
@@ -497,7 +779,7 @@ const FavoritesScreen = () => {
   const onRefresh = async () => {
     setRefreshing(true);
 
-    await loadFavorites(true);
+    await loadFavorites(false);
   };
 
   useEffect(() => {
@@ -531,7 +813,7 @@ const FavoritesScreen = () => {
           payload.wallpaper || existingItem?.wallpaper || undefined;
 
         if (!sourceWallpaper) {
-          loadFavorites();
+          void loadFavorites(false);
           return current;
         }
 
@@ -604,7 +886,7 @@ const FavoritesScreen = () => {
     });
 
     const unsubscribeWallpapers = appEvents.on('wallpapersChanged', () => {
-      loadFavorites();
+      void loadFavorites(false);
     });
 
     return () => {
@@ -797,11 +1079,15 @@ const FavoritesScreen = () => {
               </BlurView>
             </View>
           }
-          ListEmptyComponent={<EmptyState />}
-          renderItem={({ item }) =>
+          ListEmptyComponent={
+            <EmptyState key={`empty-${filter}-${emptyAnimationKey}`} />
+          }
+          renderItem={({ item, index }) =>
             item?.wallpaper ? (
-              <FavoriteCard
+              <AnimatedFavoriteCard
                 item={item}
+                index={index}
+                animationKey={cardsAnimationKey}
                 onRemove={remove}
                 onPress={openWallpaper}
               />
@@ -958,6 +1244,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
 
+  animatedCardWrap: {
+    width: CARD_W,
+  },
+
   card: {
     width: CARD_W,
     height: CARD_H,
@@ -1064,33 +1354,45 @@ const styles = StyleSheet.create({
   },
 
   emptyWrap: {
-    paddingHorizontal: spacing.xl,
-    marginTop: spacing.xxl,
-  },
-
-  emptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    flex: 1,
+    minHeight: Math.max(280, SCREEN.height * 0.42),
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.glassBorder,
-    backgroundColor: colors.glassFillSoft,
-    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: 70,
+  },
+
+  emptyContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  emptyHeartStage: {
+    width: EMPTY_HEART_SIZE + 12,
+    height: EMPTY_HEART_SIZE + 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  emptyHeartLayer: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  emptyHeartCrackFlash: {
+    position: 'absolute',
+    width: 13,
+    height: 42,
+    borderRadius: 7,
+    backgroundColor: 'rgba(255,255,255,0.32)',
   },
 
   emptyTitle: {
-    color: colors.textPrimary,
+    color: '#FFFFFF',
     fontFamily: fontFamily.semiBold,
     fontSize: 20,
-  },
-
-  emptySubtitle: {
-    color: colors.textSecondary,
-    fontFamily: fontFamily.semiBold,
-    fontSize: 14,
+    marginTop: spacing.md,
     textAlign: 'center',
-    marginTop: 6,
   },
 });
