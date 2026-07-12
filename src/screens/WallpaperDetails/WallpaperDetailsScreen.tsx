@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,55 +13,57 @@ import {
   StyleSheet,
   Text,
   View,
-} from "react-native";
+} from 'react-native';
 
 import {
   SafeAreaView,
   useSafeAreaInsets,
-} from "react-native-safe-area-context";
-import { BlurView } from "expo-blur";
-import { LinearGradient } from "expo-linear-gradient";
-import { useVideoPlayer, VideoView } from "expo-video";
-import { Ionicons } from "@expo/vector-icons";
-import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as SecureStore from "expo-secure-store";
+} from 'react-native-safe-area-context';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import { Ionicons } from '@expo/vector-icons';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
-import { colors } from "../../styles/colors";
-import { fontFamily } from "../../styles/typography";
-import { radius, spacing } from "../../utils/constants";
-import { RootStackParamList } from "../../navigation/RootStackParamList";
+import { colors } from '../../styles/colors';
+import { fontFamily } from '../../styles/typography';
+import { radius, spacing } from '../../utils/constants';
+import { RootStackParamList } from '../../navigation/RootStackParamList';
 
-import API from "../../services/api";
-import { downloadWallpaper } from "../../utils/downloadHelper";
+import API from '../../services/api';
+import { downloadWallpaper } from '../../utils/downloadHelper';
 import {
   addDownload,
   ensureDownloadAllowed,
   saveLocalDownload,
-} from "../../services/downloadService";
+} from '../../services/downloadService';
 import {
   getFavoriteStatus,
   toggleFavorite,
-} from "../../services/favoriteService";
+} from '../../services/favoriteService';
 import {
   getWallpaperById,
   incrementView,
-} from "../../services/wallpaperService";
-import type { WallpaperApplyTarget } from "../../services/applyWallpaperService";
+} from '../../services/wallpaperService';
+import type { WallpaperApplyTarget } from '../../services/applyWallpaperService';
 
-import { appEvents } from "../../utils/appEvents";
-import { useToast } from "../../components/ui/toast/useToast";
+import { appEvents } from '../../utils/appEvents';
+import { useToast } from '../../components/ui/toast/useToast';
 
-type Props = NativeStackScreenProps<RootStackParamList, "WallpaperDetails">;
 
-type Status = "idle" | "downloading" | "done";
 
-const DOWNLOAD_GRADIENT = ["#3B82F6", "#8B5CF6", "#EC4899"] as const;
-const APPLY_GRADIENT = ["#0EA5E9", "#14B8A6", "#22D3EE"] as const;
-const POPUP_GRADIENT = ["#3B82F6", "#8B5CF6", "#EC4899"] as const;
+type Props = NativeStackScreenProps<RootStackParamList, 'WallpaperDetails'>;
 
-const API_ORIGIN = String(API.defaults.baseURL || "").replace(/\/api\/?$/, "");
-const LOCAL_DOWNLOADS_KEY = "@flexiwalls:guestDownloads";
+type Status = 'idle' | 'downloading' | 'done';
+
+const DOWNLOAD_GRADIENT = ['#3B82F6', '#8B5CF6', '#EC4899'] as const;
+const APPLY_GRADIENT = ['#0EA5E9', '#14B8A6', '#22D3EE'] as const;
+const POPUP_GRADIENT = ['#3B82F6', '#8B5CF6', '#EC4899'] as const;
+
+const API_ORIGIN = String(API.defaults.baseURL || '').replace(/\/api\/?$/, '');
+const LOCAL_DOWNLOADS_KEY = '@flexiwalls:guestDownloads';
 const MAX_LOCAL_DOWNLOADS = 100;
 
 type DownloadSaveResult =
@@ -84,27 +86,27 @@ type DownloadSaveResult =
   | undefined;
 
 const isDownloadSuccessful = (result: DownloadSaveResult) => {
-  if (typeof result === "boolean") return result;
+  if (typeof result === 'boolean') return result;
   if (!result) return false;
 
   if (result.success === false || result.ok === false) return false;
 
   return Boolean(
     result.success ||
-    result.ok ||
-    result.uri ||
-    result.localUri ||
-    result.fileUri ||
-    result.savedUri ||
-    result.assetId ||
-    result.mediaAssetId ||
-    result.asset?.id ||
-    result.asset?.uri,
+      result.ok ||
+      result.uri ||
+      result.localUri ||
+      result.fileUri ||
+      result.savedUri ||
+      result.assetId ||
+      result.mediaAssetId ||
+      result.asset?.id ||
+      result.asset?.uri,
   );
 };
 
 const getSavedDeviceInfo = (result: DownloadSaveResult) => {
-  if (!result || typeof result === "boolean") {
+  if (!result || typeof result === 'boolean') {
     return {
       localUri: null,
       fileUri: null,
@@ -137,16 +139,16 @@ const getSavedDeviceInfo = (result: DownloadSaveResult) => {
 const VIDEO_EXTENSION_PATTERN = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
 
 const isBlankishValue = (value: unknown) => {
-  const text = String(value ?? "")
+  const text = String(value ?? '')
     .trim()
     .toLowerCase();
 
   return (
     !text ||
-    text === "null" ||
-    text === "undefined" ||
-    text === "false" ||
-    text === "0"
+    text === 'null' ||
+    text === 'undefined' ||
+    text === 'false' ||
+    text === '0'
   );
 };
 
@@ -164,7 +166,7 @@ const isRealVideoUrlValue = (value: unknown) => {
 
 const getWallpaperMediaType = (wallpaper: any) => {
   return String(
-    wallpaper?.mediaType || wallpaper?.media_type || wallpaper?.type || "",
+    wallpaper?.mediaType || wallpaper?.media_type || wallpaper?.type || '',
   )
     .trim()
     .toUpperCase();
@@ -186,9 +188,9 @@ const toAbsoluteMediaUrl = (value?: string | null) => {
     );
   }
 
-  if (url.startsWith("//")) return `https:${url}`;
+  if (url.startsWith('//')) return `https:${url}`;
 
-  if (url.startsWith("/")) {
+  if (url.startsWith('/')) {
     return API_ORIGIN ? `${API_ORIGIN}${url}` : url;
   }
 
@@ -205,17 +207,17 @@ const getApiErrorMessage = (error: any) =>
   error?.response?.data?.message ||
   error?.response?.data?.error ||
   error?.message ||
-  "";
+  '';
 
 const clearSavedToken = async () => {
   try {
-    await SecureStore.deleteItemAsync("token");
+    await SecureStore.deleteItemAsync('token');
   } catch {
     // ignore
   }
 
   try {
-    await AsyncStorage.removeItem("token");
+    await AsyncStorage.removeItem('token');
   } catch {
     // ignore
   }
@@ -227,22 +229,22 @@ const getWallpaperId = (wallpaper: any) =>
       wallpaper?._id ||
       wallpaper?.wallpaperId ||
       wallpaper?.wallpaper_id ||
-      "",
+      '',
   );
 
 const isPlaceholder = (wallpaperId: string) =>
   !wallpaperId ||
-  wallpaperId.includes("placeholder") ||
-  wallpaperId.startsWith("ph-");
+  wallpaperId.includes('placeholder') ||
+  wallpaperId.startsWith('ph-');
 
 const isVideoWallpaper = (wallpaper: any) => {
   const mediaType = getWallpaperMediaType(wallpaper);
 
-  if (mediaType === "IMAGE") {
+  if (mediaType === 'IMAGE') {
     return false;
   }
 
-  if (mediaType === "VIDEO") {
+  if (mediaType === 'VIDEO') {
     return true;
   }
 
@@ -264,7 +266,7 @@ const isVideoWallpaper = (wallpaper: any) => {
 const getWallpaperVideoUrl = (wallpaper: any): string | undefined => {
   const mediaType = getWallpaperMediaType(wallpaper);
 
-  if (mediaType === "IMAGE") {
+  if (mediaType === 'IMAGE') {
     return undefined;
   }
 
@@ -321,7 +323,7 @@ const getWallpaperPreviewImage = (wallpaper: any): string => {
 
   return (
     toAbsoluteMediaUrl(image) ||
-    "https://picsum.photos/seed/flexiwalls-details-fallback/900/1600"
+    'https://picsum.photos/seed/flexiwalls-details-fallback/900/1600'
   );
 };
 
@@ -353,7 +355,7 @@ const getWallpaperFullImage = (wallpaper: any): string => {
 
   return (
     toAbsoluteMediaUrl(image) ||
-    "https://picsum.photos/seed/flexiwalls-details-fallback/900/1600"
+    'https://picsum.photos/seed/flexiwalls-details-fallback/900/1600'
   );
 };
 
@@ -398,27 +400,27 @@ const getDownloadUrlFromResponse = (response: any, fallbackUrl: string) => {
 };
 
 const toNumber = (value: unknown) => {
-  if (typeof value === "number") {
+  if (typeof value === 'number') {
     return Number.isFinite(value) ? value : 0;
   }
 
-  const parsed = Number(String(value ?? "").replace(/[^\d.]/g, ""));
+  const parsed = Number(String(value ?? '').replace(/[^\d.]/g, ''));
 
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
 const toPositiveDimensionNumber = (value: unknown): number | null => {
-  if (typeof value === "number") {
+  if (typeof value === 'number') {
     return Number.isFinite(value) && value > 0 ? value : null;
   }
 
-  const parsed = Number(String(value ?? "").replace(/[^\d.]/g, ""));
+  const parsed = Number(String(value ?? '').replace(/[^\d.]/g, ''));
 
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 };
 
 const getDimensionPartsFromText = (value?: string | null) => {
-  const text = String(value || "").trim();
+  const text = String(value || '').trim();
 
   if (!text) {
     return {
@@ -476,11 +478,11 @@ const formatCount = (value?: number | string) => {
   const count = toNumber(value);
 
   if (count >= 1000000) {
-    return `${(count / 1000000).toFixed(1).replace(".0", "")}M`;
+    return `${(count / 1000000).toFixed(1).replace('.0', '')}M`;
   }
 
   if (count >= 1000) {
-    return `${(count / 1000).toFixed(1).replace(".0", "")}K`;
+    return `${(count / 1000).toFixed(1).replace('.0', '')}K`;
   }
 
   return String(count);
@@ -522,9 +524,9 @@ const getCategoryName = (wallpaper: any) => {
   if (wallpaper?.category?.name) return wallpaper.category.name;
   if (wallpaper?.categoryName) return wallpaper.categoryName;
   if (wallpaper?.category_name) return wallpaper.category_name;
-  if (typeof wallpaper?.category === "string") return wallpaper.category;
+  if (typeof wallpaper?.category === 'string') return wallpaper.category;
 
-  return "Wallpaper";
+  return 'Wallpaper';
 };
 
 const getDimensions = (wallpaper: any) => {
@@ -549,7 +551,7 @@ const getDimensions = (wallpaper: any) => {
 
   if (width && height) return `${width} × ${height}`;
 
-  return isVideoWallpaper(wallpaper) ? "Live Wallpaper" : "4K Ultra HD";
+  return isVideoWallpaper(wallpaper) ? 'Live Wallpaper' : '4K Ultra HD';
 };
 
 const saveGuestDownloadHistory = async (
@@ -581,7 +583,7 @@ const saveGuestDownloadHistory = async (
     const record = {
       ...wallpaper,
       id,
-      mediaType: isVideo ? "VIDEO" : "IMAGE",
+      mediaType: isVideo ? 'VIDEO' : 'IMAGE',
       isVideo,
       downloadUrl: downloadedUrl,
       localUri:
@@ -642,7 +644,7 @@ const saveGuestDownloadHistory = async (
 
     const withoutDuplicate = existing.filter((item: any) => {
       const existingId = String(
-        item?.id || item?._id || item?.wallpaperId || item?.wallpaper_id || "",
+        item?.id || item?._id || item?.wallpaperId || item?.wallpaper_id || '',
       );
 
       return existingId !== id;
@@ -655,7 +657,7 @@ const saveGuestDownloadHistory = async (
       ),
     );
   } catch (error) {
-    console.log("SAVE GUEST DOWNLOAD HISTORY ERROR", error);
+    console.log('SAVE GUEST DOWNLOAD HISTORY ERROR', error);
   }
 };
 
@@ -698,7 +700,7 @@ const VideoWallpaperPreview = ({
   style,
   children,
 }: VideoWallpaperPreviewProps) => {
-  const player = useVideoPlayer(videoUrl, (videoPlayer) => {
+  const player = useVideoPlayer(videoUrl, videoPlayer => {
     videoPlayer.loop = true;
     videoPlayer.muted = true;
     videoPlayer.play();
@@ -711,14 +713,14 @@ const VideoWallpaperPreview = ({
         player.muted = true;
         player.play();
       } catch (error) {
-        console.log("Video preview play failed:", error);
+        console.log('Video preview play failed:', error);
       }
     };
 
     playVideo();
 
-    const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") {
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') {
         setTimeout(playVideo, 250);
       }
     });
@@ -745,7 +747,7 @@ const VideoWallpaperPreview = ({
       />
 
       <LinearGradient
-        colors={["rgba(0,0,0,0.16)", "rgba(0,0,0,0.01)", "rgba(0,0,0,0.20)"]}
+        colors={['rgba(0,0,0,0.16)', 'rgba(0,0,0,0.01)', 'rgba(0,0,0,0.20)']}
         locations={[0, 0.48, 1]}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
@@ -911,7 +913,7 @@ const PannableImagePreview = ({
   return (
     <View
       style={style}
-      onLayout={(event) => {
+      onLayout={event => {
         const { width, height } = event.nativeEvent.layout;
         setViewportSize({ width, height });
       }}
@@ -1001,7 +1003,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
   const image = getWallpaperPreviewImage(wallpaper);
   const fullImage = isVideo ? image : getWallpaperFullImage(wallpaper);
 
-  const [status, setStatus] = useState<Status>("idle");
+  const [status, setStatus] = useState<Status>('idle');
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [isFavorite, setIsFavorite] = useState(
     Boolean(wallpaper?.isFavorite || wallpaper?.is_favorite),
@@ -1024,7 +1026,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
   const toast = useToast();
 
   const finalImage = imageFailed
-    ? "https://picsum.photos/seed/flexiwalls-details-error/900/1600"
+    ? 'https://picsum.photos/seed/flexiwalls-details-error/900/1600'
     : fullImage;
 
   const downloadFallbackUrl = getWallpaperDownloadUrl(wallpaper) || finalImage;
@@ -1042,7 +1044,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
   useEffect(() => {
     if (!wallpaperId) return;
 
-    const unsubscribeFavorite = appEvents.on("favoritesChanged", (payload) => {
+    const unsubscribeFavorite = appEvents.on('favoritesChanged', payload => {
       if (String(payload.wallpaperId) !== wallpaperId) return;
 
       setIsFavorite(Boolean(payload.isFavorite));
@@ -1067,7 +1069,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
       }));
     });
 
-    const unsubscribeDownload = appEvents.on("downloadsChanged", (payload) => {
+    const unsubscribeDownload = appEvents.on('downloadsChanged', payload => {
       if (String(payload.wallpaperId) !== wallpaperId) return;
       if (payload.downloadCount === undefined) return;
 
@@ -1132,8 +1134,8 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
 
             return {
               ...merged,
-              mediaType: "VIDEO",
-              media_type: "VIDEO",
+              mediaType: 'VIDEO',
+              media_type: 'VIDEO',
               isVideo: true,
               is_video: true,
               videoUrl: preservedVideoUrl,
@@ -1149,7 +1151,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
         }
       } catch (error: any) {
         console.log(
-          "Wallpaper details failed:",
+          'Wallpaper details failed:',
           error?.response?.data || error,
         );
       }
@@ -1158,8 +1160,8 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
     const loadFavoriteStatus = async () => {
       try {
         const token =
-          (await SecureStore.getItemAsync("token")) ||
-          (await AsyncStorage.getItem("token"));
+          (await SecureStore.getItemAsync('token')) ||
+          (await AsyncStorage.getItem('token'));
 
         if (!token) {
           setIsFavorite(false);
@@ -1172,7 +1174,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
         setIsFavorite(Boolean(data?.isFavorite ?? data?.favorite));
         setFavoriteCount(getFavoriteCountValue(data));
       } catch (error: any) {
-        console.log("Favorite status failed:", error?.response?.data || error);
+        console.log('Favorite status failed:', error?.response?.data || error);
 
         if (getApiErrorStatus(error) === 401) {
           setIsFavorite(false);
@@ -1184,7 +1186,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
       try {
         await incrementView(wallpaperId);
       } catch (error: any) {
-        console.log("Increment view failed:", error?.response?.data || error);
+        console.log('Increment view failed:', error?.response?.data || error);
       }
     };
 
@@ -1195,7 +1197,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
 
   const closeSavedPopup = () => {
     setSavedPopupVisible(false);
-    setStatus("idle");
+    setStatus('idle');
   };
 
   const closeAppliedPopup = () => {
@@ -1203,24 +1205,24 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
   };
 
   const onDownload = async () => {
-    if (status === "downloading") return;
+    if (status === 'downloading') return;
 
     try {
       await ensureDownloadAllowed();
     } catch (error: any) {
       toast.warning(
         error?.message ||
-          "Wi-Fi only downloads are enabled. Please connect to Wi-Fi or turn this setting off from Settings.",
+          'Wi-Fi only downloads are enabled. Please connect to Wi-Fi or turn this setting off from Settings.',
       );
       return;
     }
 
-    setStatus("downloading");
+    setStatus('downloading');
 
     try {
       const token =
-        (await SecureStore.getItemAsync("token")) ||
-        (await AsyncStorage.getItem("token"));
+        (await SecureStore.getItemAsync('token')) ||
+        (await AsyncStorage.getItem('token'));
       const loggedIn = !!token;
       const shouldSaveLocalDownload = !loggedIn;
 
@@ -1236,7 +1238,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
           );
         } catch (error: any) {
           console.log(
-            "Download record failed:",
+            'Download record failed:',
             error?.response?.data || error,
           );
 
@@ -1258,114 +1260,114 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
               const guestMessage = getApiErrorMessage(guestError);
 
               if (guestStatusCode === 403) {
-                if (guestMessage.includes("Daily free download limit")) {
+                if (guestMessage.includes('Daily free download limit')) {
                   toast.warning(
-                    "Daily limit reached! Upgrade to Premium for unlimited downloads.",
+                    'Daily limit reached! Upgrade to Premium for unlimited downloads.',
                   );
 
-                  setStatus("idle");
+                  setStatus('idle');
 
                   setTimeout(() => {
-                    navigation.navigate("Premium");
+                    navigation.navigate('Premium');
                   }, 1200);
 
                   return;
                 }
 
                 if (
-                  guestMessage.includes("Premium subscription required") ||
-                  guestMessage.includes("premium wallpapers") ||
-                  guestMessage.includes("Premium wallpaper")
+                  guestMessage.includes('Premium subscription required') ||
+                  guestMessage.includes('premium wallpapers') ||
+                  guestMessage.includes('Premium wallpaper')
                 ) {
                   toast.warning(
-                    "This is a Premium wallpaper. Upgrade to unlock it.",
+                    'This is a Premium wallpaper. Upgrade to unlock it.',
                   );
 
-                  setStatus("idle");
+                  setStatus('idle');
 
                   setTimeout(() => {
-                    navigation.navigate("Premium");
+                    navigation.navigate('Premium');
                   }, 1200);
 
                   return;
                 }
 
-                toast.warning(guestMessage || "Download not allowed.");
-                setStatus("idle");
+                toast.warning(guestMessage || 'Download not allowed.');
+                setStatus('idle');
                 return;
               }
 
               if (
-                guestError?.message === "Network Error" ||
+                guestError?.message === 'Network Error' ||
                 !guestError?.response
               ) {
-                toast.error("No internet connection. Please try again.");
-                setStatus("idle");
+                toast.error('No internet connection. Please try again.');
+                setStatus('idle');
                 return;
               }
 
               toast.error(
-                guestMessage || "Something went wrong while downloading.",
+                guestMessage || 'Something went wrong while downloading.',
               );
 
-              setStatus("idle");
+              setStatus('idle');
               return;
             }
           } else if (statusCode === 401) {
             await clearSavedToken();
 
-            toast.info("Please sign in again to continue downloading.");
+            toast.info('Please sign in again to continue downloading.');
 
-            setStatus("idle");
+            setStatus('idle');
 
-            navigation.navigate("MainTabs", {
-              screen: "Profile",
+            navigation.navigate('MainTabs', {
+              screen: 'Profile',
             });
 
             return;
           } else if (statusCode === 403) {
-            if (message.includes("Daily free download limit")) {
+            if (message.includes('Daily free download limit')) {
               toast.warning(
-                "Daily limit reached! Upgrade to Premium for unlimited downloads.",
+                'Daily limit reached! Upgrade to Premium for unlimited downloads.',
               );
 
-              setStatus("idle");
+              setStatus('idle');
 
               setTimeout(() => {
-                navigation.navigate("Premium");
+                navigation.navigate('Premium');
               }, 1200);
 
               return;
             }
 
             if (
-              message.includes("Premium subscription required") ||
-              message.includes("premium wallpapers") ||
-              message.includes("Premium wallpaper")
+              message.includes('Premium subscription required') ||
+              message.includes('premium wallpapers') ||
+              message.includes('Premium wallpaper')
             ) {
               toast.warning(
-                "This is a Premium wallpaper. Upgrade to unlock it.",
+                'This is a Premium wallpaper. Upgrade to unlock it.',
               );
 
-              setStatus("idle");
+              setStatus('idle');
 
               setTimeout(() => {
-                navigation.navigate("Premium");
+                navigation.navigate('Premium');
               }, 1200);
 
               return;
             }
 
-            toast.warning(message || "Download not allowed.");
-            setStatus("idle");
+            toast.warning(message || 'Download not allowed.');
+            setStatus('idle');
             return;
-          } else if (error?.message === "Network Error" || !error?.response) {
-            toast.error("No internet connection. Please try again.");
-            setStatus("idle");
+          } else if (error?.message === 'Network Error' || !error?.response) {
+            toast.error('No internet connection. Please try again.');
+            setStatus('idle');
             return;
           } else {
-            toast.error(message || "Something went wrong while downloading.");
-            setStatus("idle");
+            toast.error(message || 'Something went wrong while downloading.');
+            setStatus('idle');
             return;
           }
         }
@@ -1380,16 +1382,16 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
 
       const downloadResult: DownloadSaveResult = await downloadWallpaper(
         downloadUrl,
-        wallpaper?.title || wallpaperId || "FlexiWalls Wallpaper",
+        wallpaper?.title || wallpaperId || 'FlexiWalls Wallpaper',
         {
-          mediaType: isVideo ? "VIDEO" : "IMAGE",
+          mediaType: isVideo ? 'VIDEO' : 'IMAGE',
           isVideo,
-          extension: isVideo ? "mp4" : wallpaper?.extension,
+          extension: isVideo ? 'mp4' : wallpaper?.extension,
         },
       );
 
       if (!isDownloadSuccessful(downloadResult)) {
-        setStatus("idle");
+        setStatus('idle');
         return;
       }
 
@@ -1400,7 +1402,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
 
       const updatedWallpaper = {
         ...wallpaper,
-        mediaType: isVideo ? "VIDEO" : "IMAGE",
+        mediaType: isVideo ? 'VIDEO' : 'IMAGE',
         isVideo,
         downloadUrl,
         localUri: savedDeviceInfo.localUri,
@@ -1439,21 +1441,21 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
       }
 
       if (wallpaperId && !isPlaceholder(wallpaperId)) {
-        appEvents.emit("downloadsChanged", {
+        appEvents.emit('downloadsChanged', {
           wallpaperId,
           downloadCount: nextDownloadCount,
           wallpaper: updatedWallpaper,
         });
       }
 
-      setStatus("done");
+      setStatus('done');
       setSavedPopupVisible(true);
     } catch (error: any) {
-      console.log("Download failed:", error?.response?.data || error);
+      console.log('Download failed:', error?.response?.data || error);
 
-      setStatus("idle");
+      setStatus('idle');
 
-      Alert.alert("Download failed", "Something went wrong while downloading.");
+      Alert.alert('Download failed', 'Something went wrong while downloading.');
     }
   };
 
@@ -1462,8 +1464,8 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
 
     if (isPlaceholder(wallpaperId)) {
       Alert.alert(
-        "Unavailable",
-        "This placeholder wallpaper cannot be added to favorites.",
+        'Unavailable',
+        'This placeholder wallpaper cannot be added to favorites.',
       );
       return;
     }
@@ -1491,14 +1493,14 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
       setFavoriteCount(nextOptimisticCount);
       setWallpaper(optimisticWallpaper);
 
-      appEvents.emit("favoritesChanged", {
+      appEvents.emit('favoritesChanged', {
         wallpaperId,
         isFavorite: nextOptimisticFavorite,
         favoriteCount: nextOptimisticCount,
         wallpaper: optimisticWallpaper,
       });
 
-      const response = await toggleFavorite(wallpaperId);
+      const response = await toggleFavorite(wallpaperId, optimisticWallpaper);
       const data = unwrapApiData(response);
 
       const nextIsFavorite = Boolean(
@@ -1523,14 +1525,14 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
       setFavoriteCount(nextFavoriteCount);
       setWallpaper(confirmedWallpaper);
 
-      appEvents.emit("favoritesChanged", {
+      appEvents.emit('favoritesChanged', {
         wallpaperId,
         isFavorite: nextIsFavorite,
         favoriteCount: nextFavoriteCount,
         wallpaper: confirmedWallpaper,
       });
     } catch (error: any) {
-      console.log("Favorite toggle failed:", error?.response?.data || error);
+      console.log('Favorite toggle failed:', error?.response?.data || error);
 
       const rollbackWallpaper = {
         ...wallpaper,
@@ -1545,7 +1547,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
       setFavoriteCount(previousFavoriteCount);
       setWallpaper(rollbackWallpaper);
 
-      appEvents.emit("favoritesChanged", {
+      appEvents.emit('favoritesChanged', {
         wallpaperId,
         isFavorite: previousIsFavorite,
         favoriteCount: previousFavoriteCount,
@@ -1556,14 +1558,14 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
         await clearSavedToken();
 
         Alert.alert(
-          "Session expired",
-          "Please login again to add wallpapers to favorites.",
+          'Session expired',
+          'Please login again to add wallpapers to favorites.',
           [
             {
-              text: "OK",
+              text: 'OK',
               onPress: () => {
-                navigation.navigate("MainTabs", {
-                  screen: "Profile",
+                navigation.navigate('MainTabs', {
+                  screen: 'Profile',
                 });
               },
             },
@@ -1575,9 +1577,9 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
       }
 
       Alert.alert(
-        "Failed",
+        'Failed',
         getApiErrorMessage(error) ||
-          "Could not update this wallpaper favorite.",
+          'Could not update this wallpaper favorite.',
       );
     } finally {
       setFavoriteLoading(false);
@@ -1598,27 +1600,27 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
       const previewImage = finalImage || getWallpaperPreviewImage(wallpaper);
 
       if (!liveWallpaperUrl) {
-        Alert.alert("Missing video", "Video wallpaper URL is missing.");
+        Alert.alert('Missing video', 'Video wallpaper URL is missing.');
         return;
       }
 
       if (!previewImage) {
         Alert.alert(
-          "Missing preview",
-          "Video wallpaper preview image is missing.",
+          'Missing preview',
+          'Video wallpaper preview image is missing.',
         );
         return;
       }
 
       setApplySheetVisible(false);
 
-      navigation.navigate("WallpaperCropPreview", {
+      navigation.navigate('WallpaperCropPreview', {
         imageUrl: previewImage,
         videoUrl: liveWallpaperUrl,
-        mediaType: "VIDEO",
+        mediaType: 'VIDEO',
         isVideo: true,
         target,
-        title: wallpaper?.title || "FlexiWalls Video Wallpaper",
+        title: wallpaper?.title || 'FlexiWalls Video Wallpaper',
         videoWidth: getWallpaperSourceWidth(wallpaper),
         videoHeight: getWallpaperSourceHeight(wallpaper),
       });
@@ -1627,18 +1629,18 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
     }
 
     if (!finalImage) {
-      Alert.alert("Missing wallpaper", "Wallpaper image URL is missing.");
+      Alert.alert('Missing wallpaper', 'Wallpaper image URL is missing.');
       return;
     }
 
     setApplySheetVisible(false);
 
-    navigation.navigate("WallpaperCropPreview", {
+    navigation.navigate('WallpaperCropPreview', {
       imageUrl: finalImage,
-      mediaType: "IMAGE",
+      mediaType: 'IMAGE',
       isVideo: false,
       target,
-      title: wallpaper?.title || "FlexiWalls Wallpaper",
+      title: wallpaper?.title || 'FlexiWalls Wallpaper',
     });
   };
 
@@ -1769,30 +1771,30 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
       previewSize.height,
       Math.max(previewSize.height, safeAreaHeight),
     ],
-    extrapolate: "clamp",
+    extrapolate: 'clamp',
   });
 
   const expandedPreviewRadius = expandProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [28, 0],
-    extrapolate: "clamp",
+    extrapolate: 'clamp',
   });
 
   return (
     <View style={styles.root}>
       <SafeAreaView
         style={styles.safeArea}
-        edges={["top", "bottom"]}
-        onLayout={(event) => {
+        edges={['top', 'bottom']}
+        onLayout={event => {
           setSafeAreaHeight(event.nativeEvent.layout.height);
         }}
       >
         <View
           style={styles.wallpaperPreviewContainer}
-          onLayout={(event) => {
+          onLayout={event => {
             const { width, height } = event.nativeEvent.layout;
 
-            setPreviewSize((current) => {
+            setPreviewSize(current => {
               if (current.width === width && current.height === height) {
                 return current;
               }
@@ -1813,9 +1815,9 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
           >
             <LinearGradient
               colors={[
-                "rgba(0,0,0,0.24)",
-                "rgba(0,0,0,0.02)",
-                "rgba(0,0,0,0.16)",
+                'rgba(0,0,0,0.24)',
+                'rgba(0,0,0,0.02)',
+                'rgba(0,0,0,0.16)',
               ]}
               locations={[0, 0.45, 1]}
               style={StyleSheet.absoluteFill}
@@ -1852,9 +1854,9 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
           <BlurView intensity={52} tint="dark" style={styles.detailsPanel}>
             <LinearGradient
               colors={[
-                "rgba(255,255,255,0.15)",
-                "rgba(255,255,255,0.055)",
-                "rgba(0,0,0,0.40)",
+                'rgba(255,255,255,0.15)',
+                'rgba(255,255,255,0.055)',
+                'rgba(0,0,0,0.40)',
               ]}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
@@ -1864,10 +1866,10 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
 
             <LinearGradient
               colors={[
-                "rgba(96,165,250,0.16)",
-                "rgba(168,85,247,0.10)",
-                "rgba(236,72,153,0.08)",
-                "rgba(0,0,0,0)",
+                'rgba(96,165,250,0.16)',
+                'rgba(168,85,247,0.10)',
+                'rgba(236,72,153,0.08)',
+                'rgba(0,0,0,0)',
               ]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
@@ -1876,12 +1878,12 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
             />
 
             <Text style={styles.title} numberOfLines={2}>
-              {wallpaper?.title || "FlexiWalls Wallpaper"}
+              {wallpaper?.title || 'FlexiWalls Wallpaper'}
             </Text>
 
             <View style={styles.infoRow}>
               <InfoPill
-                icon={isVideo ? "videocam-outline" : "image-outline"}
+                icon={isVideo ? 'videocam-outline' : 'image-outline'}
                 text={getCategoryName(wallpaper)}
               />
 
@@ -1898,14 +1900,14 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
             <View style={styles.actionRow}>
               <Pressable
                 onPress={onDownload}
-                disabled={status === "downloading"}
+                disabled={status === 'downloading'}
                 style={({ pressed }) => [
                   styles.downloadButtonWrap,
                   {
-                    opacity: status === "downloading" ? 0.85 : 1,
+                    opacity: status === 'downloading' ? 0.85 : 1,
                     transform: [
                       {
-                        scale: pressed && status !== "downloading" ? 0.98 : 1,
+                        scale: pressed && status !== 'downloading' ? 0.98 : 1,
                       },
                     ],
                   },
@@ -1917,13 +1919,13 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
                   end={{ x: 1, y: 1 }}
                   style={styles.downloadButton}
                 >
-                  {status === "downloading" ? (
+                  {status === 'downloading' ? (
                     <>
                       <ActivityIndicator color={colors.textPrimary} />
 
                       <Text style={styles.downloadText}>Downloading...</Text>
                     </>
-                  ) : status === "done" ? (
+                  ) : status === 'done' ? (
                     <>
                       <Ionicons
                         name="checkmark-circle-outline"
@@ -1950,7 +1952,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
               <Pressable
                 onPress={() => {
                   if (isVideo) {
-                    onApplyWallpaper("lock");
+                    onApplyWallpaper('lock');
                     return;
                   }
 
@@ -1995,7 +1997,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
                     <ActivityIndicator color={colors.textPrimary} />
                   ) : (
                     <Ionicons
-                      name={isFavorite ? "heart" : "heart-outline"}
+                      name={isFavorite ? 'heart' : 'heart-outline'}
                       size={25}
                       color={isFavorite ? colors.heart : colors.textPrimary}
                     />
@@ -2009,11 +2011,11 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
         {previewSize.height > 0 &&
         (!isVideo || expandOverlayVisible || isPreviewFullscreen) ? (
           <Animated.View
-            pointerEvents={isPreviewFullscreen ? "auto" : "none"}
+            pointerEvents={isPreviewFullscreen ? 'auto' : 'none'}
             accessibilityLabel={
               isPreviewFullscreen
-                ? "Fullscreen wallpaper preview"
-                : "Expanding wallpaper preview"
+                ? 'Fullscreen wallpaper preview'
+                : 'Expanding wallpaper preview'
             }
             style={[
               styles.expandedPreviewOverlay,
@@ -2037,9 +2039,9 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
             >
               <LinearGradient
                 colors={[
-                  "rgba(0,0,0,0.24)",
-                  "rgba(0,0,0,0.02)",
-                  "rgba(0,0,0,0.16)",
+                  'rgba(0,0,0,0.24)',
+                  'rgba(0,0,0,0.02)',
+                  'rgba(0,0,0,0.16)',
                 ]}
                 locations={[0, 0.45, 1]}
                 style={StyleSheet.absoluteFill}
@@ -2058,7 +2060,6 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
                 </BlurView>
               ) : null}
             </MediaPreview>
-
           </Animated.View>
         ) : null}
 
@@ -2110,9 +2111,9 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
           <BlurView intensity={52} tint="dark" style={styles.applySheet}>
             <LinearGradient
               colors={[
-                "rgba(255,255,255,0.16)",
-                "rgba(255,255,255,0.06)",
-                "rgba(0,0,0,0.36)",
+                'rgba(255,255,255,0.16)',
+                'rgba(255,255,255,0.06)',
+                'rgba(0,0,0,0.36)',
               ]}
               style={StyleSheet.absoluteFill}
             />
@@ -2124,7 +2125,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
             </Text>
 
             <Pressable
-              onPress={() => onApplyWallpaper("home")}
+              onPress={() => onApplyWallpaper('home')}
               style={({ pressed }) => [
                 styles.applyOption,
                 { opacity: pressed ? 0.7 : 1 },
@@ -2146,7 +2147,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
             </Pressable>
 
             <Pressable
-              onPress={() => onApplyWallpaper("lock")}
+              onPress={() => onApplyWallpaper('lock')}
               style={({ pressed }) => [
                 styles.applyOption,
                 { opacity: pressed ? 0.7 : 1 },
@@ -2168,7 +2169,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
             </Pressable>
 
             <Pressable
-              onPress={() => onApplyWallpaper("both")}
+              onPress={() => onApplyWallpaper('both')}
               style={({ pressed }) => [
                 styles.applyOption,
                 styles.applyOptionLast,
@@ -2216,9 +2217,9 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
             <BlurView intensity={48} tint="dark" style={styles.savedCard}>
               <LinearGradient
                 colors={[
-                  "rgba(255,255,255,0.14)",
-                  "rgba(255,255,255,0.055)",
-                  "rgba(15,15,16,0.92)",
+                  'rgba(255,255,255,0.14)',
+                  'rgba(255,255,255,0.055)',
+                  'rgba(15,15,16,0.92)',
                 ]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
@@ -2227,10 +2228,10 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
 
               <LinearGradient
                 colors={[
-                  "rgba(59,130,246,0.18)",
-                  "rgba(139,92,246,0.12)",
-                  "rgba(20,184,166,0.10)",
-                  "rgba(0,0,0,0)",
+                  'rgba(59,130,246,0.18)',
+                  'rgba(139,92,246,0.12)',
+                  'rgba(20,184,166,0.10)',
+                  'rgba(0,0,0,0)',
                 ]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
@@ -2300,9 +2301,9 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
             <BlurView intensity={48} tint="dark" style={styles.savedCard}>
               <LinearGradient
                 colors={[
-                  "rgba(255,255,255,0.14)",
-                  "rgba(255,255,255,0.055)",
-                  "rgba(15,15,16,0.92)",
+                  'rgba(255,255,255,0.14)',
+                  'rgba(255,255,255,0.055)',
+                  'rgba(15,15,16,0.92)',
                 ]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
@@ -2311,10 +2312,10 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
 
               <LinearGradient
                 colors={[
-                  "rgba(59,130,246,0.18)",
-                  "rgba(139,92,246,0.12)",
-                  "rgba(236,72,153,0.08)",
-                  "rgba(0,0,0,0)",
+                  'rgba(59,130,246,0.18)',
+                  'rgba(139,92,246,0.12)',
+                  'rgba(236,72,153,0.08)',
+                  'rgba(0,0,0,0)',
                 ]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
@@ -2340,8 +2341,8 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
 
               <Text style={styles.savedSubtitle}>
                 {isVideo
-                  ? "Video wallpaper saved to your gallery"
-                  : "Wallpaper saved to your gallery"}
+                  ? 'Video wallpaper saved to your gallery'
+                  : 'Wallpaper saved to your gallery'}
               </Text>
 
               <Pressable
@@ -2383,7 +2384,7 @@ const styles = StyleSheet.create({
 
   wallpaperPreviewContainer: {
     flex: 1,
-    position: "relative",
+    position: 'relative',
   },
 
   wallpaperPreview: {
@@ -2397,51 +2398,51 @@ const styles = StyleSheet.create({
   },
 
   pannableImageClip: {
-    overflow: "hidden",
+    overflow: 'hidden',
   },
 
   pannableImage: {
-    position: "absolute",
+    position: 'absolute',
   },
 
   previewDragHandleTouchArea: {
-    position: "absolute",
-    left: "50%",
+    position: 'absolute',
+    left: '50%',
     bottom: 5,
     width: 72,
     height: 34,
     marginLeft: -36,
     zIndex: 30,
     elevation: 30,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   previewDragHandleSurface: {
     width: 56,
     height: 22,
     borderRadius: 11,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.30)",
-    backgroundColor: "rgba(5,8,18,0.34)",
+    borderColor: 'rgba(255,255,255,0.30)',
+    backgroundColor: 'rgba(5,8,18,0.34)',
   },
 
   previewDragHandleBar: {
     width: 32,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "rgba(255,255,255,0.88)",
+    backgroundColor: 'rgba(255,255,255,0.88)',
   },
 
   expandedPreviewOverlay: {
-    position: "absolute",
+    position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    overflow: "hidden",
+    overflow: 'hidden',
     zIndex: 100,
     elevation: 100,
     backgroundColor: colors.baseElevated,
@@ -2453,34 +2454,34 @@ const styles = StyleSheet.create({
   },
 
   fixedBackButtonContainer: {
-    position: "absolute",
+    position: 'absolute',
     left: spacing.xl,
     zIndex: 140,
     elevation: 140,
   },
 
   expandedWallpaperImage: {
-    overflow: "hidden",
+    overflow: 'hidden',
   },
 
   videoPreviewWrap: {
-    overflow: "hidden",
+    overflow: 'hidden',
   },
 
   videoBadge: {
-    position: "absolute",
+    position: 'absolute',
     left: spacing.xl,
     bottom: spacing.xl,
     minHeight: 38,
     borderRadius: radius.pill,
-    overflow: "hidden",
+    overflow: 'hidden',
     paddingHorizontal: spacing.md,
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.20)",
-    backgroundColor: "rgba(5, 8, 18, 0.42)",
+    borderColor: 'rgba(255,255,255,0.20)',
+    backgroundColor: 'rgba(5, 8, 18, 0.42)',
   },
 
   videoBadgeText: {
@@ -2492,9 +2493,9 @@ const styles = StyleSheet.create({
   topBar: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-start",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
   },
 
   topIconButtonWrap: {
@@ -2507,9 +2508,9 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
     backgroundColor: colors.glassFill,
@@ -2523,15 +2524,15 @@ const styles = StyleSheet.create({
   detailsPanel: {
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    overflow: "hidden",
+    overflow: 'hidden',
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xl,
     paddingBottom: spacing.xl,
     borderTopWidth: 1,
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderRightWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.22)",
-    backgroundColor: "rgba(5, 8, 18, 0.82)",
+    borderColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(5, 8, 18, 0.82)',
   },
 
   title: {
@@ -2543,7 +2544,7 @@ const styles = StyleSheet.create({
   },
 
   infoRow: {
-    flexDirection: "row",
+    flexDirection: 'row',
     gap: spacing.xs,
     marginTop: spacing.lg,
   },
@@ -2552,15 +2553,15 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 38,
     borderRadius: radius.pill,
-    overflow: "hidden",
+    overflow: 'hidden',
     paddingHorizontal: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 5,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
 
   infoPillText: {
@@ -2572,22 +2573,22 @@ const styles = StyleSheet.create({
 
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: "rgba(255,255,255,0.18)",
+    backgroundColor: 'rgba(255,255,255,0.18)',
     marginVertical: spacing.xl,
   },
 
   actionRow: {
-    flexDirection: "row",
+    flexDirection: 'row',
     gap: spacing.sm,
-    alignItems: "center",
+    alignItems: 'center',
   },
 
   downloadButtonWrap: {
     flex: 1,
     height: 52,
     borderRadius: 18,
-    overflow: "hidden",
-    shadowColor: "#8B5CF6",
+    overflow: 'hidden',
+    shadowColor: '#8B5CF6',
     shadowOffset: {
       width: 0,
       height: 8,
@@ -2598,12 +2599,12 @@ const styles = StyleSheet.create({
   },
 
   downloadButton: {
-    width: "100%",
+    width: '100%',
     height: 52,
     borderRadius: 18,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 5,
   },
 
@@ -2618,8 +2619,8 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 52,
     borderRadius: 18,
-    overflow: "hidden",
-    shadowColor: "#14B8A6",
+    overflow: 'hidden',
+    shadowColor: '#14B8A6',
     shadowOffset: {
       width: 0,
       height: 8,
@@ -2630,13 +2631,13 @@ const styles = StyleSheet.create({
   },
 
   applyButton: {
-    width: "100%",
+    width: '100%',
     height: 52,
     borderRadius: 18,
-    overflow: "hidden",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+    overflow: 'hidden',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 5,
   },
 
@@ -2654,9 +2655,9 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 2,
     borderColor: colors.textPrimary,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     marginBottom: 0,
   },
 
@@ -2664,38 +2665,38 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 18,
-    overflow: "hidden",
+    overflow: 'hidden',
   },
 
   favoriteIconButton: {
     width: 52,
     height: 52,
     borderRadius: 18,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1.2,
-    borderColor: "rgba(255,255,255,0.34)",
-    backgroundColor: "rgba(5, 8, 18, 0.18)",
+    borderColor: 'rgba(255,255,255,0.34)',
+    backgroundColor: 'rgba(5, 8, 18, 0.18)',
   },
 
   applyOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    justifyContent: "flex-end",
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
   },
 
   applySheet: {
     marginHorizontal: spacing.lg,
     marginBottom: spacing.xl,
     borderRadius: 30,
-    overflow: "hidden",
+    overflow: 'hidden',
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xl,
     paddingBottom: spacing.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.glassBorder,
-    backgroundColor: "rgba(6, 8, 20, 0.86)",
+    backgroundColor: 'rgba(6, 8, 20, 0.86)',
   },
 
   applyTitle: {
@@ -2716,11 +2717,11 @@ const styles = StyleSheet.create({
 
   applyOption: {
     minHeight: 58,
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(255,255,255,0.14)",
+    borderBottomColor: 'rgba(255,255,255,0.14)',
   },
 
   applyOptionLast: {
@@ -2736,9 +2737,9 @@ const styles = StyleSheet.create({
 
   savedOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.42)",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: 'rgba(0,0,0,0.42)',
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: spacing.xl,
   },
 
@@ -2747,13 +2748,13 @@ const styles = StyleSheet.create({
   },
 
   savedCardBorder: {
-    width: "100%",
+    width: '100%',
     maxWidth: 292,
     borderRadius: 28,
     padding: 1,
-    overflow: "hidden",
-    backgroundColor: "rgba(255,255,255,0.20)",
-    shadowColor: "#8B5CF6",
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.20)',
+    shadowColor: '#8B5CF6',
     shadowOffset: {
       width: 0,
       height: 16,
@@ -2765,32 +2766,32 @@ const styles = StyleSheet.create({
 
   savedCard: {
     borderRadius: 27,
-    overflow: "hidden",
-    alignItems: "center",
+    overflow: 'hidden',
+    alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingTop: 26,
     paddingBottom: spacing.lg,
-    backgroundColor: "rgba(15, 15, 16, 0.88)",
+    backgroundColor: 'rgba(15, 15, 16, 0.88)',
   },
 
   savedIconRing: {
     width: 70,
     height: 70,
     borderRadius: 35,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: spacing.md,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.22)",
+    borderColor: 'rgba(255,255,255,0.22)',
   },
 
   savedIconCircle: {
     width: 58,
     height: 58,
     borderRadius: 29,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   savedTitle: {
@@ -2799,7 +2800,7 @@ const styles = StyleSheet.create({
     fontSize: 30,
     lineHeight: 36,
     letterSpacing: -0.6,
-    textAlign: "center",
+    textAlign: 'center',
   },
 
   savedSubtitle: {
@@ -2808,7 +2809,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     marginTop: 4,
-    textAlign: "center",
+    textAlign: 'center',
   },
 
   appliedTitle: {
@@ -2817,24 +2818,24 @@ const styles = StyleSheet.create({
     fontSize: 23,
     lineHeight: 30,
     letterSpacing: -0.4,
-    textAlign: "center",
+    textAlign: 'center',
     paddingHorizontal: spacing.sm,
   },
 
   doneButtonWrap: {
-    width: "100%",
+    width: '100%',
     borderRadius: radius.pill,
-    overflow: "hidden",
+    overflow: 'hidden',
     marginTop: spacing.lg,
   },
 
   doneButton: {
     height: 46,
     borderRadius: radius.pill,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.32)",
+    borderColor: 'rgba(255,255,255,0.32)',
   },
 
   doneButtonText: {

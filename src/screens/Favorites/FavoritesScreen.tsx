@@ -197,7 +197,16 @@ const normalizeFavoriteItem = (
   item: any,
   index: number,
 ): FavoriteItem | null => {
-  const wallpaper = normalizeWallpaper(item, index);
+  // Guest favorites are stored as:
+  // {
+  //   wallpaperId,
+  //   wallpaper,
+  //   createdAt
+  // }
+
+  const sourceWallpaper = item.wallpaper ?? item;
+
+  const wallpaper = normalizeWallpaper(sourceWallpaper, index);
 
   if (!wallpaper.id) {
     return null;
@@ -207,7 +216,7 @@ const normalizeFavoriteItem = (
     id: wallpaper.id,
     favoriteKey: wallpaper.id,
     wallpaper,
-    createdAt: wallpaper.createdAt,
+    createdAt: item.createdAt ?? wallpaper.createdAt,
   };
 };
 
@@ -449,7 +458,8 @@ const AnimatedFavoriteCard = React.memo(
       opacity.setValue(0);
       scale.setValue(0.92);
 
-      const delay = Math.min(index, MAX_STAGGERED_CARD_INDEX) * CARD_STAGGER_DELAY;
+      const delay =
+        Math.min(index, MAX_STAGGERED_CARD_INDEX) * CARD_STAGGER_DELAY;
 
       const animation = Animated.sequence([
         Animated.delay(delay),
@@ -650,9 +660,7 @@ const EmptyState = React.memo(() => {
 
   return (
     <View style={styles.emptyWrap}>
-      <Animated.View
-        style={[styles.emptyContent, { opacity: contentOpacity }]}
-      >
+      <Animated.View style={[styles.emptyContent, { opacity: contentOpacity }]}>
         <View style={styles.emptyHeartStage}>
           <Animated.View
             style={[
@@ -675,10 +683,7 @@ const EmptyState = React.memo(() => {
               styles.emptyHeartCrackFlash,
               {
                 opacity: crackFlashOpacity,
-                transform: [
-                  { rotate: '-16deg' },
-                  { scale: crackFlashScale },
-                ],
+                transform: [{ rotate: '-16deg' }, { scale: crackFlashScale }],
               },
             ]}
           />

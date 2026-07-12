@@ -2,6 +2,7 @@ import API from './api';
 import { ApiResponse, Favorite } from './types';
 import * as SecureStore from "expo-secure-store";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getWallpaperById } from './wallpaperService';
 
 export interface FavoriteQuery {
   limit?: number;
@@ -42,7 +43,8 @@ export const getLocalFavorites = async (): Promise<LocalFavoriteRecord[]> => {
     const parsed = JSON.parse(raw);
 
     return Array.isArray(parsed) ? parsed : [];
-  } catch {
+  } catch (e) {
+    console.log(e);
     return [];
   }
 };
@@ -216,9 +218,33 @@ export const toggleFavorite = async (
       };
     }
 
+    let wallpaperData = wallpaper;
+
+    // If caller didn't pass wallpaper, fetch it
+    if (!wallpaperData) {
+      try {
+        const response = await getWallpaperById(wallpaperId);
+
+        wallpaperData = response?.data;
+      } catch (error) {
+        console.log(
+          'Failed to fetch wallpaper details for guest favorite',
+          error,
+        );
+
+        wallpaperData = {
+          id: wallpaperId,
+        };
+      }
+    }
+
     await saveLocalFavorite({
       wallpaperId,
-      wallpaper,
+      wallpaper: {
+        ...wallpaperData,
+        isFavorite: true,
+        is_favorite: true,
+      },
     });
 
     return {
@@ -226,6 +252,7 @@ export const toggleFavorite = async (
     };
   }
 
+  // Logged-in flow unchanged
   const response = await API.post<ApiResponse<FavoriteStatus>>(
     `/favorites/toggle/${wallpaperId}`,
   );
