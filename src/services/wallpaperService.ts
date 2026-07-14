@@ -124,7 +124,7 @@ export const searchWallpapers = async (
     '/wallpapers/search',
     {
       params: {
-        search,
+        q: search,
         limit,
         offset,
       },

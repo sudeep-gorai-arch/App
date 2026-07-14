@@ -32,6 +32,8 @@ import { fontFamily } from '../../styles/typography';
 import { radius, spacing } from '../../utils/constants';
 import { RootStackParamList } from '../../navigation/RootStackParamList';
 
+import { getProfile } from '../../services/authService';
+
 import API from '../../services/api';
 import { downloadWallpaper } from '../../utils/downloadHelper';
 import {
@@ -51,8 +53,6 @@ import type { WallpaperApplyTarget } from '../../services/applyWallpaperService'
 
 import { appEvents } from '../../utils/appEvents';
 import { useToast } from '../../components/ui/toast/useToast';
-
-
 
 type Props = NativeStackScreenProps<RootStackParamList, 'WallpaperDetails'>;
 
@@ -1780,6 +1780,68 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
     extrapolate: 'clamp',
   });
 
+  const isPremiumWallpaper = Boolean(
+    wallpaper?.isPremium || wallpaper?.is_premium || wallpaper?.premium,
+  );
+
+  const validatePremiumAccess = async () => {
+    // Free wallpaper
+    if (!isPremiumWallpaper) {
+      return true;
+    }
+
+    const token = await SecureStore.getItemAsync('token');
+
+    // Guest user
+    if (!token) {
+      toast.warning(
+        'Please sign in and subscribe to Premium to apply this wallpaper.',
+      );
+
+      setTimeout(() => {
+        navigation.navigate('Premium');
+      }, 1200);
+
+      return false;
+    }
+
+    try {
+      const response = await getProfile();
+      const user = response.data;
+
+      if (!user.isPremium) {
+        toast.warning(
+          'This wallpaper requires an active Premium subscription.',
+        );
+
+        setTimeout(() => {
+          navigation.navigate('Premium');
+        }, 1200);
+
+        return false;
+      }
+
+      return true;
+    } catch (error: any) {
+      if (getApiErrorStatus(error) === 401) {
+        await clearSavedToken();
+
+        navigation.navigate('MainTabs', {
+          screen: 'Profile',
+        });
+
+        return false;
+      }
+
+      toast.error(
+        getApiErrorMessage(error) ||
+          'Unable to verify your Premium subscription.',
+      );
+
+      return false;
+    }
+  };
+
   return (
     <View style={styles.root}>
       <SafeAreaView
@@ -1950,7 +2012,13 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
               </Pressable>
 
               <Pressable
-                onPress={() => {
+                onPress={async () => {
+                  const allowed = await validatePremiumAccess();
+
+                  if (!allowed) {
+                    return;
+                  }
+
                   if (isVideo) {
                     onApplyWallpaper('lock');
                     return;
@@ -1958,12 +2026,6 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
 
                   openImageApplySheet();
                 }}
-                style={({ pressed }) => [
-                  styles.applyButtonWrap,
-                  {
-                    transform: [{ scale: pressed ? 0.96 : 1 }],
-                  },
-                ]}
               >
                 <LinearGradient
                   colors={APPLY_GRADIENT}
