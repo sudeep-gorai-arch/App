@@ -19,7 +19,6 @@ import { radius, spacing } from '../../utils/constants';
 
 type Nav = {
   goBack?: () => void;
-  navigate?: (screen: string) => void;
 };
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -48,7 +47,6 @@ const LAST_UPDATED = 'July 13, 2026';
 const SUPPORT_EMAIL = 'support@flexiwalls.app';
 
 const HERO_GRADIENT = ['#8B5CF6', '#EC4899', '#3B82F6'] as const;
-const BUTTON_GRADIENT = ['#EC4899', '#8B5CF6', '#3B82F6'] as const;
 
 const QUICK_FACTS: QuickFact[] = [
   {
@@ -462,17 +460,6 @@ const PrivacyPolicyScreen = ({ navigation }: { navigation?: Nav }) => {
     ).catch(() => {});
   };
 
-  const openDeletionEmail = () => {
-    const subject = encodeURIComponent('FlexiWalls Account Deletion Request');
-    const body = encodeURIComponent(
-      'I would like to request deletion of my FlexiWalls account and associated personal data. My account email is:',
-    );
-
-    Linking.openURL(
-      `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`,
-    ).catch(() => {});
-  };
-
   return (
     <View style={styles.root}>
       <MeshBackground variant="profile" />
@@ -542,82 +529,6 @@ const PrivacyPolicyScreen = ({ navigation }: { navigation?: Nav }) => {
               <QuickFactCard key={item.id} item={item} />
             ))}
           </View>
-
-          <Card style={styles.controlsCard} padding={spacing.lg} glowBorder strong>
-            <View style={styles.controlsHeader}>
-              <View style={styles.controlsIcon}>
-                <Ionicons
-                  name="options-outline"
-                  size={22}
-                  color={colors.textPrimary}
-                />
-              </View>
-
-              <View style={styles.controlsHeaderText}>
-                <Text style={styles.controlsTitle}>Your data controls</Text>
-                <Text style={styles.controlsText}>
-                  Manage permissions, preferences, logout and account deletion.
-                </Text>
-              </View>
-            </View>
-
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => navigation?.navigate?.('Settings')}
-              style={({ pressed }) => [
-                styles.primaryButtonWrap,
-                pressed && styles.pressed,
-              ]}
-            >
-              <LinearGradient
-                colors={BUTTON_GRADIENT}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.primaryButton}
-              >
-                <Ionicons
-                  name="settings-outline"
-                  size={18}
-                  color={colors.textPrimary}
-                />
-                <Text style={styles.primaryButtonText}>Open Account Settings</Text>
-              </LinearGradient>
-            </Pressable>
-
-            <View style={styles.secondaryActions}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={openDeletionEmail}
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Ionicons
-                  name="trash-outline"
-                  size={17}
-                  color={colors.textPrimary}
-                />
-                <Text style={styles.secondaryButtonText}>Deletion Request</Text>
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                onPress={openPrivacyEmail}
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Ionicons
-                  name="mail-outline"
-                  size={17}
-                  color={colors.textPrimary}
-                />
-                <Text style={styles.secondaryButtonText}>Privacy Email</Text>
-              </Pressable>
-            </View>
-          </Card>
 
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionEyebrow}>FULL POLICY</Text>
@@ -837,78 +748,6 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 18,
     fontWeight: '500',
-  },
-  controlsCard: {
-    marginTop: spacing.xxl,
-  },
-  controlsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  controlsIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(236,72,153,0.20)',
-  },
-  controlsHeaderText: {
-    flex: 1,
-  },
-  controlsTitle: {
-    color: colors.textPrimary,
-    fontSize: 17,
-    fontWeight: '900',
-  },
-  controlsText: {
-    marginTop: 4,
-    color: colors.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: '500',
-  },
-  primaryButtonWrap: {
-    height: 50,
-    marginTop: spacing.lg,
-    borderRadius: radius.pill,
-    overflow: 'hidden',
-  },
-  primaryButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  primaryButtonText: {
-    color: colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  secondaryActions: {
-    marginTop: spacing.md,
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  secondaryButton: {
-    flex: 1,
-    minHeight: 46,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.pill,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    backgroundColor: 'rgba(255,255,255,0.075)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-  },
-  secondaryButtonText: {
-    color: colors.textPrimary,
-    fontSize: 12.5,
-    fontWeight: '800',
   },
   policyCard: {
     marginTop: spacing.md,
