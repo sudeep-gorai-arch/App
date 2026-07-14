@@ -1,6 +1,5 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  Animated,
   Linking,
   Pressable,
   ScrollView,
@@ -9,14 +8,13 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
 import MeshBackground from '../../components/MeshBackground';
 import Card from '../../components/Card';
 import { RoundButton } from '../../components/Header';
-import { colors, gradients } from '../../styles/colors';
+import { colors } from '../../styles/colors';
 import { radius, spacing } from '../../utils/constants';
 
 type Nav = {
@@ -26,23 +24,8 @@ type Nav = {
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
-type MiniCard = {
-  id: string;
-  title: string;
-  text: string;
-  icon: IconName;
-};
-
-type JourneyStep = {
-  id: string;
-  label: string;
-  title: string;
-  text: string;
-  icon: IconName;
-};
-
-type Bullet = {
-  bold?: string;
+type PolicyItem = {
+  label?: string;
   text: string;
 };
 
@@ -50,124 +33,66 @@ type PolicySection = {
   id: string;
   title: string;
   icon: IconName;
-  intro: string;
-  bullets: Bullet[];
+  summary: string;
+  items: PolicyItem[];
 };
 
-const LAST_UPDATED = 'June 29, 2026';
+type QuickFact = {
+  id: string;
+  icon: IconName;
+  title: string;
+  text: string;
+};
 
-// Replace this email with your real support/privacy email before publishing.
+const LAST_UPDATED = 'July 13, 2026';
 const SUPPORT_EMAIL = 'support@flexiwalls.app';
 
 const HERO_GRADIENT = ['#8B5CF6', '#EC4899', '#3B82F6'] as const;
-const CTA_GRADIENT = ['#EC4899', '#8B5CF6', '#3B82F6'] as const;
-const DARK_GLASS_GRADIENT = [
-  'rgba(255,255,255,0.18)',
-  'rgba(255,255,255,0.04)',
-  'rgba(255,255,255,0.02)',
-] as const;
+const BUTTON_GRADIENT = ['#EC4899', '#8B5CF6', '#3B82F6'] as const;
 
-const TRUST_PILLS: MiniCard[] = [
+const QUICK_FACTS: QuickFact[] = [
   {
-    id: 'no-sale',
-    title: 'No data sale',
-    text: 'Your personal information is not sold.',
+    id: 'sale',
     icon: 'ban-outline',
+    title: 'We do not sell personal data',
+    text: 'FlexiWalls does not sell or rent your personal information.',
   },
   {
-    id: 'no-photo-upload',
-    title: 'No photo upload',
-    text: 'Gallery permission is only for saving wallpapers.',
-    icon: 'image-outline',
+    id: 'photos',
+    icon: 'images-outline',
+    title: 'Your photos are not uploaded',
+    text: 'Media access is used to save or remove wallpapers you choose.',
   },
   {
-    id: 'secure-session',
-    title: 'Secure login',
-    text: 'Session tokens stay on your device.',
-    icon: 'lock-closed-outline',
+    id: 'ads',
+    icon: 'eye-off-outline',
+    title: 'No personalized advertising',
+    text: 'The current app has no third-party ad or cross-app tracking SDK.',
   },
   {
-    id: 'delete-control',
-    title: 'Deletion control',
-    text: 'You can request account or data deletion.',
+    id: 'delete',
     icon: 'trash-outline',
-  },
-];
-
-const DATA_SUMMARY: MiniCard[] = [
-  {
-    id: 'account',
-    title: 'Account data',
-    text: 'Name, email, profile image and premium status when you sign in.',
-    icon: 'person-outline',
-  },
-  {
-    id: 'activity',
-    title: 'App activity',
-    text: 'Favorites, downloads, wallpaper IDs, categories and premium checks.',
-    icon: 'heart-outline',
-  },
-  {
-    id: 'device',
-    title: 'Device & logs',
-    text: 'Basic device, app, server and error logs for security and reliability.',
-    icon: 'phone-portrait-outline',
-  },
-  {
-    id: 'payments',
-    title: 'Premium',
-    text: 'Payment details should be handled by the app store or approved provider.',
-    icon: 'card-outline',
-  },
-];
-
-const JOURNEY_STEPS: JourneyStep[] = [
-  {
-    id: 'browse',
-    label: '01',
-    title: 'Browse wallpapers',
-    text: 'FlexiWalls loads categories, trending items and wallpaper details from the backend.',
-    icon: 'grid-outline',
-  },
-  {
-    id: 'favorite',
-    label: '02',
-    title: 'Favorite something',
-    text: 'If signed in, your selected wallpaper can be saved to your account favorites.',
-    icon: 'heart-outline',
-  },
-  {
-    id: 'download',
-    label: '03',
-    title: 'Download or apply',
-    text: 'Media access is used only to save wallpapers. Android wallpaper access is used only when you tap apply.',
-    icon: 'download-outline',
-  },
-  {
-    id: 'control',
-    label: '04',
-    title: 'Stay in control',
-    text: 'You can log out, revoke permissions or request data deletion whenever needed.',
-    icon: 'shield-checkmark-outline',
+    title: 'You can delete your account',
+    text: 'Account deletion is available from Settings inside the app.',
   },
 ];
 
 const SECTIONS: PolicySection[] = [
   {
     id: 'scope',
-    title: '1. Scope of this policy',
+    title: '1. About this policy',
     icon: 'document-text-outline',
-    intro:
-      'This Privacy Policy explains how FlexiWalls handles information when you browse wallpapers, save wallpapers, create an account, use favorites, download wallpapers or use premium features.',
-    bullets: [
+    summary:
+      'This policy explains how FlexiWalls handles information when you use the app and related services.',
+    items: [
       {
-        text: 'This policy applies to the FlexiWalls mobile app, backend APIs and related services.',
+        text: 'FlexiWalls lets you browse, favorite, download and apply image or video wallpapers and use optional premium features.',
       },
       {
-        text: 'Guest users can browse and download supported wallpapers without creating an account.',
+        text: 'This policy applies to the FlexiWalls mobile app, public website, backend APIs, support communications and related services.',
       },
       {
-        text: 'Some features, such as favorites, download history and premium access, may require sign-in.',
+        text: 'You can browse and download eligible wallpapers as a guest. Features such as cloud favorites, account download history and premium access require sign-in.',
       },
     ],
   },
@@ -175,416 +100,320 @@ const SECTIONS: PolicySection[] = [
     id: 'collect',
     title: '2. Information we collect',
     icon: 'server-outline',
-    intro:
-      'We collect only the information needed to provide the wallpaper experience, protect the service and improve app reliability.',
-    bullets: [
+    summary:
+      'We collect account, activity, payment and technical information needed to operate FlexiWalls.',
+    items: [
       {
-        bold: 'Account information:',
-        text: 'When you sign in, we may receive your name, email address, profile image, user ID and premium status.',
+        label: 'Google account information:',
+        text: 'If you choose Google Sign-In, we receive your Google account identifier, name, email address, email verification status and profile image.',
       },
       {
-        bold: 'Authentication data:',
-        text: 'We store a login token on your device so you can stay signed in. The token is removed when you log out.',
+        label: 'Account and app activity:',
+        text: 'We process your FlexiWalls user ID, profile details, favorites, likes, wallpaper download history, daily download count, premium status and subscription status.',
       },
       {
-        bold: 'Wallpaper activity:',
-        text: 'We may process wallpaper IDs, favorites, download history, download counts, categories and premium access checks.',
+        label: 'Guest activity:',
+        text: 'For guest downloads, the app creates a random guest identifier and sends it with wallpaper download events so we can apply download limits and reduce abuse.',
       },
       {
-        bold: 'Guest downloads:',
-        text: 'For guest downloads, we may record the wallpaper download event to maintain download counts, limits, abuse prevention and app performance.',
+        label: 'Session and technical information:',
+        text: 'We may process login and logout times, session records, IP address, user-agent, request dates, API errors and security logs.',
       },
       {
-        bold: 'Device and technical data:',
-        text: 'We may process basic technical data such as app version, device type, operating system, IP address, crash or error logs and server request logs.',
+        label: 'Payment information:',
+        text: 'For premium purchases, we process the selected plan, receipt, order, payment and subscription identifiers, amount, currency, payment status, verification signature and provider response.',
       },
       {
-        bold: 'Support messages:',
-        text: 'If you contact us, we may collect the email address and message content you provide so we can respond.',
-      },
-    ],
-  },
-  {
-    id: 'permissions',
-    title: '3. App permissions',
-    icon: 'settings-outline',
-    intro:
-      'FlexiWalls asks for permissions only when they are required for a feature you use.',
-    bullets: [
-      {
-        bold: 'Photos or media library:',
-        text: 'Used to save downloaded wallpapers to your gallery. We do not upload your personal photos to our servers.',
-      },
-      {
-        bold: 'Set wallpaper permission on Android:',
-        text: 'Used only when you choose to apply a wallpaper directly to your home screen, lock screen or both.',
-      },
-      {
-        bold: 'Google Sign-In:',
-        text: 'Used only when you choose to sign in with Google. Google may provide identity information needed for account login.',
-      },
-      {
-        bold: 'Permission control:',
-        text: 'You can disable app permissions anytime from your device settings, but some features may stop working.',
+        label: 'Support information:',
+        text: 'If you contact us, we receive the email address, message and any information or files you choose to provide.',
       },
     ],
   },
   {
     id: 'use',
-    title: '4. How we use information',
+    title: '3. How we use information',
     icon: 'sparkles-outline',
-    intro:
-      'We use information to provide the app features users expect from FlexiWalls.',
-    bullets: [
-      { text: 'Show wallpapers, categories, trending content and wallpaper details.' },
-      { text: 'Save wallpapers to your device when you request a download.' },
-      { text: 'Apply wallpapers directly on Android when you choose that action.' },
-      { text: 'Sync account features such as favorites, premium status and download history.' },
-      { text: 'Prevent abuse, enforce download limits and protect the app from unauthorized access.' },
-      { text: 'Improve performance, troubleshoot issues and maintain service reliability.' },
-      { text: 'Respond to support, privacy or deletion requests.' },
+    summary:
+      'We use information to provide app features, maintain security and support your account.',
+    items: [
+      { text: 'Authenticate your account and keep you signed in.' },
+      { text: 'Display wallpapers, categories, favorites, downloads and trending content.' },
+      { text: 'Enforce guest and free-user download limits and verify premium access.' },
+      { text: 'Create, verify, manage and cancel premium subscriptions.' },
+      { text: 'Calculate aggregate download, favorite and like counts.' },
+      { text: 'Prevent fraud, misuse, unauthorized access and security incidents.' },
+      { text: 'Diagnose errors, maintain performance and respond to support or privacy requests.' },
+      {
+        text: 'We process optional permissions with your choice, account and payment data to provide requested services, and limited technical data for security, legal and operational purposes.',
+      },
+    ],
+  },
+  {
+    id: 'device',
+    title: '4. Data stored on your device and permissions',
+    icon: 'phone-portrait-outline',
+    summary:
+      'Some information stays on your device so app features work correctly.',
+    items: [
+      {
+        label: 'Secure device storage:',
+        text: 'The app stores your login token, basic profile and guest identifier using secure device storage where supported.',
+      },
+      {
+        label: 'Local app storage:',
+        text: 'The app stores notification and Wi-Fi-only preferences, local download records, wallpaper details, file locations and media asset identifiers on your device.',
+      },
+      {
+        label: 'Photos and media:',
+        text: 'Media-library permission is used to save downloaded wallpapers and remove selected downloaded wallpapers from your device. FlexiWalls does not upload your personal photo library to our servers.',
+      },
+      {
+        label: 'Set wallpaper:',
+        text: 'Android wallpaper access is used only when you choose to apply a wallpaper to your home screen, lock screen or both.',
+      },
+      {
+        label: 'Notifications:',
+        text: 'Notification permission is requested only when you enable notifications. The current preference is stored locally on your device.',
+      },
+      {
+        label: 'Network state:',
+        text: 'The app checks whether you are connected to Wi-Fi when the Wi-Fi-only download preference is enabled.',
+      },
+      {
+        text: 'You can change permissions from your device settings. Disabling a permission may prevent the related feature from working.',
+      },
     ],
   },
   {
     id: 'sharing',
-    title: '5. Sharing and third-party services',
+    title: '5. Service providers and sharing',
     icon: 'people-outline',
-    intro:
-      'We do not sell your personal information. We share data only when needed to operate FlexiWalls, comply with law or protect users and the service.',
-    bullets: [
+    summary:
+      'We use trusted providers to run login, payments, hosting, database and media delivery.',
+    items: [
       {
-        bold: 'Service providers:',
-        text: 'We may use providers for authentication, hosting, database, storage, content delivery, payments, security and support.',
+        label: 'Google:',
+        text: 'Google processes the sign-in flow when you choose Google Sign-In. We use the identity information received only for account authentication and profile features described in this policy.',
       },
       {
-        bold: 'Google Sign-In:',
-        text: 'If you choose Google login, Google handles the sign-in flow according to its own privacy practices.',
+        label: 'Razorpay:',
+        text: 'Razorpay processes checkout and payment-method information. FlexiWalls receives transaction identifiers and status information but does not receive or store your full card number, CVV, UPI PIN or online-banking password.',
       },
       {
-        bold: 'App stores and payments:',
-        text: 'Premium purchases should be processed by Google Play, Apple App Store or an approved payment provider. FlexiWalls should not store full card numbers or CVV codes.',
+        label: 'Hosting and database providers:',
+        text: 'Render may host backend services, Supabase may host the PostgreSQL database, and Vercel may host the public website.',
       },
       {
-        bold: 'Legal and safety reasons:',
-        text: 'We may disclose information if required by law, to enforce our terms, prevent fraud or protect rights and safety.',
+        label: 'Media delivery:',
+        text: 'Cloudflare R2 and related content-delivery services may store and deliver wallpaper files and thumbnails.',
+      },
+      {
+        label: 'Legal and safety:',
+        text: 'We may disclose information when required by law or when reasonably necessary to protect users, investigate fraud, enforce rights or secure the service.',
+      },
+      {
+        label: 'Business changes:',
+        text: 'If FlexiWalls is reorganized, sold or transferred, relevant information may transfer with the service subject to this policy and applicable law.',
+      },
+      {
+        text: 'We do not sell or rent your personal information to advertisers or data brokers.',
+      },
+    ],
+  },
+  {
+    id: 'payments',
+    title: '6. Premium payments',
+    icon: 'card-outline',
+    summary:
+      'Razorpay handles payment credentials while FlexiWalls verifies and records the purchase.',
+    items: [
+      {
+        text: 'Checkout may support payment methods such as UPI, cards, wallets or net banking according to Razorpay availability.',
+      },
+      {
+        text: 'Razorpay may independently collect payment, billing, device and fraud-prevention information under its own privacy notice.',
+      },
+      {
+        text: 'FlexiWalls stores transaction and subscription records needed to activate premium access, handle cancellation, resolve disputes, prevent fraud and meet accounting or legal obligations.',
+      },
+      {
+        text: 'Deleting your FlexiWalls account does not automatically erase records that must be kept for tax, accounting, chargeback, fraud-prevention or other legal purposes.',
       },
     ],
   },
   {
     id: 'ads',
-    title: '6. Ads, tracking and analytics',
+    title: '7. Ads and analytics',
     icon: 'analytics-outline',
-    intro:
-      'FlexiWalls is designed as a wallpaper app and should be transparent about advertising and tracking choices.',
-    bullets: [
+    summary:
+      'The current app does not use personalized advertising or third-party analytics SDKs.',
+    items: [
       {
-        text: 'At this stage, FlexiWalls does not use third-party advertising SDKs for personalized ads.',
+        text: 'FlexiWalls does not currently use a third-party advertising SDK or track you across other companies’ apps or websites for advertising.',
       },
       {
-        text: 'We do not track you across other companies’ apps or websites for advertising purposes.',
+        text: 'We use server logs and aggregate wallpaper activity such as download, favorite and like counts to operate and improve app features.',
       },
       {
-        text: 'If analytics, crash reporting or ads are added later, this policy and the store privacy declarations must be updated before release.',
+        text: 'Before adding advertising, remote analytics, crash reporting or similar tracking, we will update this policy, store disclosures and consent flows where required.',
       },
     ],
   },
   {
     id: 'retention',
-    title: '7. Data retention and deletion',
+    title: '8. Retention and account deletion',
     icon: 'time-outline',
-    intro:
-      'We keep information only as long as it is needed for app features, security, legal obligations or legitimate business purposes.',
-    bullets: [
+    summary:
+      'We keep information only while it is needed for the service, security or legal requirements.',
+    items: [
       {
-        text: 'Account data is kept while your account is active unless deletion is requested or required by law.',
+        label: 'Account information:',
+        text: 'Account data, favorites, likes, cloud download history and premium profile information are kept while your account remains active or until deletion is requested, subject to limited legal retention.',
       },
       {
-        text: 'Favorites and download history may be kept so they can appear in your account and profile screens.',
+        label: 'Guest and local information:',
+        text: 'The guest identifier, preferences and local download history remain on your device until you clear app data, uninstall the app or remove the related records.',
       },
       {
-        text: 'Server logs are kept for a limited period for security, debugging and abuse prevention.',
+        label: 'Downloaded files:',
+        text: 'Deleting your account does not automatically remove wallpaper files already saved in your device gallery. You can remove those files from the Downloads screen or your gallery.',
       },
       {
-        text: `To request deletion of your account or personal data, contact us at ${SUPPORT_EMAIL}.`,
+        label: 'Technical records:',
+        text: 'Security, request and error logs are kept only for a limited period based on operational, fraud-prevention and legal needs.',
+      },
+      {
+        label: 'Payment records:',
+        text: 'Transaction records may be retained for accounting, tax, refunds, disputes, chargebacks, fraud prevention and compliance for as long as required or reasonably necessary.',
+      },
+      {
+        text: 'To delete your account in the app, open Settings and select “Delete Account and Data.” You may also email us to request access, correction or deletion.',
       },
     ],
   },
   {
     id: 'rights',
-    title: '8. Your choices and rights',
+    title: '9. Your choices and privacy rights',
     icon: 'shield-checkmark-outline',
-    intro:
-      'Depending on your region, you may have privacy rights over your personal information.',
-    bullets: [
-      { text: 'Access, correct or update your account information.' },
-      { text: 'Request deletion of your account or personal data.' },
-      { text: 'Withdraw optional permissions from device settings.' },
-      { text: 'Log out to remove the active session from your device.' },
-      { text: 'Contact us for questions about privacy, account deletion or data access.' },
-    ],
-  },
-  {
-    id: 'children',
-    title: '9. Children’s privacy',
-    icon: 'happy-outline',
-    intro:
-      'FlexiWalls is not intended for children under the age required by applicable law to use online services without parental consent.',
-    bullets: [
+    summary:
+      'You can manage permissions, preferences, account information and deletion requests.',
+    items: [
+      { text: 'Access the personal information associated with your account.' },
+      { text: 'Request correction or updating of inaccurate account information.' },
+      { text: 'Request deletion of your account and associated personal information.' },
+      { text: 'Disable optional permissions through your device settings.' },
+      { text: 'Turn notifications or Wi-Fi-only downloads on or off in the app.' },
+      { text: 'Log out and revoke Google access through your Google Account settings.' },
       {
-        text: 'We do not knowingly collect personal information from children without appropriate consent.',
-      },
-      {
-        text: 'If you believe a child has provided personal information, contact us and we will take appropriate action.',
+        text: 'We may need to verify your identity before completing a request. Some information may be retained when required by law or necessary for security, fraud prevention or dispute resolution.',
       },
     ],
   },
   {
     id: 'security',
-    title: '10. Security',
+    title: '10. Security and international processing',
     icon: 'lock-closed-outline',
-    intro:
-      'We use reasonable technical and organizational measures to protect information handled by FlexiWalls.',
-    bullets: [
-      { text: 'Authentication tokens are stored using secure device storage where supported.' },
-      { text: 'Requests to the production backend should use HTTPS.' },
-      { text: 'No system is completely secure, so users should keep their device and account credentials protected.' },
+    summary:
+      'We use safeguards, but no app or internet transmission can be guaranteed completely secure.',
+    items: [
+      {
+        text: 'We use measures such as HTTPS, access controls, authentication, secure device storage where supported and restricted access to production services.',
+      },
+      {
+        text: 'You should protect your device, Google account and payment account and avoid sharing authentication information.',
+      },
+      {
+        text: 'Information may be processed in India and in other countries where our providers operate. Those locations may have different data-protection laws.',
+      },
+    ],
+  },
+  {
+    id: 'children',
+    title: '11. Children’s privacy',
+    icon: 'happy-outline',
+    summary:
+      'FlexiWalls is not specifically directed to children.',
+    items: [
+      {
+        text: 'We do not knowingly collect personal information from children in a way that violates applicable law.',
+      },
+      {
+        text: 'Where local law requires parental or guardian consent, a child should not create an account or make a purchase without that consent.',
+      },
+      {
+        text: 'A parent or guardian who believes a child provided personal information may contact us to request review and deletion.',
+      },
     ],
   },
   {
     id: 'changes',
-    title: '11. Changes to this policy',
-    icon: 'information-circle-outline',
-    intro:
-      'We may update this Privacy Policy when FlexiWalls changes or when store, legal or security requirements change.',
-    bullets: [
-      { text: 'The latest version will show a new “Last updated” date.' },
-      { text: 'Important changes may be communicated in the app or through another appropriate method.' },
-      { text: 'You should review this policy before publishing new features that collect new data.' },
-    ],
-  },
-  {
-    id: 'contact',
-    title: '12. Contact us',
+    title: '12. Changes and contact',
     icon: 'mail-outline',
-    intro:
-      'For privacy questions, account deletion requests or data access requests, contact the FlexiWalls team.',
-    bullets: [
-      { bold: 'Email:', text: SUPPORT_EMAIL },
-      { bold: 'App:', text: 'FlexiWalls' },
-      { bold: 'Package:', text: 'com.flexiwalls.app' },
+    summary:
+      'We may update this policy when the app, providers or legal requirements change.',
+    items: [
+      {
+        text: 'The latest version will show a revised “Last updated” date. Material changes may also be communicated in the app or through another appropriate method.',
+      },
+      {
+        label: 'Privacy and support email:',
+        text: SUPPORT_EMAIL,
+      },
+      {
+        label: 'Application:',
+        text: 'FlexiWalls',
+      },
+      {
+        label: 'Android package:',
+        text: 'com.flexiwalls.app',
+      },
     ],
   },
 ];
 
-const BulletRow = ({ item }: { item: Bullet }) => (
-  <View style={styles.bulletRow}>
-    <View style={styles.bulletDot} />
-    <Text style={styles.bulletText}>
-      {item.bold ? <Text style={styles.bulletBold}>{item.bold} </Text> : null}
-      {item.text}
-    </Text>
-  </View>
-);
-
-const TrustPill = ({ item }: { item: MiniCard }) => (
-  <View style={styles.trustPill}>
-    <View style={styles.trustIconWrap}>
-      <Ionicons name={item.icon} size={15} color={colors.accent} />
+const QuickFactCard = ({ item }: { item: QuickFact }) => (
+  <View style={styles.quickFactCard}>
+    <View style={styles.quickFactIcon}>
+      <Ionicons name={item.icon} size={19} color={colors.accent} />
     </View>
-
-    <View>
-      <Text style={styles.trustTitle}>{item.title}</Text>
-      <Text style={styles.trustText}>{item.text}</Text>
+    <View style={styles.quickFactContent}>
+      <Text style={styles.quickFactTitle}>{item.title}</Text>
+      <Text style={styles.quickFactText}>{item.text}</Text>
     </View>
   </View>
 );
 
-const FlipCardSurface = ({
-  children,
-  back,
-}: {
-  children: React.ReactNode;
-  back?: boolean;
-}) => (
-  <BlurView
-    intensity={34}
-    tint="dark"
-    experimentalBlurMethod="dimezisBlurView"
-    style={[styles.flipGlassFace, back && styles.flipGlassBackFace]}
-  >
-    <LinearGradient
-      colors={
-        back
-          ? ['rgba(139,92,246,0.26)', 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0.035)']
-          : ['rgba(255,255,255,0.18)', 'rgba(255,255,255,0.07)', 'rgba(255,255,255,0.035)']
-      }
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={StyleSheet.absoluteFill}
-      pointerEvents="none"
-    />
-
-    <View style={styles.flipGlassContent}>{children}</View>
-  </BlurView>
-);
-
-const DataCard = ({ item }: { item: MiniCard }) => {
-  const [flipped, setFlipped] = useState(false);
-  const flipAnim = useRef(new Animated.Value(0)).current;
-
-  const toggleFlip = () => {
-    const nextFlipped = !flipped;
-
-    setFlipped(nextFlipped);
-
-    Animated.spring(flipAnim, {
-      toValue: nextFlipped ? 180 : 0,
-      useNativeDriver: true,
-      friction: 8,
-      tension: 65,
-    }).start();
-  };
-
-  const frontRotate = flipAnim.interpolate({
-    inputRange: [0, 180],
-    outputRange: ['0deg', '180deg'],
-  });
-
-  const backRotate = flipAnim.interpolate({
-    inputRange: [0, 180],
-    outputRange: ['180deg', '360deg'],
-  });
-
-  return (
-    <Pressable
-      onPress={toggleFlip}
-      style={({ pressed }) => [
-        styles.flipCardPressable,
-        pressed && styles.cardPressed,
-      ]}
-    >
-      <View style={styles.flipCardShell}>
-        <Animated.View
-          pointerEvents={flipped ? 'none' : 'auto'}
-          style={[
-            styles.flipFace,
-            {
-              transform: [{ perspective: 900 }, { rotateY: frontRotate }],
-            },
-          ]}
-        >
-          <FlipCardSurface>
-            <View style={styles.dataFrontTop}>
-              <View style={styles.dataIconWrap}>
-                <Ionicons name={item.icon} size={22} color={colors.accentBlue} />
-              </View>
-
-              <View style={styles.flipHintPill}>
-                <Ionicons name="swap-horizontal" size={13} color={colors.accent} />
-              </View>
-            </View>
-
-            <View style={styles.dataFrontMiddle}>
-              <Text style={styles.dataFrontSubject} numberOfLines={2}>
-                {item.title}
-              </Text>
-
-              <Text style={styles.dataFrontSubText}>Tap card to view details</Text>
-            </View>
-          </FlipCardSurface>
-        </Animated.View>
-
-        <Animated.View
-          pointerEvents={flipped ? 'auto' : 'none'}
-          style={[
-            styles.flipFace,
-            {
-              transform: [{ perspective: 900 }, { rotateY: backRotate }],
-            },
-          ]}
-        >
-          <FlipCardSurface back>
-            <View style={styles.dataBackTop}>
-              <View style={styles.dataBackIconWrap}>
-                <Ionicons name={item.icon} size={17} color={colors.accent} />
-              </View>
-
-              <Text style={styles.dataBackTitle} numberOfLines={2}>
-                {item.title}
-              </Text>
-            </View>
-
-            <Text style={styles.dataText} numberOfLines={4}>
-              {item.text}
-            </Text>
-
-            <View style={styles.dataBackHint}>
-              <Ionicons name="refresh-outline" size={13} color={colors.textTertiary} />
-              <Text style={styles.dataBackHintText}>Tap to flip back</Text>
-            </View>
-          </FlipCardSurface>
-        </Animated.View>
-      </View>
-    </Pressable>
-  );
-};
-
-const JourneyItem = ({
-  item,
-  isLast,
-}: {
-  item: JourneyStep;
-  isLast: boolean;
-}) => (
-  <View style={styles.journeyItem}>
-    <View style={styles.journeyRail}>
-      <LinearGradient
-        colors={CTA_GRADIENT}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.journeyBadge}
-      >
-        <Ionicons name={item.icon} size={18} color={colors.textPrimary} />
-      </LinearGradient>
-
-      {!isLast ? <View style={styles.journeyLine} /> : null}
-    </View>
-
-    <View style={styles.journeyContent}>
-      <Text style={styles.journeyLabel}>{item.label}</Text>
-      <Text style={styles.journeyTitle}>{item.title}</Text>
-      <Text style={styles.journeyText}>{item.text}</Text>
-    </View>
-  </View>
-);
-
-const PolicyBlock = ({
+const PolicySectionCard = ({
   section,
   expanded,
-  onToggle,
+  onPress,
 }: {
   section: PolicySection;
   expanded: boolean;
-  onToggle: () => void;
+  onPress: () => void;
 }) => (
-  <Pressable
-    onPress={onToggle}
-    style={({ pressed }) => [pressed && styles.cardPressed]}
-  >
-    <Card style={styles.policyCard} padding={spacing.lg} strong>
+  <Card style={styles.policyCard} padding={0} strong>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ expanded }}
+      accessibilityLabel={`${section.title}. ${expanded ? 'Collapse' : 'Expand'} section`}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.policyPressable,
+        pressed && styles.pressed,
+      ]}
+    >
       <View style={styles.policyHeader}>
-        <View style={styles.policyIconWrap}>
+        <View style={styles.policyIcon}>
           <Ionicons name={section.icon} size={20} color={colors.textPrimary} />
         </View>
 
-        <View style={styles.policyTitleWrap}>
+        <View style={styles.policyHeaderText}>
           <Text style={styles.policyTitle}>{section.title}</Text>
-          <Text style={styles.policyIntro} numberOfLines={expanded ? undefined : 2}>
-            {section.intro}
-          </Text>
+          <Text style={styles.policySummary}>{section.summary}</Text>
         </View>
 
-        <View style={styles.expandIconWrap}>
+        <View style={styles.chevronWrap}>
           <Ionicons
             name={expanded ? 'chevron-up' : 'chevron-down'}
             size={18}
@@ -594,53 +423,54 @@ const PolicyBlock = ({
       </View>
 
       {expanded ? (
-        <View style={styles.bulletWrap}>
-          {section.bullets.map((item, index) => (
-            <BulletRow key={`${section.id}-${index}`} item={item} />
+        <View style={styles.policyBody}>
+          {section.items.map((item, index) => (
+            <View key={`${section.id}-${index}`} style={styles.policyItem}>
+              <View style={styles.policyDot} />
+              <Text style={styles.policyText}>
+                {item.label ? (
+                  <Text style={styles.policyLabel}>{item.label} </Text>
+                ) : null}
+                {item.text}
+              </Text>
+            </View>
           ))}
         </View>
-      ) : (
-        <View style={styles.collapsedHint}>
-          <Ionicons name="reader-outline" size={14} color={colors.textTertiary} />
-          <Text style={styles.collapsedText}>Tap to read details</Text>
-        </View>
-      )}
-    </Card>
-  </Pressable>
+      ) : null}
+    </Pressable>
+  </Card>
 );
 
 const PrivacyPolicyScreen = ({ navigation }: { navigation?: Nav }) => {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
 
-  const expandedCount = useMemo(
-    () => SECTIONS.filter(section => openSections[section.id]).length,
-    [openSections],
-  );
-
-  const allOpen = expandedCount === SECTIONS.length;
-
   const toggleSection = (id: string) => {
-    setOpenSections(prev => ({ ...prev, [id]: !prev[id] }));
+    setOpenSections(previous => ({
+      ...previous,
+      [id]: !previous[id],
+    }));
   };
 
-  const toggleAll = () => {
-    const nextValue = !allOpen;
-    const nextState = SECTIONS.reduce<Record<string, boolean>>((acc, section) => {
-      acc[section.id] = nextValue;
-      return acc;
-    }, {});
+  const openPrivacyEmail = () => {
+    const subject = encodeURIComponent('FlexiWalls Privacy Request');
+    const body = encodeURIComponent(
+      'Please describe whether you are requesting access, correction, deletion or other privacy support.',
+    );
 
-    setOpenSections(nextState);
-  };
-
-  const openEmail = () => {
     Linking.openURL(
-      `mailto:${SUPPORT_EMAIL}?subject=FlexiWalls%20Privacy%20Request`,
+      `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`,
     ).catch(() => {});
   };
 
-  const openSupport = () => {
-    navigation?.navigate?.('HelpSupport');
+  const openDeletionEmail = () => {
+    const subject = encodeURIComponent('FlexiWalls Account Deletion Request');
+    const body = encodeURIComponent(
+      'I would like to request deletion of my FlexiWalls account and associated personal data. My account email is:',
+    );
+
+    Linking.openURL(
+      `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`,
+    ).catch(() => {});
   };
 
   return (
@@ -649,17 +479,17 @@ const PrivacyPolicyScreen = ({ navigation }: { navigation?: Nav }) => {
 
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <RoundButton
-              icon="chevron-back"
-              onPress={() => navigation?.goBack?.()}
-            />
-          </View>
+          <RoundButton
+            icon="chevron-back"
+            onPress={() => navigation?.goBack?.()}
+          />
 
           <View style={styles.headerTextWrap}>
-            <Text style={styles.headerTitle}>Privacy Policy</Text>
-            <Text style={styles.headerSubtitle}>Simple, clear and transparent</Text>
+            <Text style={styles.headerTitle}>Privacy & Data</Text>
+            <Text style={styles.headerSubtitle}>Last updated {LAST_UPDATED}</Text>
           </View>
+
+          <View style={styles.headerSpacer} />
         </View>
 
         <ScrollView
@@ -672,242 +502,175 @@ const PrivacyPolicyScreen = ({ navigation }: { navigation?: Nav }) => {
             end={{ x: 1, y: 1 }}
             style={styles.heroBorder}
           >
-            <BlurView
-              intensity={36}
-              tint="dark"
-              experimentalBlurMethod="dimezisBlurView"
-              style={styles.heroCard}
-            >
-              <LinearGradient
-                colors={DARK_GLASS_GRADIENT}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0.9, y: 1 }}
-                style={StyleSheet.absoluteFill}
-                pointerEvents="none"
-              />
-
-              <View style={styles.heroGlowOne} />
-              <View style={styles.heroGlowTwo} />
-
+            <View style={styles.heroCard}>
               <View style={styles.heroTopRow}>
-                <LinearGradient
-                  colors={gradients.violetMagenta}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.heroIcon}
-                >
+                <View style={styles.heroIcon}>
                   <Ionicons
                     name="shield-checkmark"
-                    size={34}
+                    size={30}
                     color={colors.textPrimary}
                   />
-                </LinearGradient>
+                </View>
 
-                <View style={styles.updatedPill}>
+                <View style={styles.datePill}>
                   <Ionicons
                     name="calendar-outline"
                     size={14}
                     color={colors.accent}
                   />
-                  <Text style={styles.updatedText}>Updated {LAST_UPDATED}</Text>
+                  <Text style={styles.dateText}>{LAST_UPDATED}</Text>
                 </View>
               </View>
 
-              <Text style={styles.heroKicker}>FlexiWalls data promise</Text>
-              <Text style={styles.heroTitle}>Privacy, without the boring part.</Text>
-
-              <Text style={styles.heroSubtitle}>
-                We keep the wallpaper experience simple: browse, save, favorite
-                and enjoy premium wallpapers while collecting only what is
-                needed to run the app safely.
+              <Text style={styles.heroTitle}>Your privacy, explained simply.</Text>
+              <Text style={styles.heroText}>
+                FlexiWalls collects only the information needed for login,
+                favorites, downloads, premium access, payments, security and
+                support. This page explains what happens to that information and
+                the controls available to you.
               </Text>
-
-              <View style={styles.heroStatsRow}>
-                <View style={styles.heroStatBox}>
-                  <Text style={styles.heroStatNumber}>0</Text>
-                  <Text style={styles.heroStatLabel}>Data sold</Text>
-                </View>
-
-                <View style={styles.heroStatDivider} />
-
-                <View style={styles.heroStatBox}>
-                  <Text style={styles.heroStatNumber}>12</Text>
-                  <Text style={styles.heroStatLabel}>Clear sections</Text>
-                </View>
-
-                <View style={styles.heroStatDivider} />
-
-                <View style={styles.heroStatBox}>
-                  <Text style={styles.heroStatNumber}>1 tap</Text>
-                  <Text style={styles.heroStatLabel}>To expand</Text>
-                </View>
-              </View>
-            </BlurView>
+            </View>
           </LinearGradient>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.trustStrip}
-          >
-            {TRUST_PILLS.map(item => (
-              <TrustPill key={item.id} item={item} />
-            ))}
-          </ScrollView>
-
-          <View style={styles.sectionIntroWrap}>
-            <Text style={styles.sectionEyebrow}>At a glance</Text>
-            <Text style={styles.sectionHeading}>Tap the cards to flip</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionEyebrow}>QUICK SUMMARY</Text>
+            <Text style={styles.sectionTitle}>The important points</Text>
           </View>
 
-          <View style={styles.dataGrid}>
-            {DATA_SUMMARY.map(item => (
-              <DataCard key={item.id} item={item} />
+          <View style={styles.quickFactsGrid}>
+            {QUICK_FACTS.map(item => (
+              <QuickFactCard key={item.id} item={item} />
             ))}
           </View>
 
-          <Card style={styles.journeyCard} padding={spacing.lg} glowBorder strong>
-            <View style={styles.summaryHeader}>
-              <View style={styles.summaryIcon}>
+          <Card style={styles.controlsCard} padding={spacing.lg} glowBorder strong>
+            <View style={styles.controlsHeader}>
+              <View style={styles.controlsIcon}>
                 <Ionicons
-                  name="git-branch-outline"
+                  name="options-outline"
                   size={22}
                   color={colors.textPrimary}
                 />
               </View>
 
-              <View style={{ flex: 1 }}>
-                <Text style={styles.summaryTitle}>Your privacy flow</Text>
-                <Text style={styles.summarySub}>
-                  A simple view of what happens when you use core app features.
+              <View style={styles.controlsHeaderText}>
+                <Text style={styles.controlsTitle}>Your data controls</Text>
+                <Text style={styles.controlsText}>
+                  Manage permissions, preferences, logout and account deletion.
                 </Text>
               </View>
-            </View>
-
-            <View style={styles.journeyList}>
-              {JOURNEY_STEPS.map((item, index) => (
-                <JourneyItem
-                  key={item.id}
-                  item={item}
-                  isLast={index === JOURNEY_STEPS.length - 1}
-                />
-              ))}
-            </View>
-          </Card>
-
-          <Card style={styles.storeCard} padding={spacing.lg} strong>
-            <View style={styles.storeCardTop}>
-              <View style={styles.storeIconWrap}>
-                <Ionicons name="storefront-outline" size={22} color={colors.accent} />
-              </View>
-
-              <View style={{ flex: 1 }}>
-                <Text style={styles.storeTitle}>Store-ready reminder</Text>
-                <Text style={styles.storeText}>
-                  Use the same data practices in Google Play Data Safety and
-                  Apple App Privacy. Update this policy before adding ads,
-                  analytics, crash SDKs or new payment flows.
-                </Text>
-              </View>
-            </View>
-          </Card>
-
-          <View style={styles.fullPolicyHeader}>
-            <View style={styles.sectionIntroWrapCompact}>
-              <Text style={styles.sectionEyebrow}>Full policy</Text>
-              <Text style={styles.sectionHeading}>Tap any section to expand</Text>
             </View>
 
             <Pressable
-              onPress={toggleAll}
+              accessibilityRole="button"
+              onPress={() => navigation?.navigate?.('Settings')}
               style={({ pressed }) => [
-                styles.expandAllButton,
-                pressed && styles.buttonPressed,
+                styles.primaryButtonWrap,
+                pressed && styles.pressed,
               ]}
             >
-              <Ionicons
-                name={allOpen ? 'contract-outline' : 'expand-outline'}
-                size={15}
-                color={colors.textPrimary}
-              />
-              <Text style={styles.expandAllText}>
-                {allOpen ? 'Close all' : 'Open all'}
-              </Text>
+              <LinearGradient
+                colors={BUTTON_GRADIENT}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.primaryButton}
+              >
+                <Ionicons
+                  name="settings-outline"
+                  size={18}
+                  color={colors.textPrimary}
+                />
+                <Text style={styles.primaryButtonText}>Open Account Settings</Text>
+              </LinearGradient>
             </Pressable>
+
+            <View style={styles.secondaryActions}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={openDeletionEmail}
+                style={({ pressed }) => [
+                  styles.secondaryButton,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Ionicons
+                  name="trash-outline"
+                  size={17}
+                  color={colors.textPrimary}
+                />
+                <Text style={styles.secondaryButtonText}>Deletion Request</Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={openPrivacyEmail}
+                style={({ pressed }) => [
+                  styles.secondaryButton,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Ionicons
+                  name="mail-outline"
+                  size={17}
+                  color={colors.textPrimary}
+                />
+                <Text style={styles.secondaryButtonText}>Privacy Email</Text>
+              </Pressable>
+            </View>
+          </Card>
+
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionEyebrow}>FULL POLICY</Text>
+            <Text style={styles.sectionTitle}>Tap a section to read</Text>
           </View>
 
           {SECTIONS.map(section => (
-            <PolicyBlock
+            <PolicySectionCard
               key={section.id}
               section={section}
-              expanded={!!openSections[section.id]}
-              onToggle={() => toggleSection(section.id)}
+              expanded={Boolean(openSections[section.id])}
+              onPress={() => toggleSection(section.id)}
             />
           ))}
 
           <Card style={styles.contactCard} padding={spacing.lg} strong>
-            <View style={styles.contactHeader}>
+            <View style={styles.contactRow}>
               <View style={styles.contactIcon}>
-                <Ionicons name="mail-outline" size={24} color={colors.textPrimary} />
-              </View>
-
-              <View style={{ flex: 1 }}>
-                <Text style={styles.contactTitle}>Need privacy help?</Text>
-                <Text style={styles.contactSub}>
-                  Send a data access, correction or deletion request.
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.emailPreview}>
-              <Ionicons name="at-outline" size={17} color={colors.accentBlue} />
-              <Text style={styles.emailPreviewText}>{SUPPORT_EMAIL}</Text>
-            </View>
-
-            <View style={styles.contactActions}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed && styles.buttonPressed,
-                ]}
-                onPress={openSupport}
-              >
                 <Ionicons
-                  name="help-circle-outline"
-                  size={18}
-                  color={colors.textPrimary}
+                  name="mail-outline"
+                  size={22}
+                  color={colors.accent}
                 />
-                <Text style={styles.secondaryText}>Help Center</Text>
-              </Pressable>
+              </View>
 
-              <Pressable
-                style={({ pressed }) => [
-                  styles.primaryButtonWrap,
-                  pressed && styles.buttonPressed,
-                ]}
-                onPress={openEmail}
-              >
-                <LinearGradient
-                  colors={CTA_GRADIENT}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.primaryButton}
-                >
-                  <Ionicons
-                    name="send-outline"
-                    size={18}
-                    color={colors.textPrimary}
-                  />
-                  <Text style={styles.primaryText}>Email Us</Text>
-                </LinearGradient>
-              </Pressable>
+              <View style={styles.contactContent}>
+                <Text style={styles.contactTitle}>Privacy questions?</Text>
+                <Text style={styles.contactText}>
+                  Contact us for access, correction, deletion or privacy support.
+                </Text>
+                <Text style={styles.contactEmail}>{SUPPORT_EMAIL}</Text>
+              </View>
             </View>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={openPrivacyEmail}
+              style={({ pressed }) => [
+                styles.contactButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons
+                name="send-outline"
+                size={17}
+                color={colors.textPrimary}
+              />
+              <Text style={styles.contactButtonText}>Email Privacy Team</Text>
+            </Pressable>
           </Card>
 
-          <Text style={styles.footerNote}>
-            This screen is written for FlexiWalls app transparency. Before
-            publishing, make sure this same policy is hosted on a public URL and
-            the same data practices are declared in the store privacy forms.
+          <Text style={styles.footerText}>
+            FlexiWalls · com.flexiwalls.app
           </Text>
         </ScrollView>
       </SafeAreaView>
@@ -925,75 +688,54 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-
   header: {
-    minHeight: 62,
-    justifyContent: 'center',
-    alignItems: 'center',
+    minHeight: 66,
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
-  },
-  headerLeft: {
-    position: 'absolute',
-    left: spacing.xl,
-    top: spacing.sm + 5,
+    paddingBottom: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   headerTextWrap: {
+    flex: 1,
     alignItems: 'center',
   },
   headerTitle: {
     color: colors.textPrimary,
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '900',
     letterSpacing: 0.2,
   },
   headerSubtitle: {
     marginTop: 4,
     color: colors.textSecondary,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
   },
-
+  headerSpacer: {
+    width: 44,
+  },
   scrollContent: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.lg,
     paddingBottom: 120,
   },
-
   heroBorder: {
-    borderRadius: 32,
+    borderRadius: 30,
     padding: 1.5,
     shadowColor: colors.accentStrong,
-    shadowOffset: { width: 0, height: 18 },
-    shadowOpacity: 0.4,
-    shadowRadius: 30,
-    elevation: 14,
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.32,
+    shadowRadius: 26,
+    elevation: 12,
   },
   heroCard: {
-    borderRadius: 30,
+    borderRadius: 28,
+    padding: spacing.xl,
     overflow: 'hidden',
-    padding: 22,
+    backgroundColor: 'rgba(17,14,28,0.96)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.18)',
-    backgroundColor: 'rgba(255,255,255,0.09)',
-  },
-  heroGlowOne: {
-    position: 'absolute',
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    right: -42,
-    top: -46,
-    backgroundColor: 'rgba(236,72,153,0.22)',
-  },
-  heroGlowTwo: {
-    position: 'absolute',
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    left: -56,
-    bottom: -50,
-    backgroundColor: 'rgba(59,130,246,0.18)',
+    borderColor: 'rgba(255,255,255,0.16)',
   },
   heroTopRow: {
     flexDirection: 'row',
@@ -1002,561 +744,136 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   heroIcon: {
-    width: 66,
-    height: 66,
-    borderRadius: 23,
+    width: 58,
+    height: 58,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  updatedPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    height: 34,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(139,92,246,0.28)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
   },
-  updatedText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  heroKicker: {
-    color: colors.accent,
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
-  heroTitle: {
-    marginTop: 8,
-    color: colors.textPrimary,
-    fontSize: 31,
-    lineHeight: 38,
-    fontWeight: '900',
-    letterSpacing: 0.2,
-  },
-  heroSubtitle: {
-    marginTop: spacing.md,
-    color: 'rgba(255,255,255,0.72)',
-    fontSize: 15,
-    lineHeight: 24,
-    fontWeight: '500',
-  },
-  heroStatsRow: {
-    marginTop: spacing.xl,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.22)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  heroStatBox: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  heroStatNumber: {
-    color: colors.textPrimary,
-    fontSize: 17,
-    fontWeight: '900',
-  },
-  heroStatLabel: {
-    marginTop: 4,
-    color: colors.textTertiary,
-    fontSize: 11.5,
-    fontWeight: '700',
-  },
-  heroStatDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 32,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-  },
-
-  trustStrip: {
-    paddingTop: spacing.lg,
-    gap: spacing.md,
-  },
-  trustPill: {
-    width: 220,
-    minHeight: 74,
-    borderRadius: 22,
+  datePill: {
+    height: 34,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    borderRadius: radius.pill,
     flexDirection: 'row',
-    gap: spacing.md,
+    alignItems: 'center',
+    gap: 7,
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.10)',
   },
-  trustIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.chipViolet,
-  },
-  trustTitle: {
-    color: colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  trustText: {
-    marginTop: 4,
-    width: 145,
+  dateText: {
     color: colors.textSecondary,
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 11.5,
+    fontWeight: '800',
+  },
+  heroTitle: {
+    color: colors.textPrimary,
+    fontSize: 29,
+    lineHeight: 36,
+    fontWeight: '900',
+    letterSpacing: 0.1,
+  },
+  heroText: {
+    marginTop: spacing.md,
+    color: colors.textSecondary,
+    fontSize: 14.5,
+    lineHeight: 23,
     fontWeight: '500',
   },
-
-  sectionIntroWrap: {
-    marginTop: spacing.xxl,
-    marginBottom: spacing.md,
-  },
-  sectionIntroWrapCompact: {
-    flex: 1,
+  sectionHeader: {
     marginTop: spacing.xxl,
     marginBottom: spacing.md,
   },
   sectionEyebrow: {
     color: colors.accent,
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '900',
     letterSpacing: 1.2,
-    textTransform: 'uppercase',
   },
-  sectionHeading: {
+  sectionTitle: {
     marginTop: 6,
     color: colors.textPrimary,
-    fontSize: 22,
+    fontSize: 21,
     fontWeight: '900',
     letterSpacing: 0.2,
   },
-
-  dataGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    rowGap: spacing.md,
-  },
-  flipCardPressable: {
-    width: '48%',
-  },
-  flipCardShell: {
-    width: '100%',
-    height: 178,
-    minHeight: 178,
-    maxHeight: 178,
-    position: 'relative',
-  },
-  flipFace: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    width: '100%',
-    height: 178,
-    backfaceVisibility: 'hidden',
-  },
-  flipGlassFace: {
-    width: '100%',
-    height: 178,
-    minHeight: 178,
-    maxHeight: 178,
-    borderRadius: 24,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.14)',
-    backgroundColor: 'rgba(255,255,255,0.09)',
-  },
-  flipGlassBackFace: {
-    borderColor: 'rgba(139,92,246,0.38)',
-    backgroundColor: 'rgba(139,92,246,0.10)',
-  },
-  flipGlassContent: {
-    flex: 1,
-    height: 178,
-    padding: spacing.md,
-  },
-  dataFrontTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  dataFrontMiddle: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingTop: spacing.sm,
-  },
-  dataFrontSubject: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: '900',
-  },
-  dataFrontSubText: {
-    marginTop: 10,
-    color: colors.textTertiary,
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: '700',
-  },
-  flipHintPill: {
-    width: 30,
-    height: 30,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(139,92,246,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  dataIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.chipBlue,
-  },
-  dataBackTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  dataBackIconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.chipViolet,
-  },
-  dataBackTitle: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: '900',
-  },
-  dataText: {
-    marginTop: 5,
-    color: colors.textSecondary,
-    fontSize: 12.2,
-    lineHeight: 18,
-    fontWeight: '500',
-  },
-  dataBackHint: {
-    marginTop: 'auto',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  dataBackHintText: {
-    color: colors.textTertiary,
-    fontSize: 11.5,
-    fontWeight: '700',
-  },
-
-  journeyCard: {
-    marginTop: spacing.xxl,
-  },
-  summaryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  quickFactsGrid: {
     gap: spacing.md,
   },
-  summaryIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.chipPink,
-  },
-  summaryTitle: {
-    color: colors.textPrimary,
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  summarySub: {
-    marginTop: 5,
-    color: colors.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: '500',
-  },
-  journeyList: {
-    marginTop: spacing.xl,
-  },
-  journeyItem: {
+  quickFactCard: {
+    minHeight: 86,
+    padding: spacing.md,
+    borderRadius: 22,
     flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    backgroundColor: 'rgba(255,255,255,0.075)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
   },
-  journeyRail: {
-    width: 42,
-    alignItems: 'center',
-  },
-  journeyBadge: {
-    width: 38,
-    height: 38,
+  quickFactIcon: {
+    width: 40,
+    height: 40,
     borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(139,92,246,0.20)',
   },
-  journeyLine: {
+  quickFactContent: {
     flex: 1,
-    width: 1,
-    minHeight: 44,
-    backgroundColor: 'rgba(255,255,255,0.14)',
   },
-  journeyContent: {
-    flex: 1,
-    paddingLeft: spacing.md,
-    paddingBottom: spacing.lg,
-  },
-  journeyLabel: {
-    color: colors.accent,
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
-  journeyTitle: {
-    marginTop: 4,
+  quickFactTitle: {
     color: colors.textPrimary,
-    fontSize: 15,
+    fontSize: 14.5,
+    lineHeight: 20,
     fontWeight: '900',
   },
-  journeyText: {
+  quickFactText: {
     marginTop: 5,
+    color: colors.textSecondary,
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  controlsCard: {
+    marginTop: spacing.xxl,
+  },
+  controlsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  controlsIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(236,72,153,0.20)',
+  },
+  controlsHeaderText: {
+    flex: 1,
+  },
+  controlsTitle: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  controlsText: {
+    marginTop: 4,
     color: colors.textSecondary,
     fontSize: 13,
     lineHeight: 19,
     fontWeight: '500',
   },
-
-  storeCard: {
-    marginTop: spacing.xl,
-    borderColor: 'rgba(139,92,246,0.34)',
-  },
-  storeCardTop: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  storeIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.chipViolet,
-  },
-  storeTitle: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  storeText: {
-    marginTop: 6,
-    color: colors.textSecondary,
-    fontSize: 13.2,
-    lineHeight: 20,
-    fontWeight: '500',
-  },
-
-  fullPolicyHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: spacing.md,
-  },
-  expandAllButton: {
-    marginBottom: spacing.md,
-    height: 38,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    backgroundColor: 'rgba(255,255,255,0.09)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  expandAllText: {
-    color: colors.textPrimary,
-    fontSize: 12.5,
-    fontWeight: '900',
-  },
-
-  policyCard: {
-    marginTop: spacing.lg,
-  },
-  policyHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-  },
-  policyIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(139,92,246,0.28)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-  },
-  policyTitleWrap: {
-    flex: 1,
-  },
-  policyTitle: {
-    color: colors.textPrimary,
-    fontSize: 17,
-    fontWeight: '900',
-    lineHeight: 23,
-  },
-  policyIntro: {
-    marginTop: 6,
-    color: colors.textSecondary,
-    fontSize: 13.5,
-    lineHeight: 20,
-    fontWeight: '500',
-  },
-  expandIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  bulletWrap: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
-  },
-  bulletRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginTop: spacing.sm,
-    paddingRight: spacing.xs,
-  },
-  bulletDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.accent,
-    marginTop: 8,
-    marginRight: spacing.md,
-  },
-  bulletText: {
-    flex: 1,
-    color: colors.textSecondary,
-    fontSize: 14,
-    lineHeight: 22,
-    fontWeight: '500',
-  },
-  bulletBold: {
-    color: colors.textPrimary,
-    fontWeight: '900',
-  },
-  collapsedHint: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  collapsedText: {
-    color: colors.textTertiary,
-    fontSize: 12.5,
-    fontWeight: '700',
-  },
-
-  contactCard: {
-    marginTop: spacing.xxl,
-  },
-  contactHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  contactIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.chipViolet,
-  },
-  contactTitle: {
-    color: colors.textPrimary,
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  contactSub: {
-    marginTop: 4,
-    color: colors.textSecondary,
-    fontSize: 13.5,
-    lineHeight: 20,
-    fontWeight: '500',
-  },
-  emailPreview: {
-    marginTop: spacing.lg,
-    minHeight: 42,
-    borderRadius: 16,
-    paddingHorizontal: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
-  },
-  emailPreviewText: {
-    flex: 1,
-    color: colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  contactActions: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.lg,
-  },
-  secondaryButton: {
-    flex: 1,
-    height: 50,
-    borderRadius: radius.pill,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-  },
   primaryButtonWrap: {
-    flex: 1,
     height: 50,
+    marginTop: spacing.lg,
     borderRadius: radius.pill,
     overflow: 'hidden',
-    shadowColor: colors.accentStrong,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 18,
-    elevation: 10,
   },
   primaryButton: {
     flex: 1,
@@ -1565,31 +882,173 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.sm,
   },
-  secondaryText: {
+  primaryButtonText: {
     color: colors.textPrimary,
     fontSize: 14,
     fontWeight: '900',
   },
-  primaryText: {
+  secondaryActions: {
+    marginTop: spacing.md,
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  secondaryButton: {
+    flex: 1,
+    minHeight: 46,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.pill,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    backgroundColor: 'rgba(255,255,255,0.075)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  secondaryButtonText: {
     color: colors.textPrimary,
-    fontSize: 14,
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  policyCard: {
+    marginTop: spacing.md,
+  },
+  policyPressable: {
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+  },
+  policyHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  policyIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(139,92,246,0.24)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.09)',
+  },
+  policyHeaderText: {
+    flex: 1,
+  },
+  policyTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    lineHeight: 22,
     fontWeight: '900',
   },
-  buttonPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.92,
+  policySummary: {
+    marginTop: 5,
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '500',
   },
-  cardPressed: {
-    transform: [{ scale: 0.99 }],
-    opacity: 0.95,
+  chevronWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
   },
-
-  footerNote: {
+  policyBody: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.divider,
+  },
+  policyItem: {
+    marginTop: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  policyDot: {
+    width: 6,
+    height: 6,
+    marginTop: 8,
+    marginRight: spacing.md,
+    borderRadius: 3,
+    backgroundColor: colors.accent,
+  },
+  policyText: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: 13.7,
+    lineHeight: 22,
+    fontWeight: '500',
+  },
+  policyLabel: {
+    color: colors.textPrimary,
+    fontWeight: '900',
+  },
+  contactCard: {
+    marginTop: spacing.xxl,
+  },
+  contactRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  contactIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(59,130,246,0.16)',
+  },
+  contactContent: {
+    flex: 1,
+  },
+  contactTitle: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  contactText: {
+    marginTop: 5,
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '500',
+  },
+  contactEmail: {
+    marginTop: spacing.sm,
+    color: colors.accent,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  contactButton: {
+    height: 48,
+    marginTop: spacing.lg,
+    borderRadius: radius.pill,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.11)',
+  },
+  contactButtonText: {
+    color: colors.textPrimary,
+    fontSize: 13.5,
+    fontWeight: '900',
+  },
+  footerText: {
     marginTop: spacing.xl,
     color: colors.textTertiary,
-    fontSize: 12.5,
-    lineHeight: 20,
+    fontSize: 12,
     textAlign: 'center',
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  pressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.985 }],
   },
 });
