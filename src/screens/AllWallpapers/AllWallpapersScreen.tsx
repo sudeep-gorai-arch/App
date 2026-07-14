@@ -15,6 +15,8 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import BannerAdView from '../../ads/BannerAdView';
+import { AdIds } from '../../ads/AdIds';
 
 import MeshBackground from '../../components/MeshBackground';
 import { colors } from '../../styles/colors';
@@ -36,7 +38,9 @@ const API_ORIGIN = String(API.defaults.baseURL || '').replace(/\/api\/?$/, '');
 const VIDEO_EXTENSION_PATTERN = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
 
 const isBlankishValue = (value: unknown) => {
-  const text = String(value ?? '').trim().toLowerCase();
+  const text = String(value ?? '')
+    .trim()
+    .toLowerCase();
 
   return (
     !text ||
@@ -171,16 +175,16 @@ const QualityChip = ({ item }: { item: Wallpaper }) => {
     return (
       <BlurView
         intensity={28}
-        tint='dark'
+        tint="dark"
         style={[styles.qualityChip, styles.videoQualityChip]}
       >
-        <Ionicons name='videocam' size={14} color={colors.textPrimary} />
+        <Ionicons name="videocam" size={14} color={colors.textPrimary} />
       </BlurView>
     );
   }
 
   return (
-    <BlurView intensity={28} tint='dark' style={styles.qualityChip}>
+    <BlurView intensity={28} tint="dark" style={styles.qualityChip}>
       <Text style={styles.qualityText}>{item.quality || '4K'}</Text>
     </BlurView>
   );
@@ -412,6 +416,15 @@ const AllWallpapersScreen = ({ navigation }: Props) => {
                 ) : reachedEnd && items.length > 0 ? (
                   <Text style={styles.endText}>You reached the end.</Text>
                 ) : null}
+
+                <View
+                  style={{
+                    marginTop: 20,
+                    alignItems: 'center',
+                  }}
+                >
+                  <BannerAdView unitId={AdIds.banner.categories} />
+                </View>
               </View>
             }
           />

@@ -2,6 +2,13 @@
   "expo": {
     "plugins": [
       [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-3635933757449986~7677902351",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+        }
+      ],
+      [
         "expo-media-library",
         {
           "photosPermission": "Allow FlexiWalls to access your photos.",
