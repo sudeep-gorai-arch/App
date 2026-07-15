@@ -2027,6 +2027,12 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
 
                   openImageApplySheet();
                 }}
+                style={({ pressed }) => [
+                  styles.applyButtonWrap,
+                  {
+                    transform: [{ scale: pressed ? 0.98 : 1 }],
+                  },
+                ]}
               >
                 <LinearGradient
                   colors={APPLY_GRADIENT}
