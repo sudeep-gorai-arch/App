@@ -349,7 +349,11 @@ const AllWallpapersScreen = ({ navigation }: Props) => {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <View style={styles.header}>
           <Pressable
-            onPress={() => navigation.goBack()}
+            onPress={() =>
+              AdController.navigateWithAd(() => {
+                navigation.goBack();
+              })
+            }
             hitSlop={8}
             style={({ pressed }) => [
               styles.backButton,

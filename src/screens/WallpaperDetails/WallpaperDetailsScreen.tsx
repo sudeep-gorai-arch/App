@@ -53,6 +53,7 @@ import type { WallpaperApplyTarget } from '../../services/applyWallpaperService'
 
 import { appEvents } from '../../utils/appEvents';
 import { useToast } from '../../components/ui/toast/useToast';
+import AdController from '../../ads/AdController';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'WallpaperDetails'>;
 
@@ -93,15 +94,15 @@ const isDownloadSuccessful = (result: DownloadSaveResult) => {
 
   return Boolean(
     result.success ||
-      result.ok ||
-      result.uri ||
-      result.localUri ||
-      result.fileUri ||
-      result.savedUri ||
-      result.assetId ||
-      result.mediaAssetId ||
-      result.asset?.id ||
-      result.asset?.uri,
+    result.ok ||
+    result.uri ||
+    result.localUri ||
+    result.fileUri ||
+    result.savedUri ||
+    result.assetId ||
+    result.mediaAssetId ||
+    result.asset?.id ||
+    result.asset?.uri,
   );
 };
 
