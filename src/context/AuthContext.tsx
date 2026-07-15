@@ -18,6 +18,7 @@ import API from '../services/api';
 import { googleLogin, logoutUser, getProfile } from '../services/authService';
 
 import type { User, Role } from '../services/types';
+import AdController from '../ads/AdController';
 
 type AuthContextType = {
   user: User | null;
@@ -65,6 +66,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const savedUser = await SecureStore.getItemAsync('user');
 
       if (!savedToken || !savedUser) {
+        // Guest User -> Ads Enabled
+        AdController.setPremiumUser(false);
+
         setLoading(false);
         return;
       }
@@ -103,6 +107,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     API.defaults.headers.common.Authorization = `Bearer ${jwt}`;
 
     setToken(jwt);
+
+    AdController.setPremiumUser(profile.isPremium);
 
     await refreshProfile();
   };
@@ -199,6 +205,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setToken(null);
 
     setUser(null);
+
+    // Guest again -> Ads Enabled
+    AdController.setPremiumUser(false);
   };
 
   const refreshProfile = async () => {
@@ -208,6 +217,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const response = await getProfile();
 
       setUser(response.data);
+
+      // Enable/Disable ads based on subscription
+      AdController.setPremiumUser(response.data.isPremium);
 
       await SecureStore.setItemAsync('user', JSON.stringify(response.data));
     } finally {

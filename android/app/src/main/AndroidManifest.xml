@@ -31,6 +31,11 @@
     android:dataExtractionRules="@xml/secure_store_data_extraction_rules"
     android:requestLegacyExternalStorage="true">
 
+    <meta-data
+      android:name="com.google.android.gms.ads.APPLICATION_ID"
+      android:value="ca-app-pub-3635933757449986~7677902351"
+      tools:replace="android:value" />
+
     <meta-data android:name="expo.modules.updates.ENABLED" android:value="false" />
     <meta-data android:name="expo.modules.updates.ENABLE_BSDIFF_PATCH_SUPPORT" android:value="true" />
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS" />

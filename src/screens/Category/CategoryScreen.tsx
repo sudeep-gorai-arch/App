@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+} from 'react';
 import {
   StyleSheet,
   View,
@@ -29,6 +35,10 @@ import { colors } from '../../styles/colors';
 import { fontFamily } from '../../styles/typography';
 
 import { spacing, radius, SCREEN } from '../../utils/constants';
+
+import { AdIds } from '../../ads/AdIds';
+import * as SecureStore from 'expo-secure-store';
+import { getProfile } from '../../services/authService';
 
 const flexiWallsLogo = require('../../assets/images/flexiwalls-logo.png');
 
@@ -312,6 +322,7 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
     premium: false,
   });
 
+  const [showAds, setShowAds] = useState(false);
   const cardEntranceAnim = useRef(new Animated.Value(0)).current;
   const requestIdsRef = useRef<Record<CategoryDataSet, number>>({
     standard: 0,
@@ -332,10 +343,30 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
     }));
   };
 
-  const loadData = async (
-    dataSet: CategoryDataSet,
-    isRefresh = false,
-  ) => {
+  const checkAdsVisibility = useCallback(async () => {
+    try {
+      const token = await SecureStore.getItemAsync('token');
+
+      // Guest users -> show ads
+      if (!token) {
+        setShowAds(true);
+        return;
+      }
+
+      const response = await getProfile();
+
+      // Free user -> show ads
+      // Premium user -> hide ads
+      setShowAds(!response.data.isPremium);
+    } catch (error) {
+      console.log('Ad visibility error', error);
+
+      // In case of error, show ads
+      setShowAds(true);
+    }
+  }, []);
+
+  const loadData = async (dataSet: CategoryDataSet, isRefresh = false) => {
     const requestId = requestIdsRef.current[dataSet] + 1;
     requestIdsRef.current[dataSet] = requestId;
 
@@ -393,6 +424,7 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
 
   useEffect(() => {
     void loadData('standard');
+    checkAdsVisibility();
   }, []);
 
   const activeDataSet: CategoryDataSet =
@@ -580,6 +612,7 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
               </View>
 
               <CategoryTabs activeTab={activeTab} onChange={handleTabChange} />
+           
             </View>
           }
           ListEmptyComponent={
@@ -853,5 +886,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontFamily: fontFamily.semiBold,
     fontSize: 14,
+  },
+  bannerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
   },
 });

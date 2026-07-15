@@ -47,19 +47,29 @@ export default function App() {
   });
 
   useEffect(() => {
+    if (!fontsLoaded) {
+      return;
+    }
+
     const initializeApp = async () => {
-      if (!fontsLoaded) return;
+      try {
+        applyGlobalFont();
 
-      applyGlobalFont();
+        // Initialize AdMob
+        try {
+          await initializeAds();
+        } catch (e) {
+          console.log(e);
+        }
 
-      // Initialize Google Mobile Ads
-      await initializeAds();
-
-      // Preload ads
-      InterstitialManager.load();
-      RewardedManager.load();
-
-      SplashScreen.hideAsync().catch(() => {});
+        // Preload Ads
+        InterstitialManager.load();
+        RewardedManager.load();
+      } catch (error) {
+        console.log('App initialization error:', error);
+      } finally {
+        SplashScreen.hideAsync().catch(() => {});
+      }
     };
 
     initializeApp();

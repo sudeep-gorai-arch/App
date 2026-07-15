@@ -15,8 +15,6 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import BannerAdView from '../../ads/BannerAdView';
-import { AdIds } from '../../ads/AdIds';
 
 import MeshBackground from '../../components/MeshBackground';
 import { colors } from '../../styles/colors';
@@ -25,6 +23,7 @@ import { RootStackParamList } from '../../navigation/RootStackParamList';
 import API from '../../services/api';
 import { getWallpapers } from '../../services/wallpaperService';
 import { Wallpaper } from '../../services/types';
+import AdController from '../../ads/AdController';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AllWallpapers'>;
 
@@ -270,7 +269,6 @@ const WallpaperTile = ({
 
 const AllWallpapersScreen = ({ navigation }: Props) => {
   const loadingMoreRef = useRef(false);
-
   const [items, setItems] = useState<Wallpaper[]>([]);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -323,7 +321,6 @@ const AllWallpapersScreen = ({ navigation }: Props) => {
 
   useEffect(() => {
     loadPage(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onEndReached = () => {
@@ -336,7 +333,11 @@ const AllWallpapersScreen = ({ navigation }: Props) => {
     <WallpaperTile
       item={item}
       onPress={() =>
-        navigation.navigate('WallpaperDetails', { wallpaper: item })
+        AdController.navigateWithAd(() => {
+          navigation.navigate('WallpaperDetails', {
+            wallpaper: item,
+          });
+        })
       }
     />
   );
@@ -416,15 +417,6 @@ const AllWallpapersScreen = ({ navigation }: Props) => {
                 ) : reachedEnd && items.length > 0 ? (
                   <Text style={styles.endText}>You reached the end.</Text>
                 ) : null}
-
-                <View
-                  style={{
-                    marginTop: 20,
-                    alignItems: 'center',
-                  }}
-                >
-                  <BannerAdView unitId={AdIds.banner.categories} />
-                </View>
               </View>
             }
           />
@@ -619,5 +611,11 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 13,
     fontWeight: '700',
+  },
+  bannerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
   },
 });
