@@ -969,18 +969,16 @@ const HomeScreen = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    hasLoadedOnce.current = true;
+    loadHome();
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       setEntranceAnimationKey(current => current + 1);
-
-      if (hasLoadedOnce.current) {
-        loadHome(true);
-        return;
-      }
-
-      hasLoadedOnce.current = true;
-      loadHome();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []),
   );
 
