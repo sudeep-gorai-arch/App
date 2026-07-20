@@ -110,12 +110,6 @@ const getCountValue = (item: Category) => {
   );
 };
 
-const getPremiumCountValue = (item: Category) => {
-  const category = item as Category & Record<string, any>;
-
-  return toNumber(category.premiumCount);
-};
-
 const getCreatedTime = (item: Category) => {
   const value = (item as Category & Record<string, any>).createdAt;
 
@@ -230,11 +224,9 @@ const CategoryTabs = ({
 const CategoryCard = ({
   item,
   onPress,
-  isPremium,
 }: {
   item: Category;
   onPress: () => void;
-  isPremium: boolean;
 }) => {
   const [imageFailed, setImageFailed] = useState(false);
 
@@ -267,11 +259,6 @@ const CategoryCard = ({
               {item.name}
             </Text>
 
-            <Text style={styles.cardCount}>
-              {`${
-                isPremium ? getPremiumCountValue(item) : getCountValue(item)
-              } Wallpapers`}
-            </Text>
           </View>
         </ImageBackground>
       ) : (
@@ -296,11 +283,6 @@ const CategoryCard = ({
               {item.name}
             </Text>
 
-            <Text style={styles.cardCount}>
-              {`${
-                isPremium ? getPremiumCountValue(item) : getCountValue(item)
-              } Wallpapers`}
-            </Text>
           </View>
         </View>
       )}
@@ -562,7 +544,6 @@ const CategoryScreen = ({ navigation }: { navigation: Nav }) => {
         <CategoryCard
           item={item}
           onPress={() => openCategory(item)}
-          isPremium={activeTab === 'Premium'}
         />
       </Animated.View>
     );
@@ -848,14 +829,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     letterSpacing: -0.2,
   },
-
-  cardCount: {
-    color: colors.textSecondary,
-    fontFamily: fontFamily.semiBold,
-    fontSize: 11,
-    marginTop: 1,
-  },
-
   cardsLoadingBox: {
     marginHorizontal: spacing.xl,
     height: 150,
