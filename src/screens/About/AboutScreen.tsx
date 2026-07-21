@@ -40,6 +40,17 @@ type Action = {
   onPress: () => void;
 };
 
+type Developer = {
+  id: string;
+  name: string;
+  role: string;
+  description: string;
+  initials: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  gradient: [string, string];
+  instagramUrl: string;
+};
+
 const appIcon = require('../../assets/images/app-icon.png');
 
 const ABOUT_DATA = {
@@ -83,6 +94,31 @@ const STATS = [
   { id: 'access', value: 'Free', label: 'Guest Access' },
 ];
 
+const DEVELOPERS: Developer[] = [
+  {
+    id: 'sudeep',
+    name: 'Sudeep Gorai',
+    role: 'UI/UX Design',
+    description:
+      'Designed the visual language, product experience and polished interface of FlexiWalls.',
+    initials: 'SG',
+    icon: 'color-palette-outline',
+    gradient: ['#8B5CF6', '#D946EF'],
+    instagramUrl: 'https://www.instagram.com/sudeep_gorain_?igsh=eXoydW00cWlndDR5',
+  },
+  {
+    id: 'shubham',
+    name: 'Shubham Dey',
+    role: 'Backend, API Integration & DB Management',
+    description:
+      'Built and managed the backend services, API integrations and database systems powering the app.',
+    initials: 'SD',
+    icon: 'server-outline',
+    gradient: ['#4F46E5', '#06B6D4'],
+    instagramUrl: 'https://www.instagram.com/mr_shubham0623?igsh=MWg2YTBkb3h2dmE3dA==',
+  },
+];
+
 const FeatureCard = ({ item }: { item: Feature }) => (
   <Card style={styles.featureCard} padding={spacing.md} borderRadius={radius.lg} strong>
     <View style={styles.featureIcon}>
@@ -94,8 +130,16 @@ const FeatureCard = ({ item }: { item: Feature }) => (
   </Card>
 );
 
-const StatCard = ({ value, label }: { value: string; label: string }) => (
-  <View style={styles.statCard}>
+const StatCard = ({
+  value,
+  label,
+  last,
+}: {
+  value: string;
+  label: string;
+  last: boolean;
+}) => (
+  <View style={[styles.statCard, !last && styles.statCardSpacing]}>
     <Text style={styles.statValue}>{value}</Text>
     <Text style={styles.statLabel}>{label}</Text>
   </View>
@@ -106,6 +150,74 @@ const SectionHeader = ({ title, subtitle }: { title: string; subtitle?: string }
     <Text style={styles.sectionTitle}>{title}</Text>
     {!!subtitle && <Text style={styles.sectionSubtitle}>{subtitle}</Text>}
   </View>
+);
+
+const DeveloperCard = ({
+  item,
+  onInstagramPress,
+}: {
+  item: Developer;
+  onInstagramPress: (url: string) => void;
+}) => (
+  <Card style={styles.developerCard} padding={0} borderRadius={radius.xl} strong>
+    <LinearGradient
+      colors={item.gradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.developerAccent}
+    />
+
+    <View style={styles.developerContent}>
+      <View style={styles.developerTopRow}>
+        <LinearGradient
+          colors={item.gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.developerAvatar}
+        >
+          <Text style={styles.developerInitials}>{item.initials}</Text>
+        </LinearGradient>
+
+        <View style={styles.developerIdentity}>
+          <Text style={styles.developerName}>{item.name}</Text>
+
+          <View style={styles.roleRow}>
+            <Ionicons name={item.icon} size={15} color={colors.accent} />
+            <Text style={styles.developerRole}>{item.role}</Text>
+          </View>
+        </View>
+      </View>
+
+      <Text style={styles.developerDescription}>{item.description}</Text>
+
+      <Pressable
+        onPress={() => onInstagramPress(item.instagramUrl)}
+        android_ripple={{ color: 'rgba(255,255,255,0.08)' }}
+        style={({ pressed }) => [
+          styles.instagramButton,
+          { opacity: pressed ? 0.82 : 1 },
+        ]}
+      >
+        <LinearGradient
+          colors={['rgba(225,48,108,0.16)', 'rgba(131,58,180,0.16)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.instagramGradient}
+        >
+          <View style={styles.instagramIconWrap}>
+            <Ionicons name="logo-instagram" size={21} color="#F472B6" />
+          </View>
+
+          <View style={styles.instagramCopy}>
+            <Text style={styles.instagramTitle}>Instagram account</Text>
+            <Text style={styles.instagramSubtitle}>View profile on Instagram</Text>
+          </View>
+
+          <Ionicons name="open-outline" size={19} color={colors.textSecondary} />
+        </LinearGradient>
+      </Pressable>
+    </View>
+  </Card>
 );
 
 const ActionRow = ({ item, last }: { item: Action; last: boolean }) => (
@@ -161,6 +273,14 @@ const AboutScreen = ({ navigation }: { navigation: Nav }) => {
     }
   };
 
+  const openInstagram = async (url: string) => {
+    try {
+      await Linking.openURL(url);
+    } catch (error) {
+      console.log('Unable to open Instagram:', error);
+    }
+  };
+
   const actions: Action[] = [
     {
       id: 'share',
@@ -193,22 +313,33 @@ const AboutScreen = ({ navigation }: { navigation: Nav }) => {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          <View style={styles.brandSection}>
-            <View style={styles.brandLeft}>
+          <Card style={styles.brandCard} padding={spacing.lg} borderRadius={radius.xl} strong>
+            <View style={styles.brandSection}>
               <View style={styles.logoRing}>
                 <Image source={appIcon} style={styles.appIcon} resizeMode="cover" />
               </View>
-            </View>
 
-            <View style={styles.brandRight}>
-              <Text style={styles.appName}>{ABOUT_DATA.appName}</Text>
-              <Text style={styles.tagline}>{ABOUT_DATA.tagline}</Text>
+              <View style={styles.brandRight}>
+                <View style={styles.brandTitleRow}>
+                  <Text style={styles.appName}>{ABOUT_DATA.appName}</Text>
+                  <View style={styles.versionBadge}>
+                    <Text style={styles.versionBadgeText}>v{ABOUT_DATA.version}</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.tagline}>{ABOUT_DATA.tagline}</Text>
+              </View>
             </View>
-          </View>
+          </Card>
 
           <View style={styles.statsRow}>
-            {STATS.map((item) => (
-              <StatCard key={item.id} value={item.value} label={item.label} />
+            {STATS.map((item, index) => (
+              <StatCard
+                key={item.id}
+                value={item.value}
+                label={item.label}
+                last={index === STATS.length - 1}
+              />
             ))}
           </View>
 
@@ -241,6 +372,21 @@ const AboutScreen = ({ navigation }: { navigation: Nav }) => {
               trending picks and premium collections.
             </Text>
           </Card>
+
+          <SectionHeader
+            title="Know the developers"
+            subtitle="The people shaping the experience and technology behind FlexiWalls."
+          />
+
+          <View style={styles.developerList}>
+            {DEVELOPERS.map((item) => (
+              <DeveloperCard
+                key={item.id}
+                item={item}
+                onInstagramPress={openInstagram}
+              />
+            ))}
+          </View>
 
           <SectionHeader title="More" />
 
@@ -305,22 +451,21 @@ const styles = StyleSheet.create({
     paddingBottom: 130,
   },
 
-  brandSection: {
+  brandCard: {
     marginHorizontal: spacing.xl,
     marginTop: spacing.lg,
-    marginBottom: spacing.sm,
+    overflow: 'hidden',
+  },
+
+  brandSection: {
     flexDirection: 'row',
     alignItems: 'center',
   },
 
-  brandLeft: {
-    alignItems: 'center',
-  },
-
   logoRing: {
-    width: 86,
-    height: 86,
-    borderRadius: 27,
+    width: 82,
+    height: 82,
+    borderRadius: 26,
     padding: 3,
     backgroundColor: 'rgba(255,255,255,0.12)',
     borderWidth: 1,
@@ -335,7 +480,7 @@ const styles = StyleSheet.create({
   appIcon: {
     width: '100%',
     height: '100%',
-    borderRadius: 24,
+    borderRadius: 23,
   },
 
   brandRight: {
@@ -343,17 +488,40 @@ const styles = StyleSheet.create({
     marginLeft: spacing.lg,
   },
 
+  brandTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+
   appName: {
     color: colors.textPrimary,
-    fontSize: 34,
+    fontSize: 30,
     fontWeight: '900',
     letterSpacing: -0.6,
   },
 
+  versionBadge: {
+    marginLeft: spacing.sm,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(167,139,250,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(167,139,250,0.22)',
+  },
+
+  versionBadgeText: {
+    color: colors.accent,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+
   tagline: {
     color: colors.textSecondary,
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 21,
     marginTop: spacing.xs,
     maxWidth: 250,
   },
@@ -361,30 +529,33 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     marginHorizontal: spacing.xl,
-    marginTop: spacing.xl,
+    marginTop: spacing.md,
   },
 
   statCard: {
     flex: 1,
-    minHeight: 86,
+    minHeight: 78,
     borderRadius: radius.lg,
     backgroundColor: colors.glassFill,
     borderWidth: 1,
     borderColor: colors.glassBorderSoft,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  statCardSpacing: {
     marginRight: spacing.sm,
   },
 
   statValue: {
     color: colors.textPrimary,
-    fontSize: 22,
+    fontSize: 21,
     fontWeight: '900',
   },
 
   statLabel: {
     color: colors.textSecondary,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     marginTop: 4,
     textAlign: 'center',
@@ -488,6 +659,128 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 23,
     marginTop: spacing.lg,
+  },
+
+  developerList: {
+    paddingHorizontal: spacing.xl,
+  },
+
+  developerCard: {
+    marginBottom: spacing.md,
+    overflow: 'hidden',
+  },
+
+  developerAccent: {
+    height: 3,
+    width: '100%',
+  },
+
+  developerContent: {
+    padding: spacing.lg,
+  },
+
+  developerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  developerAvatar: {
+    width: 58,
+    height: 58,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+
+  developerInitials: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+  },
+
+  developerIdentity: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+
+  developerName: {
+    color: colors.textPrimary,
+    fontSize: 19,
+    fontWeight: '900',
+    letterSpacing: -0.2,
+  },
+
+  roleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+
+  developerRole: {
+    flex: 1,
+    color: colors.accent,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '700',
+    marginLeft: 6,
+  },
+
+  developerDescription: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 21,
+    marginTop: spacing.lg,
+  },
+
+  instagramButton: {
+    marginTop: spacing.lg,
+    borderRadius: 17,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(244,114,182,0.18)',
+  },
+
+  instagramGradient: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+  },
+
+  instagramIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.09)',
+  },
+
+  instagramCopy: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+
+  instagramTitle: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  instagramSubtitle: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    marginTop: 3,
   },
 
   actionCard: {
