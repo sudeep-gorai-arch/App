@@ -337,17 +337,6 @@ const getCategorySlug = (category: any) => {
   return String(category?.slug || category?.categorySlug || category?.category_slug || '');
 };
 
-const getCategoryCount = (category: any, fallback: number) => {
-  return Math.max(
-    toNumber(category?.wallpaperCount),
-    toNumber(category?.count),
-    toNumber(category?.wallpapersCount),
-    toNumber(category?.totalWallpapers),
-    toNumber(category?.total_wallpapers),
-    toNumber(category?._count?.wallpapers),
-    fallback,
-  );
-};
 
 const VideoBadge = ({ item }: { item: Wallpaper }) => {
   if (!isVideoWallpaper(item as Wallpaper & Record<string, any>)) return null;
@@ -521,9 +510,6 @@ const CategoryDetailScreen = ({ navigation, route }: Props) => {
               {categoryName}
             </Text>
 
-            <Text style={styles.headerSub}>
-              {getCategoryCount(category, visibleItems.length)} wallpapers
-            </Text>
           </View>
 
           <View style={{ width: 44 }} />
@@ -614,12 +600,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
   },
 
-  headerSub: {
-    color: colors.textSecondary,
-    fontFamily: fontFamily.semiBold,
-    fontSize: 13,
-    marginTop: 2,
-  },
 
   listContent: {
     paddingTop: spacing.lg,
