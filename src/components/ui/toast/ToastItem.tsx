@@ -155,7 +155,7 @@ export default function ToastItem({ toast, onClose }: Props) {
     >
       <View style={styles.border}>
         <BlurView
-          intensity={56}
+          intensity={38}
           tint="dark"
           experimentalBlurMethod={
             Platform.OS === 'android' ? 'dimezisBlurView' : undefined
@@ -164,9 +164,9 @@ export default function ToastItem({ toast, onClose }: Props) {
         >
           <LinearGradient
             colors={[
-              'rgba(255,255,255,0.15)',
-              'rgba(255,255,255,0.045)',
-              'rgba(7,7,10,0.93)',
+              'rgba(255,255,255,0.08)',
+              'rgba(255,255,255,0.025)',
+              'rgba(0,0,0,0.18)',
             ]}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingTop: 28,
     paddingBottom: 24,
-    backgroundColor: 'rgba(7,7,10,0.86)',
+    backgroundColor: 'rgba(8,8,10,0.78)',
   },
 
   closeButton: {

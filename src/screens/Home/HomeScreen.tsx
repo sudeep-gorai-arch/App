@@ -40,6 +40,7 @@ import {
 import { Wallpaper } from '../../services/types';
 import { appEvents } from '../../utils/appEvents';
 import AdController from '../../ads/AdController';
+import { usePremiumWallpaperGuard } from '../../utils/premiumWallpaperAccess';
 
 const flexiWallsLogo = require('../../assets/images/flexiwalls-logo.png');
 
@@ -816,6 +817,7 @@ const AllWallpapersPreview = ({
 
 const HomeScreen = () => {
   const navigation = useNavigation<any>();
+  const canOpenWallpaper = usePremiumWallpaperGuard('Home');
   const heroScrollX = useRef(new Animated.Value(0)).current;
   const hasLoadedOnce = useRef(false);
 
@@ -988,6 +990,8 @@ const HomeScreen = () => {
   };
 
   const openWallpaper = async (wallpaper: Wallpaper) => {
+    if (!canOpenWallpaper(wallpaper)) return;
+
     await AdController.onWallpaperOpen();
 
     navigation.navigate('WallpaperDetails', {

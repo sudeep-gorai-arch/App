@@ -33,6 +33,7 @@ import {
   validateDownloadedWallpaper,
 } from "../../services/downloadCoordinator";
 import { deleteDeviceDownloads as deleteRegisteredDeviceDownloads } from "../../services/deviceMediaService";
+import { usePremiumWallpaperGuard } from "../../utils/premiumWallpaperAccess";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Downloads">;
 
@@ -679,6 +680,7 @@ const DeleteBottomOverlay = ({
 
 export default function DownloadsScreen({ navigation }: Props) {
   const toast = useToast();
+  const canOpenWallpaper = usePremiumWallpaperGuard('Profile');
 
   const [downloads, setDownloads] = useState<DownloadWallpaper[]>([]);
   const [activeFilter, setActiveFilter] = useState<Filter>("All");
@@ -809,6 +811,8 @@ export default function DownloadsScreen({ navigation }: Props) {
 
   const openWallpaper = useCallback(
     async (wallpaper: DownloadWallpaper) => {
+      if (!canOpenWallpaper(wallpaper)) return;
+
       const wallpaperId = getDownloadEventId(wallpaper);
       const record = await validateDownloadedWallpaper(wallpaperId);
 
@@ -835,7 +839,7 @@ export default function DownloadsScreen({ navigation }: Props) {
         },
       });
     },
-    [navigation, toast],
+    [canOpenWallpaper, navigation, toast],
   );
 
   const browseWallpapers = () => {

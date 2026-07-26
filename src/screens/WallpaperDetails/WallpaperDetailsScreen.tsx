@@ -49,6 +49,11 @@ import type { WallpaperApplyTarget } from '../../services/applyWallpaperService'
 import { appEvents } from '../../utils/appEvents';
 import { useToast } from '../../components/ui/toast/useToast';
 import AdController from '../../ads/AdController';
+import { useAuth } from '../../context/AuthContext';
+import {
+  isPremiumUserActive,
+  isPremiumWallpaper as isPremiumWallpaperItem,
+} from '../../utils/premiumWallpaperAccess';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'WallpaperDetails'>;
 
@@ -846,6 +851,7 @@ const MediaPreview = ({
 
 const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
   const insets = useSafeAreaInsets();
+  const { user, loading: authLoading } = useAuth();
   const [wallpaper, setWallpaper] = useState<any>(
     route.params?.wallpaper ?? {},
   );
@@ -897,6 +903,16 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
     : fullImage;
 
   const downloadFallbackUrl = getWallpaperDownloadUrl(wallpaper) || finalImage;
+  const premiumWallpaperLocked =
+    isPremiumWallpaperItem(wallpaper) && !isPremiumUserActive(user);
+
+  useEffect(() => {
+    if (authLoading || !premiumWallpaperLocked) return;
+
+    navigation.replace('Premium', {
+      returnTo: 'Home',
+    });
+  }, [authLoading, navigation, premiumWallpaperLocked]);
 
   const showDownloadCapsule = (
     capsule: DownloadCapsuleState,
@@ -1032,7 +1048,14 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
   }, [wallpaperId]);
 
   useEffect(() => {
-    if (!wallpaperId || isPlaceholder(wallpaperId)) return;
+    if (
+      authLoading ||
+      premiumWallpaperLocked ||
+      !wallpaperId ||
+      isPlaceholder(wallpaperId)
+    ) {
+      return;
+    }
 
     const loadWallpaper = async () => {
       try {
@@ -1134,7 +1157,7 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
     loadWallpaper();
     loadFavoriteStatus();
     recordWallpaperView();
-  }, [wallpaperId]);
+  }, [authLoading, premiumWallpaperLocked, wallpaperId]);
 
   const closeSavedPopup = () => {
     if (savedPopupTimerRef.current) {
@@ -1686,6 +1709,18 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
     }
   };
 
+  if (authLoading && isPremiumWallpaperItem(wallpaper)) {
+    return (
+      <View style={[styles.root, styles.premiumAccessLoading]}>
+        <ActivityIndicator size="large" color={colors.textPrimary} />
+      </View>
+    );
+  }
+
+  if (premiumWallpaperLocked) {
+    return null;
+  }
+
   return (
     <View style={styles.root}>
       <SafeAreaView
@@ -2157,12 +2192,12 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
           <Animated.View
             style={[styles.savedCardBorder, appliedPopupAnimation.animatedStyle]}
           >
-            <BlurView intensity={48} tint="dark" style={styles.savedCard}>
+            <BlurView intensity={36} tint="dark" style={styles.savedCard}>
               <LinearGradient
                 colors={[
-                  'rgba(255,255,255,0.14)',
-                  'rgba(255,255,255,0.055)',
-                  'rgba(15,15,16,0.92)',
+                  'rgba(255,255,255,0.08)',
+                  'rgba(255,255,255,0.025)',
+                  'rgba(0,0,0,0.18)',
                 ]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
@@ -2247,12 +2282,12 @@ const WallpaperDetailsScreen = ({ navigation, route }: Props) => {
           <Animated.View
             style={[styles.savedCardBorder, savedPopupAnimation.animatedStyle]}
           >
-            <BlurView intensity={48} tint="dark" style={styles.savedCard}>
+            <BlurView intensity={36} tint="dark" style={styles.savedCard}>
               <LinearGradient
                 colors={[
-                  'rgba(255,255,255,0.14)',
-                  'rgba(255,255,255,0.055)',
-                  'rgba(15,15,16,0.92)',
+                  'rgba(255,255,255,0.08)',
+                  'rgba(255,255,255,0.025)',
+                  'rgba(0,0,0,0.18)',
                 ]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
@@ -2347,6 +2382,10 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.base,
+  },
+  premiumAccessLoading: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   safeArea: {
@@ -2791,7 +2830,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: 18,
     paddingBottom: 14,
-    backgroundColor: 'rgba(7,7,10,0.84)',
+    backgroundColor: 'rgba(8,8,10,0.78)',
   },
 
   savedContent: {

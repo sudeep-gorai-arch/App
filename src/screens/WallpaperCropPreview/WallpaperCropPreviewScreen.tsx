@@ -713,12 +713,12 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
       >
         <View style={styles.noticeOverlay}>
           <Animated.View style={utilityNoticeAnimation.animatedStyle}>
-            <BlurView intensity={42} tint="dark" style={styles.noticeCard}>
+            <BlurView intensity={36} tint="dark" style={styles.noticeCard}>
             <LinearGradient
               colors={[
-                'rgba(255,255,255,0.16)',
-                'rgba(255,255,255,0.06)',
-                'rgba(15,15,16,0.92)',
+                'rgba(255,255,255,0.08)',
+                'rgba(255,255,255,0.025)',
+                'rgba(0,0,0,0.18)',
               ]}
               style={StyleSheet.absoluteFill}
             />
@@ -984,7 +984,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.15)',
-    backgroundColor: 'rgba(7,7,10,0.86)',
+    backgroundColor: 'rgba(8,8,10,0.78)',
     shadowColor: '#000000',
     shadowOpacity: 0.42,
     shadowRadius: 24,

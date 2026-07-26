@@ -281,12 +281,12 @@ const WarningModal = ({
         <Animated.View
           style={[styles.modalOuterGlow, popupAnimation.animatedStyle]}
         >
-          <BlurView intensity={54} tint="dark" style={styles.modalCard}>
+          <BlurView intensity={38} tint="dark" style={styles.modalCard}>
             <LinearGradient
               colors={[
-                "rgba(255,255,255,.13)",
-                "rgba(139,92,246,.10)",
-                "rgba(7,7,10,.92)",
+                "rgba(255,255,255,.08)",
+                "rgba(139,92,246,.035)",
+                "rgba(0,0,0,.18)",
               ]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
@@ -1149,7 +1149,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,.13)",
-    backgroundColor: "rgba(7,7,10,.84)",
+    backgroundColor: "rgba(8,8,10,.78)",
     overflow: "hidden",
   },
 

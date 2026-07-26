@@ -40,6 +40,7 @@ import { spacing } from "../../utils/constants";
 import { useAuth } from "../../context/AuthContext";
 import { Wallpaper } from "../../services/types";
 import { appEvents } from "../../utils/appEvents";
+import { usePremiumWallpaperGuard } from "../../utils/premiumWallpaperAccess";
 import {
   getVerifiedDeviceDownloads,
   validateDownloadedWallpaper,
@@ -494,6 +495,7 @@ const RecentDownloadsPreview = ({
 export default function ProfileScreen({ navigation }: Props) {
   const { user, loading, authLoading, signInGoogle, logout } = useAuth();
   const openPremium = usePremiumNavigation("Profile");
+  const canOpenWallpaper = usePremiumWallpaperGuard("Profile");
 
   const [downloads, setDownloads] = useState<RecentDownloadItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -741,6 +743,8 @@ export default function ProfileScreen({ navigation }: Props) {
   const openRecentDownloadWallpaper = async (
     download: RecentDownloadItem,
   ) => {
+    if (!canOpenWallpaper(download.wallpaper)) return;
+
     const wallpaperId = String(download.wallpaper?.id || download.id);
     const validRecord = await validateDownloadedWallpaper(wallpaperId);
 

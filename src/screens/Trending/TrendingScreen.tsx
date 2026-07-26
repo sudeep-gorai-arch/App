@@ -37,6 +37,7 @@ import { appEvents } from '../../utils/appEvents';
 import { colors } from '../../styles/colors';
 import { typography, fontFamily } from '../../styles/typography';
 import { spacing, radius, SCREEN } from '../../utils/constants';
+import { usePremiumWallpaperGuard } from '../../utils/premiumWallpaperAccess';
 
 const flexiWallsLogo = require('../../assets/images/flexiwalls-logo.png');
 
@@ -956,6 +957,7 @@ const TopPickCard = ({
 };
 
 const TrendingScreen = ({ navigation }: { navigation: any }) => {
+  const canOpenWallpaper = usePremiumWallpaperGuard('Trending');
   const scrollX = useRef(new Animated.Value(0)).current;
   const sliderEntryAnim = useRef(new Animated.Value(0)).current;
   const lowerSectionEntryAnim = useRef(new Animated.Value(0)).current;
@@ -1198,6 +1200,8 @@ const TrendingScreen = ({ navigation }: { navigation: any }) => {
   };
 
   const openWallpaper = (wallpaper: Wallpaper) => {
+    if (!canOpenWallpaper(wallpaper)) return;
+
     const parentNavigation = navigation.getParent?.();
 
     if (parentNavigation) {

@@ -28,6 +28,7 @@ import { fontFamily } from '../../styles/typography';
 import { spacing, radius, SCREEN } from '../../utils/constants';
 
 import { RootStackParamList } from '../../navigation/RootStackParamList';
+import { usePremiumWallpaperGuard } from '../../utils/premiumWallpaperAccess';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CategoryDetail'>;
 
@@ -431,6 +432,7 @@ const WallpaperTile = ({
 };
 
 const CategoryDetailScreen = ({ navigation, route }: Props) => {
+  const canOpenWallpaper = usePremiumWallpaperGuard('Category');
   const params = route.params as any;
   const category = params?.category ?? {};
   const initialFilter = String(params?.initialFilter || 'All') as CategoryFilter;
@@ -494,6 +496,8 @@ const CategoryDetailScreen = ({ navigation, route }: Props) => {
   };
 
   const openWallpaper = (wallpaper: Wallpaper) => {
+    if (!canOpenWallpaper(wallpaper)) return;
+
     navigation.navigate('WallpaperDetails', { wallpaper });
   };
 

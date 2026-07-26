@@ -43,6 +43,7 @@ import {
 
 import { Wallpaper } from '../../services/types';
 import { appEvents } from '../../utils/appEvents';
+import { usePremiumWallpaperGuard } from '../../utils/premiumWallpaperAccess';
 
 const flexiWallsLogo = require('../../assets/images/flexiwalls-logo.png');
 
@@ -715,6 +716,7 @@ EmptyState.displayName = 'EmptyState';
 
 const FavoritesScreen = () => {
   const navigation = useNavigation<any>();
+  const canOpenWallpaper = usePremiumWallpaperGuard('Favorites');
 
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
   const [liveFavorites, setLiveFavorites] = useState<FavoriteItem[]>([]);
@@ -1003,6 +1005,8 @@ const FavoritesScreen = () => {
   }, [filter, favorites, liveFavorites]);
 
   const openWallpaper = (wallpaper: FavoriteWallpaper) => {
+    if (!canOpenWallpaper(wallpaper)) return;
+
     const parentNavigation = navigation.getParent?.();
 
     if (parentNavigation) {

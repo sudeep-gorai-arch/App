@@ -24,6 +24,7 @@ import API from '../../services/api';
 import { getWallpapers } from '../../services/wallpaperService';
 import { Wallpaper } from '../../services/types';
 import AdController from '../../ads/AdController';
+import { usePremiumWallpaperGuard } from '../../utils/premiumWallpaperAccess';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AllWallpapers'>;
 
@@ -268,6 +269,7 @@ const WallpaperTile = ({
 };
 
 const AllWallpapersScreen = ({ navigation }: Props) => {
+  const canOpenWallpaper = usePremiumWallpaperGuard('Home');
   const loadingMoreRef = useRef(false);
   const [items, setItems] = useState<Wallpaper[]>([]);
   const [offset, setOffset] = useState(0);
@@ -332,13 +334,15 @@ const AllWallpapersScreen = ({ navigation }: Props) => {
   const renderItem = ({ item }: { item: Wallpaper }) => (
     <WallpaperTile
       item={item}
-      onPress={() =>
+      onPress={() => {
+        if (!canOpenWallpaper(item)) return;
+
         AdController.navigateWithAd(() => {
           navigation.navigate('WallpaperDetails', {
             wallpaper: item,
           });
-        })
-      }
+        });
+      }}
     />
   );
 
