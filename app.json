@@ -23,7 +23,8 @@
       "expo-secure-store",
       "@react-native-google-signin/google-signin",
       "expo-video",
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-splash-screen"
     ],
     "name": "FlexiWalls",
     "slug": "flexiwalls",
