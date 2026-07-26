@@ -1,4 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import {
   ActivityIndicator,
@@ -12,21 +18,37 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Alert } from 'react-native';
 
+import * as Crypto from 'expo-crypto';
+import {
+  ErrorCode,
+  finishTransaction,
+  getAvailablePurchases,
+  type Purchase,
+  useIAP,
+} from 'expo-iap';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import MeshBackground from '../../components/MeshBackground';
+import { useToast } from '../../components/ui/toast/useToast';
+import {
+  GOOGLE_PLAY_PACKAGE_NAME,
+  GOOGLE_PLAY_PLAN_BY_PRODUCT_ID,
+  GOOGLE_PLAY_PRODUCT_IDS,
+  GOOGLE_PLAY_SUBSCRIPTION_IDS,
+  type GooglePlayPlan,
+} from '../../config/googlePlayBilling';
+import { useAuth } from '../../context/AuthContext';
 import { colors } from '../../styles/colors';
 import { radius, SCREEN, spacing } from '../../utils/constants';
 
 import API from '../../services/api';
 import {
   getSubscriptionPlans,
-  createOrder,
+  verifyGooglePlayPurchase,
 } from '../../services/subscriptionService';
 import {
   getFeaturedWallpapers,
@@ -42,28 +64,6 @@ type PremiumReturnRoute =
   | 'Favorites'
   | 'Profile'
   | 'Settings';
-
-type PurchasePlan = 'MONTHLY' | 'YEARLY' | 'LIFETIME';
-
-export interface RazorpayOrder {
-  keyId: string;
-
-  orderId: string;
-
-  amount: number;
-
-  currency: string;
-
-  receipt: string;
-
-  plan: PurchasePlan;
-
-  title: string;
-}
-
-type PaymentParams = {
-  order: RazorpayOrder;
-};
 
 type Navigation = {
   navigate?: (name: string, params?: Record<string, unknown>) => void;
@@ -102,6 +102,11 @@ type BillingPlan = {
   badgeTone?: 'gold' | 'green' | 'purple' | 'blue';
 };
 
+type AndroidSubscriptionOffer = {
+  offerToken?: string;
+  offerTokenAndroid?: string;
+};
+
 const TAB_RETURN_ROUTES: PremiumReturnRoute[] = [
   'Home',
   'Category',
@@ -128,7 +133,7 @@ const PLAN_CTA_LABELS: Record<BillingPlanId, string> = {
   monthly: 'Continue with Monthly',
 };
 
-const PLAN_MAP: Record<BillingPlanId, PurchasePlan> = {
+const PLAN_MAP: Record<BillingPlanId, GooglePlayPlan> = {
   monthly: 'MONTHLY',
   yearly: 'YEARLY',
   lifetime: 'LIFETIME',
@@ -436,6 +441,23 @@ const normalizeBackendPlansForPremiumUI = (backendPlans: any[]) => {
 
     return mergeBackendPlanWithDesign(backendMatch, defaultPlan);
   });
+};
+
+const getErrorMessage = (error: unknown) => {
+  const typedError = error as {
+    response?: {
+      data?: {
+        message?: string;
+      };
+    };
+    message?: string;
+  };
+
+  return (
+    typedError?.response?.data?.message ??
+    typedError?.message ??
+    'Payment failed. Please try again.'
+  );
 };
 
 const GlitterProIcon = () => {
@@ -1260,11 +1282,16 @@ const BillingPlanCard = ({
 };
 
 const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
+  const auth = useAuth();
+  const toast = useToast();
+
   const [plans, setPlans] = useState<BillingPlan[]>(BILLING_PLANS);
 
   const [selectedPlan, setSelectedPlan] = useState<BillingPlanId>('lifetime');
 
   const [loading, setLoading] = useState(false);
+
+  const [restoring, setRestoring] = useState(false);
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -1273,13 +1300,182 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
   const ctaPulseAnim = useRef(new Animated.Value(1)).current;
   const ctaShineAnim = useRef(new Animated.Value(0)).current;
 
-  const selectedPlanData = plans.find(plan => plan.id === selectedPlan);
+  const navigateAfterPurchase = useCallback(() => {
+    const returnTo = route?.params?.returnTo ?? 'Home';
+    const targetNavigation = navigation?.getParent?.() ?? navigation;
+
+    if (TAB_RETURN_ROUTES.includes(returnTo)) {
+      targetNavigation?.navigate?.('MainTabs', {
+        screen: returnTo,
+      });
+      return;
+    }
+
+    targetNavigation?.navigate?.(returnTo);
+  }, [navigation, route?.params?.returnTo]);
+
+  const completeVerifiedPurchase = useCallback(
+    async (purchase: Purchase, purchasePlan: GooglePlayPlan) => {
+      if (purchase.purchaseState === 'pending') {
+        toast.info(
+          'Payment is pending. Premium will activate after Google confirms it.',
+        );
+        return false;
+      }
+
+      if ((purchase as any).isSuspendedAndroid) {
+        throw new Error(
+          'This subscription is suspended. Update the payment method in Google Play.',
+        );
+      }
+
+      if (!purchase.purchaseToken) {
+        throw new Error('Google Play did not return a purchase token.');
+      }
+
+      await verifyGooglePlayPurchase({
+        plan: purchasePlan,
+        productId: purchase.productId,
+        purchaseToken: purchase.purchaseToken,
+        packageName:
+          (purchase as any).packageNameAndroid ?? GOOGLE_PLAY_PACKAGE_NAME,
+      });
+
+      // The backend verifies, grants, and acknowledges the purchase.
+      // This local finish is best-effort for retries and restored purchases.
+      try {
+        await finishTransaction({
+          purchase,
+          isConsumable: false,
+        });
+      } catch (finishError) {
+        console.log('GOOGLE PLAY LOCAL FINISH WARNING', finishError);
+      }
+
+      await auth.refreshProfile().catch(() => undefined);
+
+      return true;
+    },
+    [auth, toast],
+  );
+
+  const onPurchaseSuccess = useCallback(
+    async (purchase: Purchase) => {
+      try {
+        const purchasePlan =
+          GOOGLE_PLAY_PLAN_BY_PRODUCT_ID[purchase.productId];
+
+        if (!purchasePlan) {
+          throw new Error('Unknown Google Play product.');
+        }
+
+        const activated = await completeVerifiedPurchase(
+          purchase,
+          purchasePlan,
+        );
+
+        if (!activated) {
+          return;
+        }
+
+        toast.success('Premium activated successfully.');
+        navigateAfterPurchase();
+      } catch (error) {
+        console.log('GOOGLE PLAY PURCHASE VERIFY ERROR', error);
+        toast.error(getErrorMessage(error));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [completeVerifiedPurchase, navigateAfterPurchase, toast],
+  );
+
+  const onPurchaseError = useCallback(
+    (error: any) => {
+      setLoading(false);
+
+      if (error?.code === ErrorCode.UserCancelled) {
+        toast.info('Payment cancelled.');
+        return;
+      }
+
+      if (error?.code === ErrorCode.AlreadyOwned) {
+        toast.info(
+          'You already own this product. Use Restore Purchase below.',
+        );
+        return;
+      }
+
+      toast.error(getErrorMessage(error));
+    },
+    [toast],
+  );
+
+  const {
+    connected,
+    products,
+    subscriptions,
+    fetchProducts,
+    requestPurchase,
+  } = useIAP({
+    onPurchaseSuccess,
+    onPurchaseError,
+  });
+
+  const displayPlans = useMemo(
+    () =>
+      plans.map(plan => {
+        const purchasePlan = PLAN_MAP[plan.id];
+        const productId = GOOGLE_PLAY_PRODUCT_IDS[purchasePlan];
+        const storeProducts =
+          purchasePlan === 'LIFETIME' ? products : subscriptions;
+        const storeProduct = storeProducts.find(
+          product => product.id === productId,
+        ) as any;
+
+        const localizedPrice =
+          storeProduct?.displayPrice ??
+          storeProduct?.localizedPrice ??
+          storeProduct?.price;
+
+        return localizedPrice
+          ? {
+              ...plan,
+              price: String(localizedPrice),
+            }
+          : plan;
+      }),
+    [plans, products, subscriptions],
+  );
+
+  const selectedPlanData = displayPlans.find(
+    plan => plan.id === selectedPlan,
+  );
 
   useEffect(() => {
     loadPlans();
     loadShowcaseWallpapers();
   }, []);
 
+  useEffect(() => {
+    if (!connected) {
+      return;
+    }
+
+    Promise.all([
+      fetchProducts({
+        skus: [...GOOGLE_PLAY_SUBSCRIPTION_IDS],
+        type: 'subs',
+      }),
+      fetchProducts({
+        skus: [GOOGLE_PLAY_PRODUCT_IDS.LIFETIME],
+        type: 'in-app',
+      }),
+    ]).catch(error => {
+      console.log('GOOGLE PLAY PRODUCTS LOAD ERROR', error);
+      toast.error('Unable to load Premium products from Google Play.');
+    });
+  }, [connected, fetchProducts, toast]);
 
   useEffect(() => {
     ctaPulseAnim.setValue(0.97);
@@ -1402,44 +1598,174 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
   });
 
   const handleContinue = async () => {
-    if (!selectedPlanData || loading) {
+    if (!selectedPlanData || loading || restoring) {
+      return;
+    }
+
+    if (!auth.user?.id || !auth.token) {
+      toast.info('Please sign in before purchasing Premium.');
+      return;
+    }
+
+    if (!connected) {
+      toast.info('Google Play is still connecting. Please try again.');
+      return;
+    }
+
+    const purchasePlan = PLAN_MAP[selectedPlanData.id];
+    const productId = GOOGLE_PLAY_PRODUCT_IDS[purchasePlan];
+    const isSubscription = purchasePlan !== 'LIFETIME';
+    const storeProducts = isSubscription ? subscriptions : products;
+    const storeProduct = storeProducts.find(
+      product => product.id === productId,
+    ) as any;
+
+    if (!storeProduct) {
+      toast.error(
+        'This Premium product is not available from Google Play yet.',
+      );
       return;
     }
 
     try {
       setLoading(true);
 
-      const order = await createOrder(PLAN_MAP[selectedPlanData.id]);
+      const accountId = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        String(auth.user.id),
+      );
 
-      console.log('CREATE ORDER RESPONSE');
-      console.log(JSON.stringify(order, null, 2));
+      if (isSubscription) {
+        const rawOffers = (
+          storeProduct?.subscriptionOffers ??
+          storeProduct?.subscriptionOfferDetailsAndroid ??
+          []
+        ) as AndroidSubscriptionOffer[];
 
-      const parent = navigation?.getParent?.();
+        const offers = rawOffers.flatMap(
+          (offer: AndroidSubscriptionOffer) => {
+            const offerToken =
+              offer.offerTokenAndroid ?? offer.offerToken;
 
-      if (parent) {
-        parent.navigate?.('Payment', {
-          order: order as RazorpayOrder,
+            return offerToken
+              ? [
+                  {
+                    sku: productId,
+                    offerToken,
+                  },
+                ]
+              : [];
+          },
+        );
+
+        if (offers.length === 0) {
+          throw new Error(
+            'No active Google Play base plan is available for this subscription.',
+          );
+        }
+
+        await requestPurchase({
+          request: {
+            google: {
+              skus: [productId],
+              obfuscatedAccountId: accountId,
+              subscriptionOffers: offers,
+            },
+          },
+          type: 'subs',
         });
 
         return;
       }
 
-      navigation?.navigate?.('Payment', {
-        order: order as RazorpayOrder,
+      await requestPurchase({
+        request: {
+          google: {
+            skus: [productId],
+            obfuscatedAccountId: accountId,
+          },
+        },
+        type: 'in-app',
       });
-    } catch (error: any) {
-      console.error('CREATE RAZORPAY ORDER ERROR', error);
-
-      const message =
-        error?.response?.status === 401
-          ? 'Please login to continue with premium.'
-          : error?.response?.data?.message ??
-          error?.message ??
-          'Unable to create payment order.';
-
-      Alert.alert('Payment', message);
-    } finally {
+    } catch (error) {
       setLoading(false);
+      console.log('GOOGLE PLAY PURCHASE OPEN ERROR', error);
+      toast.error(getErrorMessage(error));
+    }
+  };
+
+  const handleRestore = async () => {
+    if (restoring || loading) {
+      return;
+    }
+
+    if (!auth.user?.id || !auth.token) {
+      toast.info('Please sign in before restoring Premium.');
+      return;
+    }
+
+    if (!connected) {
+      toast.info('Google Play is still connecting. Please try again.');
+      return;
+    }
+
+    try {
+      setRestoring(true);
+
+      const purchases = await getAvailablePurchases({
+        includeSuspendedAndroid: true,
+      });
+
+      const flexiWallsPurchases = purchases
+        .filter((purchase: Purchase) =>
+          Boolean(GOOGLE_PLAY_PLAN_BY_PRODUCT_ID[purchase.productId]),
+        )
+        // Verify lifetime last so it remains the strongest entitlement.
+        .sort((left: Purchase, right: Purchase) => {
+          const leftPlan =
+            GOOGLE_PLAY_PLAN_BY_PRODUCT_ID[left.productId];
+          const rightPlan =
+            GOOGLE_PLAY_PLAN_BY_PRODUCT_ID[right.productId];
+
+          return (
+            Number(leftPlan === 'LIFETIME') -
+            Number(rightPlan === 'LIFETIME')
+          );
+        });
+
+      if (flexiWallsPurchases.length === 0) {
+        toast.info(
+          'No FlexiWalls purchase was found on this Google account.',
+        );
+        return;
+      }
+
+      let restored = false;
+
+      for (const purchase of flexiWallsPurchases) {
+        const purchasePlan =
+          GOOGLE_PLAY_PLAN_BY_PRODUCT_ID[purchase.productId];
+
+        if (!purchasePlan || (purchase as any).isSuspendedAndroid) {
+          continue;
+        }
+
+        restored =
+          (await completeVerifiedPurchase(purchase, purchasePlan)) ||
+          restored;
+      }
+
+      if (!restored) {
+        throw new Error('No active purchase could be restored.');
+      }
+
+      toast.success('Your Google Play purchase has been restored.');
+      navigateAfterPurchase();
+    } catch (error) {
+      console.log('GOOGLE PLAY RESTORE ERROR', error);
+      toast.error(getErrorMessage(error));
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -1551,7 +1877,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
 
           <View style={styles.billingSection}>
             <View style={styles.plansWrap}>
-              {plans.map(plan => (
+              {displayPlans.map(plan => (
                 <BillingPlanCard
                   key={plan.id}
                   plan={plan}
@@ -1569,13 +1895,18 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
             ]}
           >
             <Pressable
-              disabled={loading}
+              disabled={loading || restoring}
               onPress={handleContinue}
               style={({ pressed }) => [
                 styles.ctaPressable,
                 {
-                  opacity: loading ? 0.72 : 1,
-                  transform: [{ scale: pressed && !loading ? 0.98 : 1 }],
+                  opacity: loading || restoring ? 0.72 : 1,
+                  transform: [
+                    {
+                      scale:
+                        pressed && !loading && !restoring ? 0.98 : 1,
+                    },
+                  ],
                 },
               ]}
             >
@@ -1621,7 +1952,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
                   )}
 
                   <Text style={styles.ctaText} numberOfLines={1}>
-                    {loading ? 'Creating Order...' : ctaLabel}
+                    {loading ? 'Opening Google Play...' : ctaLabel}
                   </Text>
                 </View>
 
@@ -1645,7 +1976,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
               <Text style={styles.paymentInfoText}>
                 {selectedPlanData?.id === 'lifetime'
                   ? 'One-time payment, no recurring fees'
-                  : 'Manual renewal, no hidden auto-renewal'}
+                  : 'Auto-renews through Google Play. Cancel anytime'}
               </Text>
             </View>
 
@@ -1657,9 +1988,38 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
               />
 
               <Text style={styles.paymentInfoText}>
-                Secured with Razorpay Checkout
+                Secured by Google Play
               </Text>
             </View>
+
+            <Text style={styles.storeStatus}>
+              {connected
+                ? 'Connected to Google Play'
+                : 'Connecting to Google Play...'}
+            </Text>
+
+            <Pressable
+              onPress={handleRestore}
+              disabled={restoring || loading}
+              accessibilityRole="button"
+              accessibilityLabel="Restore Google Play purchase"
+              style={({ pressed }) => [
+                styles.restoreButton,
+                {
+                  opacity:
+                    restoring || loading ? 0.55 : pressed ? 0.68 : 1,
+                },
+              ]}
+            >
+              {restoring ? (
+                <ActivityIndicator
+                  color={colors.textSecondary}
+                  size="small"
+                />
+              ) : (
+                <Text style={styles.restoreText}>Restore Purchase</Text>
+              )}
+            </Pressable>
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -2270,5 +2630,27 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 10.5,
     fontWeight: '700',
+  },
+
+  storeStatus: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 3,
+  },
+
+  restoreButton: {
+    minHeight: 28,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  restoreText: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '800',
+    textDecorationLine: 'underline',
   },
 });

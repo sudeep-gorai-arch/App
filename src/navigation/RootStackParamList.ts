@@ -13,16 +13,6 @@ export type PremiumReturnRoute =
   | 'Profile'
   | 'Settings';
 
-export type RazorpayOrderParam = {
-  keyId: string;
-  orderId: string;
-  amount: number;
-  currency: string;
-  receipt: string;
-  plan: 'MONTHLY' | 'YEARLY' | 'LIFETIME';
-  title: string;
-};
-
 export type WallpaperCropTarget = 'home' | 'lock' | 'both';
 
 export type WallpaperCropMediaType = 'IMAGE' | 'VIDEO';
@@ -39,7 +29,7 @@ export type RootStackParamList = {
   Login: undefined;
   Signup: undefined;
 
-  // Premium / Payment
+  // Premium
   Premium:
     | {
         returnTo?: PremiumReturnRoute;
@@ -49,12 +39,6 @@ export type RootStackParamList = {
   ManagePremium:
     | {
         returnTo?: PremiumReturnRoute;
-      }
-    | undefined;
-
-  Payment:
-    | {
-        order: RazorpayOrderParam;
       }
     | undefined;
 

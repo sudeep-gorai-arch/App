@@ -21,7 +21,8 @@
       ],
       "expo-secure-store",
       "@react-native-google-signin/google-signin",
-      "expo-video"
+      "expo-video",
+      "expo-iap"
     ],
     "name": "FlexiWalls",
     "slug": "flexiwalls",
@@ -36,7 +37,8 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
         "android.permission.ACCESS_MEDIA_LOCATION",
-        "android.permission.READ_MEDIA_IMAGES"
+        "android.permission.READ_MEDIA_IMAGES",
+        "com.android.vending.BILLING"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#0B0819"

@@ -6,7 +6,6 @@ import { RootStackParamList } from './RootStackParamList';
 import { colors } from '../styles/colors';
 
 import PremiumScreen from '../screens/Premium/PremiumScreen';
-import PaymentScreen from '../screens/Payment/PaymentScreen';
 import ManagePremiumScreen from '../screens/ManagePremium/ManagePremiumScreen';
 
 import CategoryDetailScreen from '../screens/CategoryDetail/CategoryDetailScreen';
@@ -36,7 +35,7 @@ const RootNavigator = () => {
     >
       <Stack.Screen name="MainTabs" component={BottomTabs} />
 
-      {/* PREMIUM / PAYMENT */}
+      {/* PREMIUM */}
       <Stack.Screen
         name="Premium"
         component={PremiumScreen}
@@ -44,8 +43,6 @@ const RootNavigator = () => {
           animation: 'slide_from_bottom',
         }}
       />
-
-      <Stack.Screen name="Payment" component={PaymentScreen} />
 
       <Stack.Screen name="ManagePremium" component={ManagePremiumScreen} />
 

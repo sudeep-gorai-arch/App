@@ -180,3 +180,9 @@ dependencies {
         implementation jscFlavor
     }
 }
+
+// EAS Build creates this file and injects the production upload keystore.
+// Local Gradle release builds still require a separately configured upload key.
+if (file("./eas-build.gradle").exists()) {
+    apply from: "./eas-build.gradle"
+}

@@ -380,7 +380,14 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
         cropRect,
       );
 
-      navigation.goBack();
+      // Return to the existing details screen and explicitly trigger its
+      // "Wallpaper Applied Successfully" popup. A plain goBack() does not
+      // update the previous route params, so the popup would never open.
+      navigation.popTo(
+        'WallpaperDetails',
+        { applied: true },
+        { merge: true },
+      );
     } catch (error: any) {
       console.log(
         isVideo

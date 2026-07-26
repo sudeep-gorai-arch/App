@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Ionicons } from '@expo/vector-icons';
+import { deepLinkToSubscriptions } from 'expo-iap';
 
 import MeshBackground from '../../components/MeshBackground';
 import Card from '../../components/Card';
@@ -27,6 +28,7 @@ import { RoundButton } from '../../components/Header';
 import { colors, gradients } from '../../styles/colors';
 
 import { spacing } from '../../utils/constants';
+import { GOOGLE_PLAY_PRODUCT_IDS } from '../../config/googlePlayBilling';
 
 import {
   getSubscriptionStatus,
@@ -443,6 +445,9 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
   const isLifetimePlan =
     normalizePlanKey(activeSubscription?.plan ?? status?.currentPlan) === 'lifetime';
 
+  const isGooglePlaySubscription =
+    String(activeSubscription?.platform ?? '').toUpperCase() === 'GOOGLE';
+
   const canCancelSubscription = isPremium && !isLifetimePlan;
 
   const onRefresh = () => {
@@ -465,6 +470,21 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
     try {
       setCanceling(true);
 
+      if (isGooglePlaySubscription) {
+        const planKey = String(activeSubscription?.plan ?? status?.currentPlan ?? '').toUpperCase();
+        const skuAndroid =
+          planKey === 'YEARLY'
+            ? GOOGLE_PLAY_PRODUCT_IDS.YEARLY
+            : GOOGLE_PLAY_PRODUCT_IDS.MONTHLY;
+
+        await deepLinkToSubscriptions({
+          skuAndroid,
+          packageNameAndroid: 'com.flexiwalls.app',
+        });
+        showSuccess('Manage or cancel the subscription in Google Play.');
+        return;
+      }
+
       const cancelledStatus = await cancelSubscription(true);
 
       setStatus(cancelledStatus as SubscriptionStatus);
@@ -481,13 +501,19 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
     } finally {
       setCanceling(false);
     }
-  }, [showSuccess, toast]);
+  }, [
+    activeSubscription?.plan,
+    isGooglePlaySubscription,
+    showSuccess,
+    status?.currentPlan,
+    toast,
+  ]);
 
   const onCancelSubscription = useCallback(() => {
     if (!canCancelSubscription || canceling || isCancelScheduled) return;
 
     Alert.alert(
-      'Cancel Subscription',
+      isGooglePlaySubscription ? 'Manage Google Play Subscription' : 'Cancel Subscription',
       `Your premium access will remain active until ${formatDate(
         premiumUntil,
       )}. Do you want to cancel auto-renewal?`,
@@ -497,7 +523,7 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
           style: 'cancel',
         },
         {
-          text: 'Cancel Subscription',
+          text: isGooglePlaySubscription ? 'Open Google Play' : 'Cancel Subscription',
           style: 'destructive',
           onPress: confirmCancelSubscription,
         },
@@ -508,6 +534,7 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
     canceling,
     confirmCancelSubscription,
     isCancelScheduled,
+    isGooglePlaySubscription,
     premiumUntil,
   ]);
 
@@ -829,9 +856,9 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
               </View>
 
               <View style={styles.securityTextWrap}>
-                <Text style={styles.securityTitle}>Secure Razorpay Payment</Text>
+                <Text style={styles.securityTitle}>Secure Google Play Payment</Text>
                 <Text style={styles.securityText}>
-                  Your payment is handled by Razorpay. FlexiWalls only stores
+                  Your payment is handled by Google Play. FlexiWalls only stores
                   the verified order and payment status from our backend.
                 </Text>
               </View>

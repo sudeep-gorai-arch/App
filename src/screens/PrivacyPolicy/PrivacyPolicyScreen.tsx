@@ -194,8 +194,8 @@ const SECTIONS: PolicySection[] = [
         text: 'Google processes the sign-in flow when you choose Google Sign-In. We use the identity information received only for account authentication and profile features described in this policy.',
       },
       {
-        label: 'Razorpay:',
-        text: 'Razorpay processes checkout and payment-method information. FlexiWalls receives transaction identifiers and status information but does not receive or store your full card number, CVV, UPI PIN or online-banking password.',
+        label: 'Google Play Billing:',
+        text: 'Google Play processes checkout and payment-method information. FlexiWalls receives transaction identifiers and status information but does not receive or store your full card number, CVV, UPI PIN or online-banking password.',
       },
       {
         label: 'Hosting and database providers:',
@@ -223,13 +223,13 @@ const SECTIONS: PolicySection[] = [
     title: '6. Premium payments',
     icon: 'card-outline',
     summary:
-      'Razorpay handles payment credentials while FlexiWalls verifies and records the purchase.',
+      'Google Play handles payment credentials while FlexiWalls verifies and records the purchase.',
     items: [
       {
-        text: 'Checkout may support payment methods such as UPI, cards, wallets or net banking according to Razorpay availability.',
+        text: 'Checkout displays the payment methods available through the user’s Google Play account.',
       },
       {
-        text: 'Razorpay may independently collect payment, billing, device and fraud-prevention information under its own privacy notice.',
+        text: 'Google may independently collect payment, billing, device and fraud-prevention information under the Google Play privacy terms.',
       },
       {
         text: 'FlexiWalls stores transaction and subscription records needed to activate premium access, handle cancellation, resolve disputes, prevent fraud and meet accounting or legal obligations.',

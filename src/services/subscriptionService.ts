@@ -17,23 +17,7 @@ export interface SubscriptionPlan {
   validityDays: number;
   description?: string;
   displayPrice?: string;
-}
-
-export interface VerifyPaymentRequest {
-  plan: PaidSubscriptionPlan;
-  razorpay_order_id: string;
-  razorpay_payment_id: string;
-  razorpay_signature: string;
-}
-
-export interface RazorpayOrder {
-  keyId: string;
-  orderId: string;
-  amount: number;
-  currency: string;
-  receipt: string;
-  plan: PaidSubscriptionPlan;
-  title: string;
+  googlePlayProductId?: string;
 }
 
 export interface SubscriptionRecord {
@@ -87,6 +71,13 @@ export interface SubscriptionStatus {
   };
 }
 
+export interface VerifyGooglePlayPurchaseRequest {
+  plan: Exclude<PaidSubscriptionPlan, 'QUARTERLY'>;
+  productId: string;
+  purchaseToken: string;
+  packageName: string;
+}
+
 export interface VerifyPaymentResponse {
   isPremium: boolean;
   premiumUntil?: string | null;
@@ -114,22 +105,12 @@ export const getSubscriptionPlans = async (): Promise<SubscriptionPlan[]> => {
   return unwrapApiData<SubscriptionPlan[]>(response);
 };
 
-export const createOrder = async (
-  plan: PaidSubscriptionPlan,
-): Promise<RazorpayOrder> => {
-  const response = await API.post<ApiResponse<RazorpayOrder>>(
-    '/subscriptions/create-order',
-    { plan },
-  );
 
-  return unwrapApiData<RazorpayOrder>(response);
-};
-
-export const verifyPayment = async (
-  body: VerifyPaymentRequest,
+export const verifyGooglePlayPurchase = async (
+  body: VerifyGooglePlayPurchaseRequest,
 ): Promise<VerifyPaymentResponse> => {
   const response = await API.post<ApiResponse<VerifyPaymentResponse>>(
-    '/subscriptions/verify',
+    '/subscriptions/google-play/verify',
     body,
   );
 
