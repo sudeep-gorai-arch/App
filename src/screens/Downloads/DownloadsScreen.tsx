@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   ImageBackground,
   Pressable,
   RefreshControl,
@@ -15,9 +16,7 @@ import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as FileSystem from "expo-file-system/legacy";
-import * as MediaLibrary from "expo-media-library";
+import { useFocusEffect } from "@react-navigation/native";
 
 import MeshBackground from "../../components/MeshBackground";
 import Card from "../../components/Card";
@@ -25,11 +24,15 @@ import { colors, gradients } from "../../styles/colors";
 import { fontFamily } from "../../styles/typography";
 import { spacing, radius } from "../../utils/constants";
 import { RootStackParamList } from "../../navigation/RootStackParamList";
-import { useAuth } from "../../context/AuthContext";
-import { getDownloads } from "../../services/downloadService";
 import API from "../../services/api";
 import { Wallpaper } from "../../services/types";
 import { appEvents } from "../../utils/appEvents";
+import { useToast } from "../../components/ui/toast/useToast";
+import {
+  getVerifiedDeviceDownloads,
+  validateDownloadedWallpaper,
+} from "../../services/downloadCoordinator";
+import { deleteDeviceDownloads as deleteRegisteredDeviceDownloads } from "../../services/deviceMediaService";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Downloads">;
 
@@ -97,9 +100,6 @@ const isVideoWallpaper = (item?: Record<string, any> | null) => {
     isRealVideoUrlValue(item?.url)
   );
 };
-const LOCAL_DOWNLOADS_KEY = "@flexiwalls:guestDownloads";
-const LOCAL_DELETED_DOWNLOADS_KEY = "@flexiwalls:locallyDeletedDownloads";
-
 const fallbackImage = (seed: string) =>
   `https://picsum.photos/seed/flexiwalls-download-${seed}/700/1100`;
 
@@ -232,17 +232,6 @@ const getWallpaperImage = (item?: DownloadWallpaper | null) => {
     toAbsoluteMediaUrl(getRawThumbnailUrl(record)) ||
     toAbsoluteMediaUrl(getRawImageUrl(record))
   );
-};
-
-const getPayloadArray = (response: any): any[] => {
-  const payload = response?.data?.data ?? response?.data ?? response;
-
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.downloads)) return payload.downloads;
-  if (Array.isArray(payload?.items)) return payload.items;
-  if (Array.isArray(payload?.results)) return payload.results;
-
-  return [];
 };
 
 const normalizeDownload = (record: any): DownloadWallpaper | null => {
@@ -405,414 +394,17 @@ const getDownloadEventId = (
   );
 };
 
-const mergeDownloadRecords = (
-  current: DownloadWallpaper,
-  incoming: DownloadWallpaper,
-) => {
-  const currentRecord = current as DownloadWallpaper & Record<string, any>;
-  const incomingRecord = incoming as DownloadWallpaper & Record<string, any>;
+const sortDownloads = (items: DownloadWallpaper[]) => {
+  const unique = new Map<string, DownloadWallpaper>();
 
-  return {
-    ...currentRecord,
-    ...incomingRecord,
-
-    localUri:
-      incomingRecord.localUri ||
-      incomingRecord.local_uri ||
-      currentRecord.localUri ||
-      currentRecord.local_uri ||
-      null,
-    local_uri:
-      incomingRecord.local_uri ||
-      incomingRecord.localUri ||
-      currentRecord.local_uri ||
-      currentRecord.localUri ||
-      null,
-
-    fileUri:
-      incomingRecord.fileUri ||
-      incomingRecord.file_uri ||
-      currentRecord.fileUri ||
-      currentRecord.file_uri ||
-      null,
-    file_uri:
-      incomingRecord.file_uri ||
-      incomingRecord.fileUri ||
-      currentRecord.file_uri ||
-      currentRecord.fileUri ||
-      null,
-
-    savedUri:
-      incomingRecord.savedUri ||
-      incomingRecord.saved_uri ||
-      currentRecord.savedUri ||
-      currentRecord.saved_uri ||
-      null,
-    saved_uri:
-      incomingRecord.saved_uri ||
-      incomingRecord.savedUri ||
-      currentRecord.saved_uri ||
-      currentRecord.savedUri ||
-      null,
-
-    assetId:
-      incomingRecord.assetId ||
-      incomingRecord.asset_id ||
-      currentRecord.assetId ||
-      currentRecord.asset_id ||
-      null,
-    asset_id:
-      incomingRecord.asset_id ||
-      incomingRecord.assetId ||
-      currentRecord.asset_id ||
-      currentRecord.assetId ||
-      null,
-
-    mediaAssetId:
-      incomingRecord.mediaAssetId ||
-      incomingRecord.media_asset_id ||
-      currentRecord.mediaAssetId ||
-      currentRecord.media_asset_id ||
-      null,
-    media_asset_id:
-      incomingRecord.media_asset_id ||
-      incomingRecord.mediaAssetId ||
-      currentRecord.media_asset_id ||
-      currentRecord.mediaAssetId ||
-      null,
-
-    mediaLibraryAssetId:
-      incomingRecord.mediaLibraryAssetId ||
-      incomingRecord.media_library_asset_id ||
-      currentRecord.mediaLibraryAssetId ||
-      currentRecord.media_library_asset_id ||
-      null,
-    media_library_asset_id:
-      incomingRecord.media_library_asset_id ||
-      incomingRecord.mediaLibraryAssetId ||
-      currentRecord.media_library_asset_id ||
-      currentRecord.mediaLibraryAssetId ||
-      null,
-
-    galleryAssetId:
-      incomingRecord.galleryAssetId ||
-      incomingRecord.gallery_asset_id ||
-      currentRecord.galleryAssetId ||
-      currentRecord.gallery_asset_id ||
-      null,
-    gallery_asset_id:
-      incomingRecord.gallery_asset_id ||
-      incomingRecord.galleryAssetId ||
-      currentRecord.gallery_asset_id ||
-      currentRecord.galleryAssetId ||
-      null,
-
-    downloadedAt:
-      parseTime(incomingRecord.downloadedAt) >=
-      parseTime(currentRecord.downloadedAt)
-        ? incomingRecord.downloadedAt
-        : currentRecord.downloadedAt,
-  } as DownloadWallpaper;
-};
-
-const uniqueById = (items: DownloadWallpaper[]) => {
-  const map = new Map<string, DownloadWallpaper>();
-
-  items.forEach((item) => {
-    const id = getDownloadEventId(item) || item.id;
-
-    if (!id) return;
-
-    const existing = map.get(id);
-
-    if (!existing) {
-      map.set(id, item);
-      return;
-    }
-
-    map.set(id, mergeDownloadRecords(existing, item));
+  items.forEach(item => {
+    const id = getDownloadEventId(item);
+    if (id) unique.set(id, item);
   });
 
-  return Array.from(map.values());
-};
-
-const sortDownloads = (items: DownloadWallpaper[]) =>
-  uniqueById(items).sort(
+  return Array.from(unique.values()).sort(
     (a, b) => parseTime(b.downloadedAt) - parseTime(a.downloadedAt),
   );
-
-const getLocalDownloads = async (): Promise<DownloadWallpaper[]> => {
-  try {
-    const raw = await AsyncStorage.getItem(LOCAL_DOWNLOADS_KEY);
-
-    if (!raw) return [];
-
-    const parsed = JSON.parse(raw);
-
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed.map(normalizeDownload).filter(Boolean) as DownloadWallpaper[];
-  } catch (error) {
-    console.log("LOCAL DOWNLOADS LOAD ERROR", error);
-    return [];
-  }
-};
-
-const getLocallyDeletedDownloadIds = async (): Promise<Set<string>> => {
-  try {
-    const raw = await AsyncStorage.getItem(LOCAL_DELETED_DOWNLOADS_KEY);
-
-    if (!raw) return new Set();
-
-    const parsed = JSON.parse(raw);
-
-    if (!Array.isArray(parsed)) return new Set();
-
-    return new Set(
-      parsed
-        .map((value) => String(value || "").trim())
-        .filter((value) => Boolean(value)),
-    );
-  } catch (error) {
-    console.log("LOCAL DELETED DOWNLOAD IDS LOAD ERROR", error);
-    return new Set();
-  }
-};
-
-const saveLocallyDeletedDownloadIds = async (ids: Set<string>) => {
-  try {
-    const values = Array.from(ids).filter(Boolean);
-
-    if (values.length === 0) {
-      await AsyncStorage.removeItem(LOCAL_DELETED_DOWNLOADS_KEY);
-      return;
-    }
-
-    await AsyncStorage.setItem(
-      LOCAL_DELETED_DOWNLOADS_KEY,
-      JSON.stringify(values),
-    );
-  } catch (error) {
-    console.log("LOCAL DELETED DOWNLOAD IDS SAVE ERROR", error);
-  }
-};
-
-const addLocallyDeletedDownloadIds = async (ids: Set<string>) => {
-  const current = await getLocallyDeletedDownloadIds();
-
-  ids.forEach((id) => {
-    if (id) {
-      current.add(id);
-    }
-  });
-
-  await saveLocallyDeletedDownloadIds(current);
-};
-
-const removeLocallyDeletedDownloadIds = async (ids: Set<string>) => {
-  const current = await getLocallyDeletedDownloadIds();
-
-  ids.forEach((id) => {
-    if (id) {
-      current.delete(id);
-    }
-  });
-
-  await saveLocallyDeletedDownloadIds(current);
-};
-
-const filterOutLocallyDeletedDownloads = (
-  items: DownloadWallpaper[],
-  locallyDeletedIds: Set<string>,
-) => {
-  if (locallyDeletedIds.size === 0) return items;
-
-  return items.filter((item) => {
-    const id = getDownloadEventId(item);
-
-    return !id || !locallyDeletedIds.has(id);
-  });
-};
-
-const createDownloadFromEvent = (payload: {
-  wallpaperId: string;
-  downloadCount?: number;
-  wallpaper?: any;
-}) => {
-  const downloadedAt = new Date().toISOString();
-
-  const normalized = normalizeDownload({
-    ...(payload.wallpaper || {}),
-    id: payload.wallpaperId || payload.wallpaper?.id,
-    wallpaperId: payload.wallpaperId,
-    downloadedAt,
-    createdAt: downloadedAt,
-    downloadCount:
-      payload.downloadCount ??
-      payload.wallpaper?.downloadCount ??
-      payload.wallpaper?.download_count ??
-      payload.wallpaper?.downloads,
-  });
-
-  if (!normalized) return null;
-
-  return {
-    ...normalized,
-    id: String(payload.wallpaperId || normalized.id),
-    wallpaperId: String(payload.wallpaperId || normalized.id),
-    downloadedAt,
-    downloadCount: payload.downloadCount ?? getDownloadCount(normalized),
-    download_count: payload.downloadCount ?? getDownloadCount(normalized),
-    downloads: payload.downloadCount ?? getDownloadCount(normalized),
-  } as DownloadWallpaper & Record<string, any>;
-};
-
-const patchDownloadedWallpaper = (
-  item: DownloadWallpaper,
-  patch: Record<string, any>,
-) => {
-  const nextDownloadCount = Math.max(
-    toNumber(patch.downloadCount),
-    toNumber(patch.download_count),
-    toNumber(patch.downloads),
-    getDownloadCount(item),
-  );
-
-  const normalized = normalizeDownload({
-    ...item,
-    ...patch,
-    downloadCount: nextDownloadCount,
-    download_count: nextDownloadCount,
-    downloads: nextDownloadCount,
-  });
-
-  return normalized || item;
-};
-
-const getUniqueStrings = (values: unknown[]) => {
-  const seen = new Set<string>();
-
-  values.forEach((value) => {
-    if (typeof value !== "string") return;
-
-    const clean = value.trim();
-
-    if (clean) {
-      seen.add(clean);
-    }
-  });
-
-  return Array.from(seen);
-};
-
-const getDeviceFileUris = (item: DownloadWallpaper) => {
-  const record = item as DownloadWallpaper & Record<string, any>;
-
-  return getUniqueStrings([
-    record.localUri,
-    record.local_uri,
-    record.fileUri,
-    record.file_uri,
-    record.savedUri,
-    record.saved_uri,
-    record.deviceUri,
-    record.device_uri,
-    record.downloadedUri,
-    record.downloaded_uri,
-    record.localPath,
-    record.local_path,
-    record.filePath,
-    record.file_path,
-    record.path,
-    record.uri,
-    record.imageUri,
-    record.image_uri,
-    record.thumbnailUri,
-    record.thumbnail_uri,
-  ]).filter((uri) => /^file:\/\//i.test(uri));
-};
-
-const getMediaAssetIds = (item: DownloadWallpaper) => {
-  const record = item as DownloadWallpaper & Record<string, any>;
-
-  return getUniqueStrings([
-    record.assetId,
-    record.asset_id,
-    record.localAssetId,
-    record.local_asset_id,
-    record.mediaAssetId,
-    record.media_asset_id,
-    record.mediaLibraryAssetId,
-    record.media_library_asset_id,
-    record.galleryAssetId,
-    record.gallery_asset_id,
-  ]);
-};
-
-const deleteDeviceFiles = async (items: DownloadWallpaper[]) => {
-  const assetIds = getUniqueStrings(items.flatMap(getMediaAssetIds));
-
-  console.log("DELETE_DEVICE_DEBUG_ASSETS", assetIds);
-
-  if (assetIds.length > 0) {
-    try {
-      const permission = await MediaLibrary.requestPermissionsAsync();
-
-      if (permission.granted) {
-        await MediaLibrary.deleteAssetsAsync(assetIds);
-      } else {
-        console.log("MEDIA LIBRARY DELETE PERMISSION DENIED");
-      }
-    } catch (error) {
-      console.log("MEDIA LIBRARY DELETE ERROR", error);
-    }
-  }
-
-  const fileUris = getUniqueStrings(items.flatMap(getDeviceFileUris));
-
-  console.log("DELETE_DEVICE_DEBUG_FILES", fileUris);
-
-  await Promise.all(
-    fileUris.map(async (uri) => {
-      try {
-        const info = await FileSystem.getInfoAsync(uri);
-
-        if (info.exists) {
-          await FileSystem.deleteAsync(uri, { idempotent: true });
-        }
-      } catch (error) {
-        console.log("DEVICE FILE DELETE ERROR", uri, error);
-      }
-    }),
-  );
-};
-
-const removeLocalDownloadsByIds = async (ids: Set<string>) => {
-  try {
-    const raw = await AsyncStorage.getItem(LOCAL_DOWNLOADS_KEY);
-
-    if (!raw) return;
-
-    const parsed = JSON.parse(raw);
-
-    if (!Array.isArray(parsed)) return;
-
-    const next = parsed.filter((record) => {
-      const normalized = normalizeDownload(record);
-      const id = getDownloadEventId(normalized || record);
-
-      return !ids.has(id);
-    });
-
-    if (next.length === 0) {
-      await AsyncStorage.removeItem(LOCAL_DOWNLOADS_KEY);
-      return;
-    }
-
-    await AsyncStorage.setItem(LOCAL_DOWNLOADS_KEY, JSON.stringify(next));
-  } catch (error) {
-    console.log("LOCAL DOWNLOADS DELETE ERROR", error);
-  }
 };
 
 const DownloadsHeader = ({
@@ -1086,7 +678,7 @@ const DeleteBottomOverlay = ({
 };
 
 export default function DownloadsScreen({ navigation }: Props) {
-  const { user } = useAuth();
+  const toast = useToast();
 
   const [downloads, setDownloads] = useState<DownloadWallpaper[]>([]);
   const [activeFilter, setActiveFilter] = useState<Filter>("All");
@@ -1096,102 +688,86 @@ export default function DownloadsScreen({ navigation }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
 
   const loadDownloads = useCallback(async () => {
-    let localItems: DownloadWallpaper[] = [];
-    let locallyDeletedIds = new Set<string>();
-
     try {
-      localItems = await getLocalDownloads();
-      locallyDeletedIds = await getLocallyDeletedDownloadIds();
+      const { records, removedWallpaperIds } =
+        await getVerifiedDeviceDownloads();
 
-      if (!user) {
-        const sortedLocal = filterOutLocallyDeletedDownloads(
-          sortDownloads(localItems),
-          locallyDeletedIds,
-        );
-
-        setDownloads(sortedLocal);
-        return;
-      }
-
-      const response = await getDownloads();
-
-      const serverItems = getPayloadArray(response)
-        .map(normalizeDownload)
+      const localItems = records
+        .map(record =>
+          normalizeDownload({
+            ...record.wallpaper,
+            id: record.wallpaperId,
+            wallpaperId: record.wallpaperId,
+            downloadedAt: record.downloadedAt,
+            assetId: record.assetId,
+            mediaAssetId: record.assetId,
+            localUri: record.localUri,
+            savedUri: record.localUri,
+            syncStatus: record.syncStatus,
+            downloadCount:
+              record.serverDownloadCount ??
+              record.wallpaper?.downloadCount ??
+              record.wallpaper?.download_count ??
+              record.wallpaper?.downloads ??
+              0,
+          }),
+        )
         .filter(Boolean) as DownloadWallpaper[];
 
-      const sorted = filterOutLocallyDeletedDownloads(
-        sortDownloads([...serverItems, ...localItems]),
-        locallyDeletedIds,
-      );
+      setDownloads(sortDownloads(localItems));
 
-      setDownloads(sorted);
+      removedWallpaperIds.forEach(wallpaperId => {
+        appEvents.emit("downloadsChanged", {
+          wallpaperId,
+          action: "remove",
+        });
+      });
     } catch (error) {
       console.log(
-        "DOWNLOADS LOAD ERROR",
-        (error as any)?.response?.data || (error as any)?.message || error,
+        "DEVICE DOWNLOADS LOAD ERROR",
+        (error as any)?.message || error,
       );
-
-      const sortedLocal = filterOutLocallyDeletedDownloads(
-        sortDownloads(localItems),
-        locallyDeletedIds,
-      );
-
-      setDownloads(sortedLocal);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user]);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadDownloads();
+      return undefined;
+    }, [loadDownloads]),
+  );
 
   useEffect(() => {
-    loadDownloads();
+    const subscription = AppState.addEventListener("change", state => {
+      if (state === "active") {
+        void loadDownloads();
+      }
+    });
+
+    return () => subscription.remove();
   }, [loadDownloads]);
 
   useEffect(() => {
-    const unsubscribeDownloads = appEvents.on("downloadsChanged", (payload) => {
-      const nextDownload = createDownloadFromEvent(payload);
-
-      if (!nextDownload) {
-        loadDownloads();
+    const unsubscribeDownloads = appEvents.on("downloadsChanged", payload => {
+      if (payload.action === "remove") {
+        setDownloads(current =>
+          current.filter(item => getDownloadEventId(item) !== payload.wallpaperId),
+        );
         return;
       }
 
-      const nextId = getDownloadEventId(nextDownload);
-
-      if (nextId) {
-        void removeLocallyDeletedDownloadIds(new Set([nextId]));
-      }
-
-      setDownloads((current) =>
-        sortDownloads([
-          nextDownload,
-          ...current.filter((item) => getDownloadEventId(item) !== nextId),
-        ]),
-      );
+      void loadDownloads();
     });
 
-    const unsubscribeWallpaper = appEvents.on("wallpaperChanged", (payload) => {
-      const wallpaperId = String(
-        payload.wallpaperId || payload.wallpaper?.id || "",
-      );
-
-      if (!wallpaperId || !payload.wallpaper) {
-        return;
-      }
-
-      setDownloads((current) =>
-        current.map((item) => {
-          if (getDownloadEventId(item) !== wallpaperId) {
-            return item;
-          }
-
-          return patchDownloadedWallpaper(item, payload.wallpaper);
-        }),
-      );
+    const unsubscribeWallpaper = appEvents.on("wallpaperChanged", () => {
+      void loadDownloads();
     });
 
     const unsubscribeWallpapers = appEvents.on("wallpapersChanged", () => {
-      loadDownloads();
+      void loadDownloads();
     });
 
     return () => {
@@ -1203,23 +779,23 @@ export default function DownloadsScreen({ navigation }: Props) {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadDownloads();
+    void loadDownloads();
   }, [loadDownloads]);
 
   const filteredDownloads = useMemo(() => {
     if (activeFilter === "All") return downloads;
 
     if (activeFilter === "Premium") {
-      return downloads.filter((item) => item.isPremium);
+      return downloads.filter(item => item.isPremium);
     }
 
     if (activeFilter === "Live") {
-      return downloads.filter((item) =>
+      return downloads.filter(item =>
         isVideoWallpaper(item as DownloadWallpaper & Record<string, any>),
       );
     }
 
-    return downloads.filter((item) =>
+    return downloads.filter(item =>
       String(item.quality ?? "")
         .toUpperCase()
         .includes(activeFilter),
@@ -1231,11 +807,36 @@ export default function DownloadsScreen({ navigation }: Props) {
     setSelectedIds(new Set());
   }, []);
 
-  const openWallpaper = (wallpaper: DownloadWallpaper) => {
-    navigation.navigate("WallpaperDetails", {
-      wallpaper,
-    });
-  };
+  const openWallpaper = useCallback(
+    async (wallpaper: DownloadWallpaper) => {
+      const wallpaperId = getDownloadEventId(wallpaper);
+      const record = await validateDownloadedWallpaper(wallpaperId);
+
+      if (!record) {
+        setDownloads(current =>
+          current.filter(item => getDownloadEventId(item) !== wallpaperId),
+        );
+        appEvents.emit("downloadsChanged", {
+          wallpaperId,
+          action: "remove",
+        });
+        toast.info("This wallpaper was removed from your device.");
+        return;
+      }
+
+      navigation.navigate("WallpaperDetails", {
+        wallpaper: {
+          ...wallpaper,
+          ...record.wallpaper,
+          id: record.wallpaperId,
+          assetId: record.assetId,
+          localUri: record.localUri,
+          downloadedAt: record.downloadedAt,
+        },
+      });
+    },
+    [navigation, toast],
+  );
 
   const browseWallpapers = () => {
     navigation.navigate("MainTabs");
@@ -1244,24 +845,18 @@ export default function DownloadsScreen({ navigation }: Props) {
   const toggleSelectionMode = useCallback(() => {
     if (!selectionMode && filteredDownloads.length === 0) return;
 
-    setSelectionMode((current) => !current);
+    setSelectionMode(current => !current);
     setSelectedIds(new Set());
   }, [filteredDownloads.length, selectionMode]);
 
   const toggleWallpaperSelection = useCallback((wallpaper: DownloadWallpaper) => {
     const id = getDownloadEventId(wallpaper);
-
     if (!id) return;
 
-    setSelectedIds((current) => {
+    setSelectedIds(current => {
       const next = new Set(current);
-
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }, []);
@@ -1269,30 +864,36 @@ export default function DownloadsScreen({ navigation }: Props) {
   const deleteSelectedWallpapers = useCallback(async () => {
     if (selectedIds.size === 0) return;
 
-    const idsToDelete = new Set(selectedIds);
+    const requestedIds: string[] = Array.from(selectedIds);
+    const result = await deleteRegisteredDeviceDownloads(requestedIds);
 
-    const selectedItems = downloads.filter((item) =>
-      idsToDelete.has(getDownloadEventId(item)),
-    );
+    if (result.deletedWallpaperIds.length > 0) {
+      const deleted = new Set(result.deletedWallpaperIds);
+      setDownloads(current =>
+        current.filter(item => !deleted.has(getDownloadEventId(item))),
+      );
 
-    setDownloads((current) =>
-      current.filter((item) => !idsToDelete.has(getDownloadEventId(item))),
-    );
+      result.deletedWallpaperIds.forEach(wallpaperId => {
+        appEvents.emit("downloadsChanged", {
+          wallpaperId,
+          action: "remove",
+        });
+      });
+    }
 
     setSelectedIds(new Set());
     setSelectionMode(false);
 
-    try {
-      await deleteDeviceFiles(selectedItems);
-      await removeLocalDownloadsByIds(idsToDelete);
-      await addLocallyDeletedDownloadIds(idsToDelete);
-    } catch (error) {
-      console.log(
-        "DELETE LOCAL DOWNLOADS ERROR",
-        (error as any)?.message || error,
+    if (result.failedWallpaperIds.length > 0) {
+      toast.error("Some wallpapers could not be deleted from the device.");
+    } else {
+      toast.success(
+        result.deletedWallpaperIds.length === 1
+          ? "Wallpaper deleted from device."
+          : "Wallpapers deleted from device.",
       );
     }
-  }, [downloads, selectedIds]);
+  }, [selectedIds, toast]);
 
   if (loading) {
     return (

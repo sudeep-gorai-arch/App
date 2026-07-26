@@ -42,7 +42,7 @@ type FaqItem = {
   answer: string;
 };
 
-const SUPPORT_EMAIL = 'support@flexiwalls.app';
+const SUPPORT_EMAIL = 'support.flexiwalls@gmail.com';
 
 const EMAIL_SUBJECT = 'FlexiWalls Support Request';
 

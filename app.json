@@ -15,14 +15,15 @@
           "savePhotosPermission": "Allow FlexiWalls to save wallpapers to your gallery.",
           "isAccessMediaLocationEnabled": true,
           "granularPermissions": [
-            "photo"
+            "photo",
+            "video"
           ]
         }
       ],
       "expo-secure-store",
       "@react-native-google-signin/google-signin",
       "expo-video",
-      "expo-iap"
+      "expo-sqlite"
     ],
     "name": "FlexiWalls",
     "slug": "flexiwalls",
@@ -38,7 +39,7 @@
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
         "android.permission.ACCESS_MEDIA_LOCATION",
         "android.permission.READ_MEDIA_IMAGES",
-        "com.android.vending.BILLING"
+        "android.permission.READ_MEDIA_VIDEO"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#0B0819"

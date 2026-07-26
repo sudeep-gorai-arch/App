@@ -14,10 +14,12 @@ const GRANULAR_PERMISSIONS: GranularPermission[] = ['photo', 'video'];
 
 type MediaKind = 'image' | 'video';
 
-type DownloadOptions = {
+export type DownloadOptions = {
   mediaType?: 'IMAGE' | 'VIDEO' | string;
   isVideo?: boolean;
   extension?: string | null;
+  wallpaperId?: string | null;
+  permissionAlreadyGranted?: boolean;
 };
 
 export type DownloadWallpaperSuccess = {
@@ -45,7 +47,7 @@ export type DownloadWallpaperResult = DownloadWallpaperSuccess | false;
 const VIDEO_EXTENSION_PATTERN = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
 const IMAGE_EXTENSION_PATTERN = /\.(jpg|jpeg|png|webp|avif)(\?|#|$)/i;
 
-const ensureGalleryPermission = async (): Promise<boolean> => {
+export const ensureGalleryPermission = async (): Promise<boolean> => {
   const current = await getPermissionsAsync(true, GRANULAR_PERMISSIONS);
 
   if (current.granted) return true;
@@ -197,6 +199,14 @@ const safeName = (
   options?: DownloadOptions,
 ) => {
   const extension = getExtensionFromUrl(url, mediaKind, options);
+  const wallpaperId = String(options?.wallpaperId || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-');
+
+  if (wallpaperId) {
+    return `flexiwalls-${wallpaperId}-${Date.now()}.${extension}`;
+  }
 
   return `${Date.now()}-${sanitizeBaseName(name)}.${extension}`;
 };
@@ -273,7 +283,9 @@ export const downloadWallpaper = async (
 
   const mediaKind = detectMediaKind(mediaUrl, options);
 
-  const granted = await ensureGalleryPermission();
+  const granted = options?.permissionAlreadyGranted
+    ? true
+    : await ensureGalleryPermission();
 
   if (!granted) return false;
 

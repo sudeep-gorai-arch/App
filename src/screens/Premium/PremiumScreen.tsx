@@ -1603,7 +1603,16 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
     }
 
     if (!auth.user?.id || !auth.token) {
-      toast.info('Please sign in before purchasing Premium.');
+      toast.info(
+        'Sign in to your FlexiWalls account before purchasing Premium. After signing in, tap the plan button again.',
+        {
+          duration: 6500,
+          action: {
+            label: 'Sign in',
+            onPress: auth.signInGoogle,
+          },
+        },
+      );
       return;
     }
 
@@ -1700,7 +1709,16 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
     }
 
     if (!auth.user?.id || !auth.token) {
-      toast.info('Please sign in before restoring Premium.');
+      toast.info(
+        'Sign in to restore purchases linked to your Google Play account.',
+        {
+          duration: 6500,
+          action: {
+            label: 'Sign in',
+            onPress: auth.signInGoogle,
+          },
+        },
+      );
       return;
     }
 

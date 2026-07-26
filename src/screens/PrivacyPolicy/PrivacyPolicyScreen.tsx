@@ -44,7 +44,7 @@ type QuickFact = {
 };
 
 const LAST_UPDATED = 'July 13, 2026';
-const SUPPORT_EMAIL = 'support@flexiwalls.app';
+const SUPPORT_EMAIL = 'support.flexiwalls@gmail.com';
 
 const HERO_GRADIENT = ['#8B5CF6', '#EC4899', '#3B82F6'] as const;
 

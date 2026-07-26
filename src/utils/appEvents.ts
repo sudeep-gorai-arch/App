@@ -18,6 +18,7 @@ export type DownloadChangedPayload = {
   wallpaperId: string;
   downloadCount?: number;
   wallpaper?: any;
+  action?: 'upsert' | 'remove' | 'reconcile';
 };
 
 export type PremiumChangedPayload = {

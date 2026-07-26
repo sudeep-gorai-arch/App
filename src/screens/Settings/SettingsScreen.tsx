@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   View,
@@ -13,11 +13,14 @@ import {
   Image,
   ImageStyle,
   Modal,
+  Animated,
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Ionicons } from "@expo/vector-icons";
+
+import { BlurView } from "expo-blur";
 
 import { LinearGradient } from "expo-linear-gradient";
 
@@ -70,6 +73,70 @@ type WarningModalProps = {
   onSecondary?: () => void;
   loading?: boolean;
   primaryDanger?: boolean;
+  autoDismissMs?: number;
+};
+
+
+const usePopupAnimation = (visible: boolean) => {
+  const [rendered, setRendered] = useState(visible);
+  const opacity = useRef(new Animated.Value(visible ? 1 : 0)).current;
+  const scale = useRef(new Animated.Value(visible ? 1 : 0.84)).current;
+
+  useEffect(() => {
+    let frame: number | null = null;
+
+    opacity.stopAnimation();
+    scale.stopAnimation();
+
+    if (visible) {
+      setRendered(true);
+      opacity.setValue(0);
+      scale.setValue(0.84);
+
+      frame = requestAnimationFrame(() => {
+        Animated.parallel([
+          Animated.timing(opacity, {
+            toValue: 1,
+            duration: 210,
+            useNativeDriver: true,
+          }),
+          Animated.spring(scale, {
+            toValue: 1,
+            speed: 18,
+            bounciness: 5,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      });
+    } else if (rendered) {
+      Animated.parallel([
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scale, {
+          toValue: 0.86,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (finished) setRendered(false);
+      });
+    }
+
+    return () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, [opacity, scale, visible]);
+
+  return {
+    rendered,
+    animatedStyle: {
+      opacity,
+      transform: [{ scale }],
+    },
+  };
 };
 
 const DANGER = "#FF5A6E";
@@ -170,8 +237,25 @@ const WarningModal = ({
   onSecondary,
   loading,
   primaryDanger,
+  autoDismissMs,
 }: WarningModalProps) => {
   const accent = getModalAccent(variant);
+  const popupAnimation = usePopupAnimation(visible);
+  const onPrimaryRef = useRef(onPrimary);
+
+  useEffect(() => {
+    onPrimaryRef.current = onPrimary;
+  }, [onPrimary]);
+
+  useEffect(() => {
+    if (!visible || loading || !autoDismissMs) return;
+
+    const timer = setTimeout(() => {
+      onPrimaryRef.current();
+    }, autoDismissMs);
+
+    return () => clearTimeout(timer);
+  }, [autoDismissMs, loading, visible]);
 
   const closeModal = () => {
     if (!loading && onSecondary) {
@@ -181,9 +265,9 @@ const WarningModal = ({
 
   return (
     <Modal
-      visible={visible}
+      visible={popupAnimation.rendered}
       transparent
-      animationType="fade"
+      animationType="none"
       statusBarTranslucent
       onRequestClose={closeModal}
     >
@@ -194,17 +278,21 @@ const WarningModal = ({
           onPress={closeModal}
         />
 
-        <View style={styles.modalOuterGlow}>
-          <LinearGradient
-            colors={[
-              "rgba(139,92,246,.34)",
-              "rgba(236,72,153,.18)",
-              "rgba(15,15,16,.98)",
-            ]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.modalCard}
-          >
+        <Animated.View
+          style={[styles.modalOuterGlow, popupAnimation.animatedStyle]}
+        >
+          <BlurView intensity={54} tint="dark" style={styles.modalCard}>
+            <LinearGradient
+              colors={[
+                "rgba(255,255,255,.13)",
+                "rgba(139,92,246,.10)",
+                "rgba(7,7,10,.92)",
+              ]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            />
             <View style={[styles.modalIconWrap, { borderColor: accent }]}>
               <View
                 style={[
@@ -212,7 +300,7 @@ const WarningModal = ({
                   { backgroundColor: `${accent}20` },
                 ]}
               >
-                <Ionicons name={icon} size={34} color={accent} />
+                <Ionicons name={icon} size={24} color={accent} />
               </View>
             </View>
 
@@ -282,8 +370,8 @@ const WarningModal = ({
                 </LinearGradient>
               </Pressable>
             </View>
-          </LinearGradient>
-        </View>
+          </BlurView>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -745,6 +833,7 @@ export default function SettingsScreen({ navigation }: any) {
         message="Your account and saved data have been deleted successfully."
         primaryLabel="Done"
         onPrimary={completeDeletedFlow}
+        autoDismissMs={3500}
       />
 
       <WarningModal
@@ -755,6 +844,7 @@ export default function SettingsScreen({ navigation }: any) {
         message={deleteErrorMessage}
         primaryLabel="Okay"
         onPrimary={closeDeleteModal}
+        autoDismissMs={4500}
       />
     </View>
   );
@@ -997,7 +1087,7 @@ const styles = StyleSheet.create({
   rowSubtitle: {
     color: colors.textSecondary,
     fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 17,
     marginTop: 4,
   },
 
@@ -1024,7 +1114,7 @@ const styles = StyleSheet.create({
 
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,.72)",
+    backgroundColor: "rgba(0,0,0,.64)",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: spacing.xl,
@@ -1040,67 +1130,70 @@ const styles = StyleSheet.create({
 
   modalOuterGlow: {
     width: "100%",
-    borderRadius: 30,
+    maxWidth: 304,
+    borderRadius: 25,
     padding: 1,
-    backgroundColor: "rgba(255,255,255,.12)",
-    shadowColor: "#A78BFA",
-    shadowOpacity: 0.35,
+    backgroundColor: "rgba(255,255,255,.15)",
+    shadowColor: "#000000",
+    shadowOpacity: 0.44,
     shadowRadius: 28,
-    shadowOffset: { width: 0, height: 18 },
+    shadowOffset: { width: 0, height: 16 },
     elevation: 18,
   },
 
   modalCard: {
-    borderRadius: 30,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxl,
-    paddingBottom: spacing.xl,
-    borderWidth: 1,
+    minHeight: 286,
+    borderRadius: 24,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,.13)",
+    backgroundColor: "rgba(7,7,10,.84)",
     overflow: "hidden",
   },
 
   modalIconWrap: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     alignSelf: "center",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
     backgroundColor: "rgba(255,255,255,.08)",
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
 
   modalIconInner: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: "center",
     justifyContent: "center",
   },
 
   modalTitle: {
     color: colors.textPrimary,
-    fontSize: 24,
-    fontWeight: "900",
+    fontSize: 16,
+    fontWeight: "800",
     textAlign: "center",
-    letterSpacing: 0.2,
+    letterSpacing: 0.1,
   },
 
   modalMessage: {
-    color: colors.textSecondary,
-    fontSize: 14,
+    color: "rgba(255,255,255,.62)",
+    fontSize: 12,
     fontWeight: "500",
-    lineHeight: 21,
+    lineHeight: 18,
     textAlign: "center",
-    marginTop: spacing.sm,
+    marginTop: 5,
   },
 
   modalBulletBox: {
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
     padding: spacing.md,
-    borderRadius: 22,
+    borderRadius: 18,
     backgroundColor: "rgba(255,255,255,.07)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,.09)",
@@ -1122,21 +1215,21 @@ const styles = StyleSheet.create({
 
   modalBulletText: {
     flex: 1,
-    color: colors.textPrimary,
-    fontSize: 13,
+    color: "rgba(255,255,255,.78)",
+    fontSize: 11.5,
     fontWeight: "600",
-    lineHeight: 19,
+    lineHeight: 17,
   },
 
   modalActions: {
     flexDirection: "row",
-    gap: spacing.md,
-    marginTop: spacing.xl,
+    gap: spacing.sm,
+    marginTop: spacing.lg,
   },
 
   modalSecondaryButton: {
     flex: 1,
-    height: 54,
+    height: 44,
     borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",
@@ -1147,13 +1240,13 @@ const styles = StyleSheet.create({
 
   modalSecondaryText: {
     color: colors.textPrimary,
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: 12,
+    fontWeight: "800",
   },
 
   modalPrimaryButtonWrap: {
     flex: 1,
-    height: 54,
+    height: 44,
     borderRadius: radius.pill,
     overflow: "hidden",
   },
@@ -1172,8 +1265,8 @@ const styles = StyleSheet.create({
 
   modalPrimaryText: {
     color: "#fff",
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: 12,
+    fontWeight: "800",
   },
 
   modalButtonPressed: {

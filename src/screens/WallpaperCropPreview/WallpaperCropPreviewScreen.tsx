@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Modal,
   Pressable,
   ScrollView,
@@ -56,6 +57,69 @@ type Props = {
 };
 
 type CropMap = Partial<Record<WallpaperPreviewMode, CropPreviewFrameValue>>;
+
+const usePopupAnimation = (visible: boolean) => {
+  const [rendered, setRendered] = useState(visible);
+  const opacity = useRef(new Animated.Value(visible ? 1 : 0)).current;
+  const scale = useRef(new Animated.Value(visible ? 1 : 0.84)).current;
+
+  useEffect(() => {
+    let frame: number | null = null;
+
+    opacity.stopAnimation();
+    scale.stopAnimation();
+
+    if (visible) {
+      setRendered(true);
+      opacity.setValue(0);
+      scale.setValue(0.84);
+
+      frame = requestAnimationFrame(() => {
+        Animated.parallel([
+          Animated.timing(opacity, {
+            toValue: 1,
+            duration: 210,
+            useNativeDriver: true,
+          }),
+          Animated.spring(scale, {
+            toValue: 1,
+            speed: 18,
+            bounciness: 5,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      });
+    } else if (rendered) {
+      Animated.parallel([
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scale, {
+          toValue: 0.86,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (finished) setRendered(false);
+      });
+    }
+
+    return () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, [opacity, scale, visible]);
+
+  return {
+    rendered,
+    animatedStyle: {
+      opacity,
+      transform: [{ scale }],
+    },
+  };
+};
+
 
 const VIDEO_TARGETS: WallpaperApplyTarget[] = ['home', 'lock', 'both'];
 
@@ -204,6 +268,9 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
   const [cropInteractionActive, setCropInteractionActive] = useState(false);
   const [androidUtilityNoticeVisible, setAndroidUtilityNoticeVisible] =
     useState(false);
+  const utilityNoticeAnimation = usePopupAnimation(
+    androidUtilityNoticeVisible,
+  );
 
   const previewModes = useMemo(() => {
     if (isVideo) {
@@ -639,13 +706,14 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
       </SafeAreaView>
 
       <Modal
-        visible={androidUtilityNoticeVisible}
+        visible={utilityNoticeAnimation.rendered}
         transparent
-        animationType="fade"
+        animationType="none"
         onRequestClose={() => undefined}
       >
         <View style={styles.noticeOverlay}>
-          <BlurView intensity={42} tint="dark" style={styles.noticeCard}>
+          <Animated.View style={utilityNoticeAnimation.animatedStyle}>
+            <BlurView intensity={42} tint="dark" style={styles.noticeCard}>
             <LinearGradient
               colors={[
                 'rgba(255,255,255,0.16)',
@@ -658,17 +726,18 @@ const WallpaperCropPreviewScreen = ({ navigation, route }: Props) => {
             <View style={styles.noticeIconCircle}>
               <Ionicons
                 name="open-outline"
-                size={26}
+                size={21}
                 color={colors.textPrimary}
               />
             </View>
 
-            <Text style={styles.noticeTitle}>Opening Android Utility</Text>
+            <Text style={styles.noticeTitle}>Opening wallpaper preview</Text>
 
             <Text style={styles.noticeText}>
-              Moving to external Android utility to apply live wallpaper.
+              Continue in Android to finish applying the live wallpaper.
             </Text>
-          </BlurView>
+            </BlurView>
+          </Animated.View>
         </View>
       </Modal>
     </View>
@@ -898,29 +967,35 @@ const styles = StyleSheet.create({
 
   noticeOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.54)',
+    backgroundColor: 'rgba(0,0,0,0.64)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
   },
 
   noticeCard: {
-    width: '100%',
-    maxWidth: 310,
-    borderRadius: 28,
+    width: 286,
+    minHeight: 240,
+    maxWidth: 286,
+    borderRadius: 24,
     overflow: 'hidden',
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.glassBorder,
-    backgroundColor: 'rgba(15,15,16,0.88)',
+    borderColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(7,7,10,0.86)',
+    shadowColor: '#000000',
+    shadowOpacity: 0.42,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 16,
   },
 
   noticeIconCircle: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
@@ -932,16 +1007,17 @@ const styles = StyleSheet.create({
   noticeTitle: {
     color: colors.textPrimary,
     fontFamily: fontFamily.bold,
-    fontSize: 20,
+    fontSize: 15.5,
+    lineHeight: 22,
     textAlign: 'center',
   },
 
   noticeText: {
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.60)',
     fontFamily: fontFamily.semiBold,
-    fontSize: 13,
-    lineHeight: 20,
-    marginTop: spacing.sm,
+    fontSize: 11.5,
+    lineHeight: 17,
+    marginTop: 5,
     textAlign: 'center',
   },
 });

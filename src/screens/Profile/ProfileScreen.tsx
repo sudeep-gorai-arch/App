@@ -9,6 +9,7 @@ import React, {
 import {
   ActivityIndicator,
   Animated,
+  AppState,
   Dimensions,
   Easing,
   Image,
@@ -21,11 +22,11 @@ import {
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import MeshBackground from "../../components/MeshBackground";
 import Card from "../../components/Card";
@@ -37,9 +38,12 @@ import { colors, gradients } from "../../styles/colors";
 import { spacing } from "../../utils/constants";
 
 import { useAuth } from "../../context/AuthContext";
-import { getDownloads } from "../../services/downloadService";
 import { Wallpaper } from "../../services/types";
 import { appEvents } from "../../utils/appEvents";
+import {
+  getVerifiedDeviceDownloads,
+  validateDownloadedWallpaper,
+} from "../../services/downloadCoordinator";
 
 type Props = {
   navigation: any;
@@ -79,8 +83,6 @@ const DOWNLOAD_THUMB_SIZE = Math.floor(
 
 const DOWNLOAD_PREVIEW_HEIGHT =
   DOWNLOAD_THUMB_SIZE * 2 + DOWNLOAD_THUMB_GAP;
-
-const LOCAL_DOWNLOADS_KEY = "@flexiwalls:guestDownloads";
 
 const VIDEO_EXTENSION_PATTERN = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
 
@@ -275,49 +277,15 @@ const normalizeRecentDownload = (download: any, index: number) => {
   } satisfies RecentDownloadItem;
 };
 
-const extractDownloadArray = (payload: any) => {
-  const data = payload?.data?.data ?? payload?.data ?? payload;
-
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.downloads)) return data.downloads;
-  if (Array.isArray(data?.items)) return data.items;
-  if (Array.isArray(data?.results)) return data.results;
-
-  return [];
-};
-
-const getRecentDownloadKey = (item: RecentDownloadItem) =>
-  String(item.wallpaper?.id || item.id || item.image || "");
-
 const uniqueRecentDownloads = (items: RecentDownloadItem[]) => {
   const seen = new Set<string>();
 
-  return items.filter((item) => {
-    const key = getRecentDownloadKey(item);
-
+  return items.filter(item => {
+    const key = String(item.wallpaper?.id || item.id || item.image || "");
     if (!key || seen.has(key)) return false;
-
     seen.add(key);
     return true;
   });
-};
-
-const createRecentDownloadFromEvent = (payload: {
-  wallpaperId: string;
-  wallpaper?: any;
-}) => {
-  const downloadedAt = new Date().toISOString();
-
-  return normalizeRecentDownload(
-    {
-      ...(payload.wallpaper || {}),
-      id: payload.wallpaperId || payload.wallpaper?.id,
-      wallpaperId: payload.wallpaperId,
-      downloadedAt,
-      createdAt: downloadedAt,
-    },
-    0,
-  );
 };
 
 const sortRecentDownloads = (items: RecentDownloadItem[]) =>
@@ -327,19 +295,31 @@ const sortRecentDownloads = (items: RecentDownloadItem[]) =>
 
 const getLocalRecentDownloads = async () => {
   try {
-    const raw = await AsyncStorage.getItem(LOCAL_DOWNLOADS_KEY);
+    const { records } = await getVerifiedDeviceDownloads();
 
-    if (!raw) return [];
-
-    const parsed = JSON.parse(raw);
-
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed
-      .map(normalizeRecentDownload)
+    return records
+      .map((record, index) =>
+        normalizeRecentDownload(
+          {
+            ...record.wallpaper,
+            id: record.wallpaperId,
+            wallpaperId: record.wallpaperId,
+            assetId: record.assetId,
+            mediaAssetId: record.assetId,
+            localUri: record.localUri,
+            savedUri: record.localUri,
+            downloadedAt: record.downloadedAt,
+            downloadCount:
+              record.serverDownloadCount ??
+              record.wallpaper?.downloadCount ??
+              record.wallpaper?.download_count,
+          },
+          index,
+        ),
+      )
       .filter(Boolean) as RecentDownloadItem[];
   } catch (error) {
-    console.log("PROFILE LOCAL DOWNLOADS ERROR", error);
+    console.log("PROFILE DEVICE DOWNLOADS ERROR", error);
     return [];
   }
 };
@@ -603,43 +583,43 @@ export default function ProfileScreen({ navigation }: Props) {
   }, []);
 
   const loadDownloads = useCallback(async () => {
-    let localDownloads: RecentDownloadItem[] = [];
-
     try {
-      localDownloads = await getLocalRecentDownloads();
-
-      if (!user) {
-        setDownloads(sortRecentDownloads(localDownloads));
-        return;
-      }
-
-      const res = await getDownloads();
-
-      const serverDownloads = extractDownloadArray(res)
-        .map(normalizeRecentDownload)
-        .filter(Boolean) as RecentDownloadItem[];
-
-      setDownloads(sortRecentDownloads([...serverDownloads, ...localDownloads]));
+      const localDownloads = await getLocalRecentDownloads();
+      setDownloads(sortRecentDownloads(localDownloads));
     } catch (err) {
       console.log("PROFILE DOWNLOADS ERROR", err);
-      setDownloads(sortRecentDownloads(localDownloads));
+      setDownloads([]);
     }
-  }, [user]);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadDownloads();
+    }, [loadDownloads]),
+  );
 
   useEffect(() => {
-    loadDownloads();
+    const subscription = AppState.addEventListener("change", state => {
+      if (state === "active") {
+        loadDownloads();
+      }
+    });
+
+    return () => subscription.remove();
   }, [loadDownloads]);
 
   useEffect(() => {
-    const unsubscribeDownloads = appEvents.on("downloadsChanged", (payload) => {
-      const nextDownload = createRecentDownloadFromEvent(payload);
-
-      if (!nextDownload) {
-        loadDownloads();
+    const unsubscribeDownloads = appEvents.on("downloadsChanged", payload => {
+      if (payload.action === "remove") {
+        setDownloads(current =>
+          current.filter(
+            item => String(item.wallpaper?.id || item.id) !== payload.wallpaperId,
+          ),
+        );
         return;
       }
 
-      setDownloads((current) => sortRecentDownloads([nextDownload, ...current]));
+      loadDownloads();
     });
 
     const unsubscribeWallpapers = appEvents.on("wallpapersChanged", () => {
@@ -758,18 +738,44 @@ export default function ProfileScreen({ navigation }: Props) {
 
   const openDownloads = () => navigation.navigate("Downloads");
 
-  const openRecentDownloadWallpaper = (download: RecentDownloadItem) => {
+  const openRecentDownloadWallpaper = async (
+    download: RecentDownloadItem,
+  ) => {
+    const wallpaperId = String(download.wallpaper?.id || download.id);
+    const validRecord = await validateDownloadedWallpaper(wallpaperId);
+
+    if (!validRecord) {
+      setDownloads(current =>
+        current.filter(
+          item => String(item.wallpaper?.id || item.id) !== wallpaperId,
+        ),
+      );
+      appEvents.emit("downloadsChanged", {
+        wallpaperId,
+        action: "remove",
+      });
+      return;
+    }
+
     const parentNavigation = navigation.getParent?.();
+    const verifiedWallpaper = {
+      ...download.wallpaper,
+      ...validRecord.wallpaper,
+      id: wallpaperId,
+      assetId: validRecord.assetId,
+      localUri: validRecord.localUri,
+      downloadedAt: validRecord.downloadedAt,
+    };
 
     if (parentNavigation) {
       parentNavigation.navigate("WallpaperDetails", {
-        wallpaper: download.wallpaper,
+        wallpaper: verifiedWallpaper,
       });
       return;
     }
 
     navigation.navigate("WallpaperDetails", {
-      wallpaper: download.wallpaper,
+      wallpaper: verifiedWallpaper,
     });
   };
 
