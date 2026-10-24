@@ -22,7 +22,6 @@ import {
   statusCodes,
 } from '@react-native-google-signin/google-signin';
 
-import API from '../services/api';
 import { shouldKeepCachedSession } from '../utils/sessionRecovery';
 
 import { googleLogin, logoutUser, getProfile } from '../services/authService';
