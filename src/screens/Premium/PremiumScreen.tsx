@@ -12,6 +12,7 @@ import {
   Easing,
   Image,
   Pressable,
+  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -47,8 +48,10 @@ import { radius, SCREEN, spacing } from '../../utils/constants';
 
 import API from '../../services/api';
 import { PurchaseAttemptGate } from '../../utils/purchaseAttemptGate';
+import { decidePlayPurchase } from '../../utils/playPurchasePolicy';
 import {
   getSubscriptionPlans,
+  getSubscriptionStatus,
   verifyGooglePlayPurchase,
 } from '../../services/subscriptionService';
 import {
@@ -1606,7 +1609,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
     outputRange: [-SCREEN.width, SCREEN.width],
   });
 
-  const handleContinue = async () => {
+  const handleContinue = async (confirmedLifetimeOverlap = false) => {
     if (!selectedPlanData || loading || restoring || purchaseGate.isPurchaseInFlight()) {
       return;
     }
@@ -1648,6 +1651,29 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
     try {
       if (!purchaseGate.beginPurchase()) return;
       setLoading(true);
+
+      // Check the server entitlement before launching the native billing sheet.
+      // The old flow could purchase another subscription over an existing one.
+      const currentStatus = await getSubscriptionStatus();
+      const decision = decidePlayPurchase(currentStatus, purchasePlan);
+      if (decision.kind === 'blocked') {
+        purchaseGate.finishPurchase();
+        setLoading(false);
+        toast.info(decision.reason, { duration: 8000 });
+        return;
+      }
+      if (decision.kind === 'confirm-lifetime' && !confirmedLifetimeOverlap) {
+        purchaseGate.finishPurchase();
+        setLoading(false);
+        Alert.alert('Existing Google Play subscription', decision.reason, [
+          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Continue to Lifetime',
+            onPress: () => { void handleContinue(true); },
+          },
+        ]);
+        return;
+      }
 
       const accountId = await Crypto.digestStringAsync(
         Crypto.CryptoDigestAlgorithm.SHA256,
@@ -1925,7 +1951,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
           >
             <Pressable
               disabled={loading || restoring}
-              onPress={handleContinue}
+              onPress={() => { void handleContinue(); }}
               style={({ pressed }) => [
                 styles.ctaPressable,
                 {
