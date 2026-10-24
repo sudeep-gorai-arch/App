@@ -17,6 +17,8 @@ import API from '../services/api';
 import { shouldKeepCachedSession } from '../utils/sessionRecovery';
 
 import { googleLogin, logoutUser, getProfile } from '../services/authService';
+import { getSubscriptionStatus } from '../services/subscriptionService';
+import { isCurrentPremium } from '../utils/premiumStatus';
 
 import type { User, Role } from '../services/types';
 import AdController from '../ads/AdController';
@@ -223,14 +225,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       setLoading(true);
 
+      // Sync verified Google Play entitlement before displaying Free/Pro badges.
+      // Failure of status sync should not erase a valid session or cached profile.
+      const status = await getSubscriptionStatus().catch(() => null);
       const response = await getProfile();
-
-      setUser(response.data);
-
-      // Enable/Disable ads based on subscription
-      AdController.setPremiumUser(response.data.isPremium);
-
-      await SecureStore.setItemAsync('user', JSON.stringify(response.data));
+      const updatedUser = {
+        ...response.data,
+        isPremium: status ? isCurrentPremium(status) : Boolean(response.data.isPremium &&
+          response.data.premiumUntil && Date.parse(response.data.premiumUntil) > Date.now()),
+        premiumUntil: status ? status.premiumUntil ?? null : response.data.premiumUntil,
+      };
+      setUser(updatedUser);
+      AdController.setPremiumUser(updatedUser.isPremium);
+      await SecureStore.setItemAsync('user', JSON.stringify(updatedUser));
     } finally {
       setLoading(false);
     }
