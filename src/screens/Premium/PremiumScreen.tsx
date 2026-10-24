@@ -12,6 +12,7 @@ import {
   Easing,
   Image,
   Pressable,
+  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -46,8 +47,11 @@ import { colors } from '../../styles/colors';
 import { radius, SCREEN, spacing } from '../../utils/constants';
 
 import API from '../../services/api';
+import { PurchaseAttemptGate } from '../../utils/purchaseAttemptGate';
+import { decidePlayPurchase } from '../../utils/playPurchasePolicy';
 import {
   getSubscriptionPlans,
+  getSubscriptionStatus,
   verifyGooglePlayPurchase,
 } from '../../services/subscriptionService';
 import {
@@ -1291,6 +1295,9 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
 
   const [loading, setLoading] = useState(false);
 
+  // Synchronous ref blocks a second tap before React commits loading state.
+  const purchaseGate = useRef(new PurchaseAttemptGate()).current;
+
   const [restoring, setRestoring] = useState(false);
 
   const [refreshing, setRefreshing] = useState(false);
@@ -1361,6 +1368,8 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
 
   const onPurchaseSuccess = useCallback(
     async (purchase: Purchase) => {
+      const token = purchase.purchaseToken;
+      if (token && !purchaseGate.beginVerification(token)) return;
       try {
         const purchasePlan =
           GOOGLE_PLAY_PLAN_BY_PRODUCT_ID[purchase.productId];
@@ -1384,6 +1393,8 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
         console.log('GOOGLE PLAY PURCHASE VERIFY ERROR', error);
         toast.error(getErrorMessage(error));
       } finally {
+        if (token) purchaseGate.finishVerification(token);
+        purchaseGate.finishPurchase();
         setLoading(false);
       }
     },
@@ -1392,6 +1403,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
 
   const onPurchaseError = useCallback(
     (error: any) => {
+      purchaseGate.finishPurchase();
       setLoading(false);
 
       if (error?.code === ErrorCode.UserCancelled) {
@@ -1597,8 +1609,8 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
     outputRange: [-SCREEN.width, SCREEN.width],
   });
 
-  const handleContinue = async () => {
-    if (!selectedPlanData || loading || restoring) {
+  const handleContinue = async (confirmedLifetimeOverlap = false) => {
+    if (!selectedPlanData || loading || restoring || purchaseGate.isPurchaseInFlight()) {
       return;
     }
 
@@ -1637,7 +1649,31 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
     }
 
     try {
+      if (!purchaseGate.beginPurchase()) return;
       setLoading(true);
+
+      // Check the server entitlement before launching the native billing sheet.
+      // The old flow could purchase another subscription over an existing one.
+      const currentStatus = await getSubscriptionStatus();
+      const decision = decidePlayPurchase(currentStatus, purchasePlan);
+      if (decision.kind === 'blocked') {
+        purchaseGate.finishPurchase();
+        setLoading(false);
+        toast.info(decision.reason, { duration: 8000 });
+        return;
+      }
+      if (decision.kind === 'confirm-lifetime' && !confirmedLifetimeOverlap) {
+        purchaseGate.finishPurchase();
+        setLoading(false);
+        Alert.alert('Existing Google Play subscription', decision.reason, [
+          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Continue to Lifetime',
+            onPress: () => { void handleContinue(true); },
+          },
+        ]);
+        return;
+      }
 
       const accountId = await Crypto.digestStringAsync(
         Crypto.CryptoDigestAlgorithm.SHA256,
@@ -1697,6 +1733,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
         type: 'in-app',
       });
     } catch (error) {
+      purchaseGate.finishPurchase();
       setLoading(false);
       console.log('GOOGLE PLAY PURCHASE OPEN ERROR', error);
       toast.error(getErrorMessage(error));
@@ -1914,7 +1951,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
           >
             <Pressable
               disabled={loading || restoring}
-              onPress={handleContinue}
+              onPress={() => { void handleContinue(); }}
               style={({ pressed }) => [
                 styles.ctaPressable,
                 {

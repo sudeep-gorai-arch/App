@@ -14,8 +14,11 @@ import {
 } from '@react-native-google-signin/google-signin';
 
 import API from '../services/api';
+import { shouldKeepCachedSession } from '../utils/sessionRecovery';
 
 import { googleLogin, logoutUser, getProfile } from '../services/authService';
+import { getSubscriptionStatus } from '../services/subscriptionService';
+import { isCurrentPremium } from '../utils/premiumStatus';
 
 import type { User, Role } from '../services/types';
 import AdController from '../ads/AdController';
@@ -73,11 +76,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
+      // Retain the last authenticated profile during temporary network loss.
+      // Every server-side privileged request still validates the session.
+      const cachedProfile = JSON.parse(savedUser) as User;
       API.defaults.headers.common.Authorization = `Bearer ${savedToken}`;
-
       setToken(savedToken);
+      setUser(cachedProfile);
+      AdController.setPremiumUser(Boolean(cachedProfile.isPremium));
 
-      await refreshProfile();
+      try {
+        await refreshProfile();
+      } catch (error) {
+        if (!shouldKeepCachedSession(error)) throw error;
+        // Timeout/offline/5xx: leave cached login intact and retry on the next refresh.
+        console.warn('Unable to refresh profile while offline; retaining cached session.');
+      }
     } catch (error) {
       console.log('RESTORE SESSION ERROR', error);
 
@@ -132,7 +145,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const result = await GoogleSignin.signIn();
 
-      console.log('Google Result:', result);
 
       const idToken = result.data?.idToken;
 
@@ -144,7 +156,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const response = await googleLogin(idToken);
 
-      console.log('Backend Response:', response);
 
       await saveSession(response.data.token, response.data.user);
 
@@ -214,14 +225,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       setLoading(true);
 
+      // Sync verified Google Play entitlement before displaying Free/Pro badges.
+      // Failure of status sync should not erase a valid session or cached profile.
+      const status = await getSubscriptionStatus().catch(() => null);
       const response = await getProfile();
-
-      setUser(response.data);
-
-      // Enable/Disable ads based on subscription
-      AdController.setPremiumUser(response.data.isPremium);
-
-      await SecureStore.setItemAsync('user', JSON.stringify(response.data));
+      const updatedUser = {
+        ...response.data,
+        isPremium: status ? isCurrentPremium(status) : Boolean(response.data.isPremium &&
+          response.data.premiumUntil && Date.parse(response.data.premiumUntil) > Date.now()),
+        premiumUntil: status ? status.premiumUntil ?? null : response.data.premiumUntil,
+      };
+      setUser(updatedUser);
+      AdController.setPremiumUser(updatedUser.isPremium);
+      await SecureStore.setItemAsync('user', JSON.stringify(updatedUser));
     } finally {
       setLoading(false);
     }

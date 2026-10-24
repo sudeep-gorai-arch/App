@@ -9,6 +9,7 @@ import {
   Switch,
   Share,
   Alert,
+  Linking,
   ActivityIndicator,
   Image,
   ImageStyle,
@@ -33,6 +34,7 @@ import { colors } from "../../styles/colors";
 import { spacing, radius } from "../../utils/constants";
 
 import { useAuth } from "../../context/AuthContext";
+import { isCurrentPremium } from '../../utils/premiumStatus';
 
 import API from "../../services/api";
 
@@ -433,7 +435,7 @@ export default function SettingsScreen({ navigation }: any) {
     );
   }, [user]);
 
-  const memberLabel = user?.isPremium ? "Premium Member" : "Free Member";
+  const memberLabel = isCurrentPremium(user) ? "Premium Member" : "Free Member";
 
   const goBack = () => {
     if (navigation?.canGoBack?.()) {
@@ -445,12 +447,20 @@ export default function SettingsScreen({ navigation }: any) {
   };
 
   const openPremium = () => {
-    if (user?.isPremium) {
-      navigation.navigate("Subscription");
+    if (isCurrentPremium(user)) {
+      navigation.navigate("ManagePremium");
       return;
     }
 
     navigation.navigate("Premium");
+  };
+
+  const openGooglePlaySubscriptionCenter = async () => {
+    try {
+      await Linking.openURL("https://play.google.com/store/account/subscriptions");
+    } catch {
+      Alert.alert("Unable to open Google Play", "Open Google Play → Payments & subscriptions → Subscriptions to manage your plan.");
+    }
   };
 
   const shareApp = async () => {
@@ -643,9 +653,9 @@ export default function SettingsScreen({ navigation }: any) {
 
                     <View style={styles.memberBadge}>
                       <Ionicons
-                        name={user.isPremium ? "diamond" : "person"}
+                        name={isCurrentPremium(user) ? "diamond" : "person"}
                         size={14}
-                        color={user.isPremium ? "#FFD54F" : colors.accent}
+                        color={isCurrentPremium(user) ? "#FFD54F" : colors.accent}
                       />
 
                       <Text style={styles.memberText}>{memberLabel}</Text>
@@ -691,7 +701,7 @@ export default function SettingsScreen({ navigation }: any) {
           <View style={styles.quickGrid}>
             <QuickAction
               icon="diamond-outline"
-              title={user?.isPremium ? "Manage Premium" : "Get Premium"}
+              title={isCurrentPremium(user) ? "Manage Premium" : "Get Premium"}
               onPress={openPremium}
             />
 
@@ -701,6 +711,16 @@ export default function SettingsScreen({ navigation }: any) {
               onPress={shareApp}
             />
           </View>
+
+          <Text style={styles.sectionTitle}>SUBSCRIPTIONS</Text>
+          <Card style={styles.card} padding={0} strong>
+            <Row
+              icon="card-outline"
+              title="Manage Google Play Subscriptions"
+              subtitle="Cancel auto-renewal or review purchased plans"
+              onPress={openGooglePlaySubscriptionCenter}
+            />
+          </Card>
 
           <Text style={styles.sectionTitle}>PREFERENCES</Text>
 

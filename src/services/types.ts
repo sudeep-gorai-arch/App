@@ -26,6 +26,8 @@ export interface User {
 
     isPremium: boolean;
 
+    premiumUntil?: string | null;
+
     role?: Role | null;
 
     createdAt?: string;
