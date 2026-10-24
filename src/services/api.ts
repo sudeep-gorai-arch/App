@@ -2,7 +2,7 @@ import axios, {
   AxiosError,
   InternalAxiosRequestConfig,
 } from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
 // ===============================
 // CHANGE THIS ONLY
@@ -25,7 +25,7 @@ const API = axios.create({
 // ===============================
 API.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
-    const token = await AsyncStorage.getItem('token');
+    const token = await SecureStore.getItemAsync('token');
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -44,8 +44,9 @@ API.interceptors.response.use(
   async (error: AxiosError<any>) => {
     if (error.response?.status === 401) {
       // Invalid/expired token
-      await AsyncStorage.removeItem('token');
-      await AsyncStorage.removeItem('user');
+      await SecureStore.deleteItemAsync('token');
+      await SecureStore.deleteItemAsync('user');
+      delete API.defaults.headers.common.Authorization;
     }
 
     let message = 'Something went wrong';
