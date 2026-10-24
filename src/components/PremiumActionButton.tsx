@@ -15,6 +15,7 @@ import { CommonActions, useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 
 import { useAuth } from "../context/AuthContext";
+import { isCurrentPremium } from "../utils/premiumStatus";
 
 export type PremiumReturnRoute =
   | "Home"
@@ -82,7 +83,7 @@ export const usePremiumNavigation = (
   const openPremium = () => {
     const rootNavigation = getRootNavigation(navigation);
 
-    const screenName = isPremiumActive(user) ? "ManagePremium" : "Premium";
+    const screenName = isCurrentPremium(user) ? "ManagePremium" : "Premium";
 
     rootNavigation.dispatch(
       CommonActions.navigate({
