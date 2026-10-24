@@ -8,6 +8,8 @@ import {
   Image,
   Pressable,
   RefreshControl,
+  AppState,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +17,9 @@ import {
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
+import { useAuth } from '../../context/AuthContext';
+import { hasRenewingSubscription, isCurrentPremium } from '../../utils/premiumStatus';
 
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -258,6 +263,7 @@ const getCancellationFromPayment = (payment?: PaymentLike | null) => {
 
 const ManagePremiumScreen = ({ navigation }: Props) => {
   const toast = useToast();
+  const { refreshProfile } = useAuth();
 
   const shineAnim = useRef(new Animated.Value(0)).current;
   const glitterAnim = useRef(new Animated.Value(0)).current;
@@ -355,6 +361,7 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
 
         setPlans(Array.isArray(planData) ? planData : []);
         setStatus(statusData ?? null);
+        await refreshProfile().catch(() => undefined);
       } catch (e) {
         console.log(e);
         toast.error('Unable to load premium details.');
@@ -363,27 +370,27 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
         setRefreshing(false);
       }
     },
-    [toast],
+    [toast, refreshProfile],
   );
 
+  useFocusEffect(useCallback(() => {
+    void loadData(false);
+  }, [loadData]));
+
   useEffect(() => {
-    loadData();
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') void loadData(false);
+    });
+    return () => subscription.remove();
   }, [loadData]);
 
   const activeSubscription = useMemo(() => {
-    return (
-      status?.activeSubscription ??
-      status?.subscription ??
-      status?.latestSubscription ??
-      null
-    );
+    return status?.activeSubscription ?? status?.subscription ?? null;
   }, [status]);
 
   const latestPayment = useMemo(() => getLatestPayment(status), [status]);
 
-  const isPremium = Boolean(
-    status?.isPremium ?? status?.user?.isPremium ?? activeSubscription?.active,
-  );
+  const isPremium = isCurrentPremium(status ?? null);
 
   const premiumUntil =
     status?.premiumUntil ?? status?.user?.premiumUntil ?? activeSubscription?.endDate;
@@ -448,7 +455,11 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
   const isGooglePlaySubscription =
     String(activeSubscription?.platform ?? '').toUpperCase() === 'GOOGLE';
 
-  const canCancelSubscription = isPremium && !isLifetimePlan;
+  const canCancelSubscription =
+    !isLifetimePlan &&
+    hasRenewingSubscription(activeSubscription?.plan, activeSubscription?.platform,
+      activeSubscription?.razorpaySubscriptionId) &&
+    Boolean(activeSubscription?.active || isPremium);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -477,11 +488,15 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
             ? GOOGLE_PLAY_PRODUCT_IDS.YEARLY
             : GOOGLE_PLAY_PRODUCT_IDS.MONTHLY;
 
-        await deepLinkToSubscriptions({
-          skuAndroid,
-          packageNameAndroid: 'com.flexiwalls.app',
-        });
-        showSuccess('Manage or cancel the subscription in Google Play.');
+        try {
+          await deepLinkToSubscriptions({
+            skuAndroid,
+            packageNameAndroid: 'com.flexiwalls.app',
+          });
+        } catch {
+          await Linking.openURL('https://play.google.com/store/account/subscriptions');
+        }
+        toast.info('Complete cancellation in Google Play. Your Premium access continues until expiry.');
         return;
       }
 
@@ -510,13 +525,13 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
   ]);
 
   const onCancelSubscription = useCallback(() => {
-    if (!canCancelSubscription || canceling || isCancelScheduled) return;
+    if (!canCancelSubscription || canceling || (isCancelScheduled && !isGooglePlaySubscription)) return;
 
     Alert.alert(
       isGooglePlaySubscription ? 'Manage Google Play Subscription' : 'Cancel Subscription',
-      `Your premium access will remain active until ${formatDate(
-        premiumUntil,
-      )}. Do you want to cancel auto-renewal?`,
+      isGooglePlaySubscription
+        ? 'Google Play handles auto-renewal and cancellation. Open Google Play to manage this subscription.'
+        : `Your premium access will remain active until ${formatDate(premiumUntil)}. Do you want to cancel auto-renewal?`,
       [
         {
           text: 'Keep Premium',
@@ -802,7 +817,7 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
 
             <ActionRow
               icon={isPremium ? 'refresh-circle-outline' : 'rocket-outline'}
-              title={isPremium ? 'Renew Premium' : 'Upgrade Premium'}
+              title={isPremium ? 'Explore Premium Plans' : 'Upgrade Premium'}
               value={
                 isPremium
                   ? 'Choose a plan and extend access'
@@ -816,8 +831,8 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
                 icon={isCancelScheduled ? 'time-outline' : 'close-circle-outline'}
                 title={
                   isCancelScheduled
-                    ? 'Cancellation Scheduled'
-                    : 'Cancel Subscription'
+                    ? (isGooglePlaySubscription ? 'Manage Canceled Plan' : 'Cancellation Scheduled')
+                    : (isGooglePlaySubscription ? 'Manage / Cancel in Google Play' : 'Cancel Subscription')
                 }
                 value={
                   isCancelScheduled
@@ -829,7 +844,7 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
                 onPress={onCancelSubscription}
                 tone="danger"
                 loading={canceling}
-                disabled={canceling || isCancelScheduled}
+                disabled={canceling || (isCancelScheduled && !isGooglePlaySubscription)}
               />
             ) : null}
 
