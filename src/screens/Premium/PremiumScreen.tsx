@@ -1340,7 +1340,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
         throw new Error('Google Play did not return a purchase token.');
       }
 
-      await verifyGooglePlayPurchase({
+      const verifiedStatus = await verifyGooglePlayPurchase({
         plan: purchasePlan,
         productId: purchase.productId,
         purchaseToken: purchase.purchaseToken,
@@ -1359,12 +1359,61 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
         console.log('GOOGLE PLAY LOCAL FINISH WARNING', finishError);
       }
 
-      await auth.refreshProfile().catch(() => undefined);
+      // Do not show a success message until the backend confirms Pro.
+      // The backend verified this purchase against the Play Developer API.
+      await auth.applyVerifiedPurchase(verifiedStatus, String(auth.user?.id ?? ''));
 
       return true;
     },
     [auth, toast],
   );
+
+  // Reconcile purchases Google Play already owns before offering another
+  // checkout. The backend remains authoritative and verifies every token.
+  const restoreOwnedPurchases = useCallback(async (): Promise<boolean> => {
+    const purchases = await getAvailablePurchases({
+      includeSuspendedAndroid: true,
+    });
+    const owned = purchases
+      .filter((purchase: Purchase) =>
+        Boolean(GOOGLE_PLAY_PLAN_BY_PRODUCT_ID[purchase.productId]),
+      )
+      // Apply subscriptions first; lifetime (when present) is strongest.
+      .sort((left: Purchase, right: Purchase) =>
+        Number(GOOGLE_PLAY_PLAN_BY_PRODUCT_ID[left.productId] === 'LIFETIME') -
+        Number(GOOGLE_PLAY_PLAN_BY_PRODUCT_ID[right.productId] === 'LIFETIME'),
+      );
+
+    if (owned.length === 0) return false;
+
+    let restored = false;
+    let verificationError: unknown = null;
+    let pendingOrSuspended = false;
+
+    for (const purchase of owned) {
+      if (purchase.purchaseState === 'pending' || (purchase as any).isSuspendedAndroid) {
+        pendingOrSuspended = true;
+        continue;
+      }
+      try {
+        const plan = GOOGLE_PLAY_PLAN_BY_PRODUCT_ID[purchase.productId];
+        restored = (await completeVerifiedPurchase(purchase, plan)) || restored;
+      } catch (error) {
+        verificationError = error;
+      }
+    }
+
+    if (restored) return true;
+    if (verificationError) {
+      throw verificationError;
+    }
+    if (pendingOrSuspended) {
+      throw new Error(
+        'Google Play reports a pending or suspended purchase. Check your payment in Google Play before trying another purchase.',
+      );
+    }
+    throw new Error('Google Play owns a FlexiWalls purchase but Premium could not be restored.');
+  }, [completeVerifiedPurchase]);
 
   const onPurchaseSuccess = useCallback(
     async (purchase: Purchase) => {
@@ -1412,15 +1461,31 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
       }
 
       if (error?.code === ErrorCode.AlreadyOwned) {
-        toast.info(
-          'You already own this product. Use Restore Purchase below.',
-        );
+        if (!auth.user?.id || !auth.token) {
+          toast.error('Sign in to your FlexiWalls account to restore the purchase.');
+          return;
+        }
+        setRestoring(true);
+        void restoreOwnedPurchases()
+          .then(restored => {
+            if (restored) {
+              toast.success('Your existing Google Play purchase has been restored.');
+              navigateAfterPurchase();
+            } else {
+              toast.info('No owned FlexiWalls purchase was returned by Google Play.');
+            }
+          })
+          .catch(restoreError => {
+            console.log('GOOGLE PLAY OWNED PURCHASE RESTORE ERROR', restoreError);
+            toast.error(getErrorMessage(restoreError));
+          })
+          .finally(() => setRestoring(false));
         return;
       }
 
       toast.error(getErrorMessage(error));
     },
-    [toast],
+    [auth.user?.id, auth.token, restoreOwnedPurchases, navigateAfterPurchase, toast],
   );
 
   const {
@@ -1675,6 +1740,17 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
         return;
       }
 
+      // The backend can only sync tokens it has previously recorded.
+      // First reconcile any purchases still owned by Google Play.
+      const alreadyRestored = await restoreOwnedPurchases();
+      if (alreadyRestored) {
+        purchaseGate.finishPurchase();
+        setLoading(false);
+        toast.success('Your existing Premium purchase has been restored.');
+        navigateAfterPurchase();
+        return;
+      }
+
       const accountId = await Crypto.digestStringAsync(
         Crypto.CryptoDigestAlgorithm.SHA256,
         String(auth.user.id),
@@ -1767,51 +1843,10 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
     try {
       setRestoring(true);
 
-      const purchases = await getAvailablePurchases({
-        includeSuspendedAndroid: true,
-      });
-
-      const flexiWallsPurchases = purchases
-        .filter((purchase: Purchase) =>
-          Boolean(GOOGLE_PLAY_PLAN_BY_PRODUCT_ID[purchase.productId]),
-        )
-        // Verify lifetime last so it remains the strongest entitlement.
-        .sort((left: Purchase, right: Purchase) => {
-          const leftPlan =
-            GOOGLE_PLAY_PLAN_BY_PRODUCT_ID[left.productId];
-          const rightPlan =
-            GOOGLE_PLAY_PLAN_BY_PRODUCT_ID[right.productId];
-
-          return (
-            Number(leftPlan === 'LIFETIME') -
-            Number(rightPlan === 'LIFETIME')
-          );
-        });
-
-      if (flexiWallsPurchases.length === 0) {
-        toast.info(
-          'No FlexiWalls purchase was found on this Google account.',
-        );
-        return;
-      }
-
-      let restored = false;
-
-      for (const purchase of flexiWallsPurchases) {
-        const purchasePlan =
-          GOOGLE_PLAY_PLAN_BY_PRODUCT_ID[purchase.productId];
-
-        if (!purchasePlan || (purchase as any).isSuspendedAndroid) {
-          continue;
-        }
-
-        restored =
-          (await completeVerifiedPurchase(purchase, purchasePlan)) ||
-          restored;
-      }
-
+      const restored = await restoreOwnedPurchases();
       if (!restored) {
-        throw new Error('No active purchase could be restored.');
+        toast.info('No FlexiWalls purchase was found on this Google Play account.');
+        return;
       }
 
       toast.success('Your Google Play purchase has been restored.');
