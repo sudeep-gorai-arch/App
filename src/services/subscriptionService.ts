@@ -36,6 +36,8 @@ export interface SubscriptionRecord {
   startDate: string;
   endDate: string;
   active: boolean;
+  autoRenewing?: boolean | null;
+  googlePlayState?: string | null;
   cancelAtCycleEnd?: boolean;
   cancel_at_cycle_end?: boolean;
   cancelledAt?: string | null;
