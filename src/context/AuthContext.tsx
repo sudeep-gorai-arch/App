@@ -3,6 +3,8 @@ import React, {
   useContext,
   useEffect,
   useState,
+  useRef,
+  useCallback,
   ReactNode,
 } from 'react';
 
@@ -50,6 +52,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   const [authLoading, setAuthLoading] = useState(false);
+
+  // Deduplicate concurrent profile updates triggered by login, focus and resume.
+  const profileRefreshInFlight = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     GoogleSignin.configure({
@@ -221,12 +226,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     AdController.setPremiumUser(false);
   };
 
-  const refreshProfile = async () => {
-    try {
-      setLoading(true);
+  const refreshProfile = useCallback(async (): Promise<void> => {
+    // Background refreshes must not toggle the initial app loading state.
+    // Otherwise Profile unmounts its content and its focus effect can retrigger.
+    if (profileRefreshInFlight.current) {
+      return profileRefreshInFlight.current;
+    }
 
-      // Sync verified Google Play entitlement before displaying Free/Pro badges.
-      // Failure of status sync should not erase a valid session or cached profile.
+    const request = (async () => {
+      // A transient subscription status error must not discard a valid profile.
       const status = await getSubscriptionStatus().catch(() => null);
       const response = await getProfile();
       const updatedUser = {
@@ -238,10 +246,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(updatedUser);
       AdController.setPremiumUser(updatedUser.isPremium);
       await SecureStore.setItemAsync('user', JSON.stringify(updatedUser));
+    })();
+
+    profileRefreshInFlight.current = request;
+    try {
+      await request;
     } finally {
-      setLoading(false);
+      if (profileRefreshInFlight.current === request) {
+        profileRefreshInFlight.current = null;
+      }
     }
-  };
+  }, []);
 
   return (
     <AuthContext.Provider
