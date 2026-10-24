@@ -17,7 +17,7 @@ export const decidePlayPurchase = (
 ): PurchaseDecision => {
   const until = status?.premiumUntil ?? status?.activeSubscription?.endDate;
   const isPremium = Boolean(status?.isPremium && until && Date.parse(until) > now);
-  if (!isPremium) return { kind: 'allow' };
+  if (!status || !isPremium) return { kind: 'allow' };
 
   const activePlan = String(
     status.activeSubscription?.plan ?? status.currentPlan ?? '',
