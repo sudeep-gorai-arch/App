@@ -132,7 +132,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const result = await GoogleSignin.signIn();
 
-      console.log('Google Result:', result);
 
       const idToken = result.data?.idToken;
 
@@ -144,7 +143,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const response = await googleLogin(idToken);
 
-      console.log('Backend Response:', response);
 
       await saveSession(response.data.token, response.data.user);
 
