@@ -9,6 +9,7 @@ import {
   Switch,
   Share,
   Alert,
+  Linking,
   ActivityIndicator,
   Image,
   ImageStyle,
@@ -447,11 +448,19 @@ export default function SettingsScreen({ navigation }: any) {
 
   const openPremium = () => {
     if (isCurrentPremium(user)) {
-      navigation.navigate("Subscription");
+      navigation.navigate("ManagePremium");
       return;
     }
 
     navigation.navigate("Premium");
+  };
+
+  const openGooglePlaySubscriptionCenter = async () => {
+    try {
+      await Linking.openURL("https://play.google.com/store/account/subscriptions");
+    } catch {
+      Alert.alert("Unable to open Google Play", "Open Google Play → Payments & subscriptions → Subscriptions to manage your plan.");
+    }
   };
 
   const shareApp = async () => {
@@ -702,6 +711,16 @@ export default function SettingsScreen({ navigation }: any) {
               onPress={shareApp}
             />
           </View>
+
+          <Text style={styles.sectionTitle}>SUBSCRIPTIONS</Text>
+          <Card style={styles.card} padding={0} strong>
+            <Row
+              icon="card-outline"
+              title="Manage Google Play Subscriptions"
+              subtitle="Cancel auto-renewal or review purchased plans"
+              onPress={openGooglePlaySubscriptionCenter}
+            />
+          </Card>
 
           <Text style={styles.sectionTitle}>PREFERENCES</Text>
 
