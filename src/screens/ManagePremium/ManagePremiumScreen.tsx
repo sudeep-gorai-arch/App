@@ -430,6 +430,9 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
     ? formatPlanDisplayName(rawPlanName, true)
     : 'Free';
 
+  const isLifetimePlan =
+    normalizePlanKey(activeSubscription?.plan ?? status?.currentPlan) === 'lifetime';
+
   const expiryText = isPremium
     ? isLifetimePlan
       ? 'Lifetime Premium — no auto-renewal'
@@ -451,8 +454,6 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
   const paymentStatus =
     latestPayment?.status ?? activeSubscription?.status ?? (isPremium ? 'PAID' : '--');
 
-  const isLifetimePlan =
-    normalizePlanKey(activeSubscription?.plan ?? status?.currentPlan) === 'lifetime';
 
   const isGooglePlaySubscription =
     String(activeSubscription?.platform ?? '').toUpperCase() === 'GOOGLE';
