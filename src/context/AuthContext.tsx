@@ -51,7 +51,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     GoogleSignin.configure({
       webClientId:
-        '941020838367-3p357g930n99gi68aq4inclg6geqjn3c.apps.googleusercontent.com',
+        '966374671800-vcb8487op5tc1s7vfbpmqjlkctg90rmd.apps.googleusercontent.com',
 
       offlineAccess: false,
     });

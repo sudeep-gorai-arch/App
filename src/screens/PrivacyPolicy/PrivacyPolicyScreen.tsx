@@ -43,7 +43,7 @@ type QuickFact = {
   text: string;
 };
 
-const LAST_UPDATED = 'July 13, 2026';
+const LAST_UPDATED = 'July 27, 2026';
 const SUPPORT_EMAIL = 'support.flexiwalls@gmail.com';
 
 const HERO_GRADIENT = ['#8B5CF6', '#EC4899', '#3B82F6'] as const;
@@ -53,25 +53,25 @@ const QUICK_FACTS: QuickFact[] = [
     id: 'sale',
     icon: 'ban-outline',
     title: 'We do not sell personal data',
-    text: 'FlexiWalls does not sell or rent your personal information.',
+    text: 'FlexiWalls does not sell or rent your personal information to data brokers.',
   },
   {
     id: 'photos',
     icon: 'images-outline',
-    title: 'Your photos are not uploaded',
-    text: 'Media access is used to save or remove wallpapers you choose.',
+    title: 'Your photo library is not uploaded',
+    text: 'Media access is used only for wallpaper download, save and deletion features you request.',
   },
   {
     id: 'ads',
-    icon: 'eye-off-outline',
-    title: 'No personalized advertising',
-    text: 'The current app has no third-party ad or cross-app tracking SDK.',
+    icon: 'megaphone-outline',
+    title: 'Free users may see Google ads',
+    text: 'Google Mobile Ads may process device, interaction, diagnostic and advertising information.',
   },
   {
     id: 'delete',
     icon: 'trash-outline',
     title: 'You can delete your account',
-    text: 'Account deletion is available from Settings inside the app.',
+    text: 'Delete your account from Settings or email us to request deletion.',
   },
 ];
 
@@ -84,13 +84,13 @@ const SECTIONS: PolicySection[] = [
       'This policy explains how FlexiWalls handles information when you use the app and related services.',
     items: [
       {
-        text: 'FlexiWalls lets you browse, favorite, download and apply image or video wallpapers and use optional premium features.',
+        text: 'This policy applies to the FlexiWalls Android app, public website, backend APIs, support communications and related services.',
       },
       {
-        text: 'This policy applies to the FlexiWalls mobile app, public website, backend APIs, support communications and related services.',
+        text: 'FlexiWalls lets you browse, favorite, like, download and apply image or video wallpapers and use optional premium features.',
       },
       {
-        text: 'You can browse and download eligible wallpapers as a guest. Features such as cloud favorites, account download history and premium access require sign-in.',
+        text: 'Eligible wallpapers can be browsed and downloaded as a guest. Account-based favorites, likes, cloud activity and premium access require sign-in.',
       },
     ],
   },
@@ -99,31 +99,39 @@ const SECTIONS: PolicySection[] = [
     title: '2. Information we collect',
     icon: 'server-outline',
     summary:
-      'We collect account, activity, payment and technical information needed to operate FlexiWalls.',
+      'We collect account, activity, technical, advertising and purchase information needed to operate FlexiWalls.',
     items: [
       {
         label: 'Google account information:',
-        text: 'If you choose Google Sign-In, we receive your Google account identifier, name, email address, email verification status and profile image.',
+        text: 'If you choose Google Sign-In, we receive information made available through the sign-in flow, such as your Google account identifier, name, email address, email-verification status and profile image.',
       },
       {
-        label: 'Account and app activity:',
-        text: 'We process your FlexiWalls user ID, profile details, favorites, likes, wallpaper download history, daily download count, premium status and subscription status.',
+        label: 'Account and profile information:',
+        text: 'We process your FlexiWalls user ID, username, email address, avatar, account role, account creation date, premium status and premium-expiry information.',
+      },
+      {
+        label: 'App activity:',
+        text: 'We process favorites, likes, wallpaper download history, selected download quality, daily download counts, subscription status and related activity needed to provide features and prevent abuse.',
       },
       {
         label: 'Guest activity:',
-        text: 'For guest downloads, the app creates a random guest identifier and sends it with wallpaper download events so we can apply download limits and reduce abuse.',
+        text: 'For guest downloads, the app creates a random guest identifier and sends it with wallpaper download events so we can apply guest limits, prevent duplicate processing and reduce abuse.',
       },
       {
         label: 'Session and technical information:',
-        text: 'We may process login and logout times, session records, IP address, user-agent, request dates, API errors and security logs.',
+        text: 'Our services may process login and logout times, session records, IP address, user-agent, request date and time, API errors, app version, device or operating-system information and security logs.',
       },
       {
-        label: 'Payment information:',
-        text: 'For premium purchases, we process the selected plan, receipt, order, payment and subscription identifiers, amount, currency, payment status, verification signature and provider response.',
+        label: 'Advertising and SDK information:',
+        text: 'Google Mobile Ads may automatically collect and share IP address, approximate general location derived from IP, app launches, taps, ad or video interactions, diagnostic information, Android advertising ID, app set ID and other device or account identifiers for advertising, ad measurement, analytics and fraud prevention.',
+      },
+      {
+        label: 'Purchase and subscription information:',
+        text: 'For Google Play purchases, we may receive and store the selected product or plan, purchase token, order or transaction identifier, payment status, acknowledgement or verification result, currency, amount when available and relevant dates. Google processes your payment-method credentials.',
       },
       {
         label: 'Support information:',
-        text: 'If you contact us, we receive the email address, message and any information or files you choose to provide.',
+        text: 'If you contact us, we receive your email address, message and any information or files you choose to provide.',
       },
     ],
   },
@@ -132,211 +140,248 @@ const SECTIONS: PolicySection[] = [
     title: '3. How we use information',
     icon: 'sparkles-outline',
     summary:
-      'We use information to provide app features, maintain security and support your account.',
+      'We use information to provide app features, show ads, maintain security and support your account.',
     items: [
       { text: 'Authenticate your account and keep you signed in.' },
-      { text: 'Display wallpapers, categories, favorites, downloads and trending content.' },
-      { text: 'Enforce guest and free-user download limits and verify premium access.' },
-      { text: 'Create, verify, manage and cancel premium subscriptions.' },
-      { text: 'Calculate aggregate download, favorite and like counts.' },
-      { text: 'Prevent fraud, misuse, unauthorized access and security incidents.' },
-      { text: 'Diagnose errors, maintain performance and respond to support or privacy requests.' },
-      {
-        text: 'We process optional permissions with your choice, account and payment data to provide requested services, and limited technical data for security, legal and operational purposes.',
-      },
+      { text: 'Provide wallpapers, categories, favorites, likes, downloads, trending content and account features.' },
+      { text: 'Apply guest and free-user limits and prevent duplicate or abusive download activity.' },
+      { text: 'Verify, activate, maintain, restore and cancel premium entitlements and subscriptions.' },
+      { text: 'Display, personalize where permitted, measure and protect advertising shown to eligible users.' },
+      { text: 'Maintain service security, prevent fraud, investigate misuse and enforce our rights.' },
+      { text: 'Diagnose errors, improve reliability and respond to support or privacy requests.' },
+      { text: 'Comply with legal, accounting, tax, payment and regulatory obligations.' },
     ],
   },
   {
     id: 'device',
-    title: '4. Data stored on your device and permissions',
+    title: '4. Device storage and Android permissions',
     icon: 'phone-portrait-outline',
     summary:
-      'Some information stays on your device so app features work correctly.',
+      'Some information and permissions remain on your device so requested features can work.',
     items: [
       {
         label: 'Secure device storage:',
-        text: 'The app stores your login token, basic profile and guest identifier using secure device storage where supported.',
+        text: 'The app stores your login token, basic profile information and guest identifier using secure device storage where supported.',
       },
       {
         label: 'Local app storage:',
-        text: 'The app stores notification and Wi-Fi-only preferences, local download records, wallpaper details, file locations and media asset identifiers on your device.',
+        text: 'The app stores notification and Wi-Fi-only preferences, local favorites or download records, wallpaper details, file locations and media asset identifiers on your device.',
       },
       {
         label: 'Photos and media:',
-        text: 'Media-library permission is used to save downloaded wallpapers and remove selected downloaded wallpapers from your device. FlexiWalls does not upload your personal photo library to our servers.',
+        text: 'Photo and media access is used to save wallpapers, locate app-created downloads and delete wallpapers you select. FlexiWalls does not intentionally upload or scan unrelated photos or videos from your personal library.',
+      },
+      {
+        label: 'Media location metadata:',
+        text: 'The Android build may include media-location access through the media-library integration. FlexiWalls does not use photo location metadata for advertising, user profiling or upload to our servers.',
       },
       {
         label: 'Set wallpaper:',
-        text: 'Android wallpaper access is used only when you choose to apply a wallpaper to your home screen, lock screen or both.',
+        text: 'Android wallpaper access is used only when you choose to apply an image or live wallpaper to the home screen, lock screen or both.',
       },
       {
         label: 'Notifications:',
-        text: 'Notification permission is requested only when you enable notifications. The current preference is stored locally on your device.',
+        text: 'Notification permission is requested only when you enable notifications. The current notification preference is stored locally on your device.',
       },
       {
         label: 'Network state:',
-        text: 'The app checks whether you are connected to Wi-Fi when the Wi-Fi-only download preference is enabled.',
+        text: 'The app checks network or Wi-Fi status when needed to load content and respect the Wi-Fi-only download preference.',
       },
       {
-        text: 'You can change permissions from your device settings. Disabling a permission may prevent the related feature from working.',
+        text: 'You can change permissions in Android settings. Disabling a permission may prevent the related feature from working.',
+      },
+    ],
+  },
+  {
+    id: 'ads',
+    title: '5. Advertising',
+    icon: 'megaphone-outline',
+    summary:
+      'FlexiWalls uses Google Mobile Ads to support free access.',
+    items: [
+      {
+        text: 'Depending on the app version and screen, eligible users may see banner, native, interstitial, app-open or rewarded ads.',
+      },
+      {
+        text: 'Rewarded ads are shown only when you choose an ad-supported action that offers a reward.',
+      },
+      {
+        text: 'Google and its advertising partners may use information described in this policy to deliver personalized or non-personalized ads, measure performance, limit repeated ads, detect fraud and produce reports.',
+      },
+      {
+        text: 'The type of ad served may depend on your consent choices, age or account settings, region, device settings and Google policies.',
+      },
+      {
+        text: 'You can reset or delete the Android advertising ID through your device settings. Where required by law, an appropriate consent or privacy-choice flow must be presented before data is used for personalized advertising.',
+      },
+    ],
+  },
+  {
+    id: 'payments',
+    title: '6. Premium purchases',
+    icon: 'card-outline',
+    summary:
+      'Google Play handles payment credentials while FlexiWalls verifies and records the purchase.',
+    items: [
+      {
+        text: 'Purchases made in the Android app are processed through Google Play Billing. Google handles payment credentials and payment methods connected to your Google Play account.',
+      },
+      {
+        text: 'FlexiWalls receives purchase and subscription information needed to verify the transaction, activate premium access, restore purchases, process cancellation or expiry, resolve disputes, prevent fraud and satisfy accounting or legal requirements.',
+      },
+      {
+        text: 'FlexiWalls does not receive or store your full card number, CVV, UPI PIN or online-banking password.',
+      },
+      {
+        text: 'Managing or deleting your FlexiWalls account does not automatically cancel a Google Play subscription. Subscriptions must also be managed through Google Play.',
+      },
+      {
+        text: 'Some transaction records may be retained when required for tax, accounting, refunds, disputes, chargebacks, fraud prevention or legal compliance.',
       },
     ],
   },
   {
     id: 'sharing',
-    title: '5. Service providers and sharing',
+    title: '7. Service providers and sharing',
     icon: 'people-outline',
     summary:
-      'We use trusted providers to run login, payments, hosting, database and media delivery.',
+      'We use service providers for login, ads, billing, hosting, database and media delivery.',
     items: [
       {
         label: 'Google:',
-        text: 'Google processes the sign-in flow when you choose Google Sign-In. We use the identity information received only for account authentication and profile features described in this policy.',
+        text: 'Google provides Sign-In, Google Play Billing, Google Mobile Ads, Play services and related fraud-prevention, attribution and device services.',
       },
       {
-        label: 'Google Play Billing:',
-        text: 'Google Play processes checkout and payment-method information. FlexiWalls receives transaction identifiers and status information but does not receive or store your full card number, CVV, UPI PIN or online-banking password.',
+        label: 'Backend hosting:',
+        text: 'Render may host FlexiWalls backend services and process requests and operational logs.',
       },
       {
-        label: 'Hosting and database providers:',
-        text: 'Render may host backend services, Supabase may host the PostgreSQL database, and Vercel may host the public website.',
+        label: 'Database hosting:',
+        text: 'Supabase may host the PostgreSQL database that stores account, activity, entitlement and related service records.',
       },
       {
-        label: 'Media delivery:',
-        text: 'Cloudflare R2 and related content-delivery services may store and deliver wallpaper files and thumbnails.',
+        label: 'Media storage and delivery:',
+        text: 'Cloudflare R2 and related content-delivery services may store and deliver wallpaper files, previews and thumbnails.',
+      },
+      {
+        label: 'Website hosting:',
+        text: 'Vercel may host the FlexiWalls public website and process standard web request information.',
       },
       {
         label: 'Legal and safety:',
-        text: 'We may disclose information when required by law or when reasonably necessary to protect users, investigate fraud, enforce rights or secure the service.',
+        text: 'We may disclose information when required by law or when reasonably necessary to protect users, investigate fraud, secure the service or enforce legal rights.',
       },
       {
         label: 'Business changes:',
         text: 'If FlexiWalls is reorganized, sold or transferred, relevant information may transfer with the service subject to this policy and applicable law.',
       },
       {
-        text: 'We do not sell or rent your personal information to advertisers or data brokers.',
-      },
-    ],
-  },
-  {
-    id: 'payments',
-    title: '6. Premium payments',
-    icon: 'card-outline',
-    summary:
-      'Google Play handles payment credentials while FlexiWalls verifies and records the purchase.',
-    items: [
-      {
-        text: 'Checkout displays the payment methods available through the user’s Google Play account.',
-      },
-      {
-        text: 'Google may independently collect payment, billing, device and fraud-prevention information under the Google Play privacy terms.',
-      },
-      {
-        text: 'FlexiWalls stores transaction and subscription records needed to activate premium access, handle cancellation, resolve disputes, prevent fraud and meet accounting or legal obligations.',
-      },
-      {
-        text: 'Deleting your FlexiWalls account does not automatically erase records that must be kept for tax, accounting, chargeback, fraud-prevention or other legal purposes.',
-      },
-    ],
-  },
-  {
-    id: 'ads',
-    title: '7. Ads and analytics',
-    icon: 'analytics-outline',
-    summary:
-      'The current app does not use personalized advertising or third-party analytics SDKs.',
-    items: [
-      {
-        text: 'FlexiWalls does not currently use a third-party advertising SDK or track you across other companies’ apps or websites for advertising.',
-      },
-      {
-        text: 'We use server logs and aggregate wallpaper activity such as download, favorite and like counts to operate and improve app features.',
-      },
-      {
-        text: 'Before adding advertising, remote analytics, crash reporting or similar tracking, we will update this policy, store disclosures and consent flows where required.',
+        text: 'We do not sell or rent personal information to data brokers.',
       },
     ],
   },
   {
     id: 'retention',
-    title: '8. Retention and account deletion',
+    title: '8. Retention',
     icon: 'time-outline',
     summary:
-      'We keep information only while it is needed for the service, security or legal requirements.',
+      'We retain information only while needed for the service, security, transactions or legal requirements.',
     items: [
       {
         label: 'Account information:',
-        text: 'Account data, favorites, likes, cloud download history and premium profile information are kept while your account remains active or until deletion is requested, subject to limited legal retention.',
+        text: 'Account data, favorites, likes, cloud download history and premium-profile information are generally retained while your account is active or until deletion is completed, subject to limited legal or security retention.',
       },
       {
         label: 'Guest and local information:',
-        text: 'The guest identifier, preferences and local download history remain on your device until you clear app data, uninstall the app or remove the related records.',
-      },
-      {
-        label: 'Downloaded files:',
-        text: 'Deleting your account does not automatically remove wallpaper files already saved in your device gallery. You can remove those files from the Downloads screen or your gallery.',
+        text: 'The guest identifier, preferences and local download history remain on your device until you clear app data, uninstall the app or remove the records. Server-side guest download records may be retained for abuse prevention and usage limits.',
       },
       {
         label: 'Technical records:',
-        text: 'Security, request and error logs are kept only for a limited period based on operational, fraud-prevention and legal needs.',
+        text: 'Security, request, diagnostic and error logs are retained only for a period reasonably needed for operations, security, fraud prevention or legal obligations.',
       },
       {
-        label: 'Payment records:',
-        text: 'Transaction records may be retained for accounting, tax, refunds, disputes, chargebacks, fraud prevention and compliance for as long as required or reasonably necessary.',
+        label: 'Purchase records:',
+        text: 'Transaction and entitlement records may be retained for accounting, tax, refunds, disputes, chargebacks, fraud prevention and compliance for as long as required or reasonably necessary.',
+      },
+    ],
+  },
+  {
+    id: 'deletion',
+    title: '9. Account and data deletion',
+    icon: 'trash-outline',
+    summary:
+      'You can delete your account in the app or request deletion by email.',
+    items: [
+      {
+        text: 'To delete your account in the app, open Settings and select “Delete Account and Data.” This sends a deletion request to the FlexiWalls service.',
       },
       {
-        text: 'To delete your account in the app, open Settings and select “Delete Account and Data.” You may also email us to request access, correction or deletion.',
+        text: 'We remove the account and associated server-side data that is not required to be retained by law or for legitimate security, fraud-prevention, transaction or dispute purposes.',
+      },
+      {
+        text: 'You may also request deletion by emailing support.flexiwalls@gmail.com with the subject “FlexiWalls Account Deletion Request” and including the email address associated with your account.',
+      },
+      {
+        text: 'We may ask you to verify account ownership before completing an email request.',
+      },
+      {
+        text: 'Deleting your account does not automatically remove wallpaper files already saved on your device and does not automatically cancel a Google Play subscription.',
       },
     ],
   },
   {
     id: 'rights',
-    title: '9. Your choices and privacy rights',
+    title: '10. Your choices and privacy rights',
     icon: 'shield-checkmark-outline',
     summary:
-      'You can manage permissions, preferences, account information and deletion requests.',
+      'You can manage permissions, account data, subscriptions and advertising choices.',
     items: [
-      { text: 'Access the personal information associated with your account.' },
-      { text: 'Request correction or updating of inaccurate account information.' },
+      { text: 'Request access to personal information associated with your account.' },
+      { text: 'Request correction of inaccurate account information.' },
       { text: 'Request deletion of your account and associated personal information.' },
-      { text: 'Disable optional permissions through your device settings.' },
+      { text: 'Disable optional permissions through Android settings.' },
       { text: 'Turn notifications or Wi-Fi-only downloads on or off in the app.' },
-      { text: 'Log out and revoke Google access through your Google Account settings.' },
+      { text: 'Log out and revoke FlexiWalls access through your Google Account settings.' },
+      { text: 'Manage or cancel subscriptions through Google Play.' },
+      { text: 'Reset or delete your Android advertising ID and manage available ad privacy settings on your device or Google account.' },
       {
-        text: 'We may need to verify your identity before completing a request. Some information may be retained when required by law or necessary for security, fraud prevention or dispute resolution.',
+        text: 'We may need to verify your identity before completing a request. Some information may be retained when required by law or needed for security, fraud prevention, transaction records or dispute resolution.',
       },
     ],
   },
   {
     id: 'security',
-    title: '10. Security and international processing',
+    title: '11. Security and international processing',
     icon: 'lock-closed-outline',
     summary:
-      'We use safeguards, but no app or internet transmission can be guaranteed completely secure.',
+      'We use safeguards, but no app, database or internet transmission can be guaranteed completely secure.',
     items: [
       {
-        text: 'We use measures such as HTTPS, access controls, authentication, secure device storage where supported and restricted access to production services.',
+        text: 'We use measures such as HTTPS, authentication, access controls, secure device storage where supported and restricted access to production services.',
       },
       {
         text: 'You should protect your device, Google account and payment account and avoid sharing authentication information.',
       },
       {
-        text: 'Information may be processed in India and in other countries where our providers operate. Those locations may have different data-protection laws.',
+        text: 'Information may be processed in India and in other countries where our providers operate. Those locations may have data-protection laws different from those in your country.',
       },
     ],
   },
   {
     id: 'children',
-    title: '11. Children’s privacy',
+    title: '12. Children’s privacy',
     icon: 'happy-outline',
     summary:
-      'FlexiWalls is not specifically directed to children.',
+      'FlexiWalls is not specifically directed to children under the applicable minimum age.',
     items: [
       {
-        text: 'We do not knowingly collect personal information from children in a way that violates applicable law.',
+        text: 'FlexiWalls is not specifically directed to children under 13 or the minimum age required by applicable local law.',
       },
       {
-        text: 'Where local law requires parental or guardian consent, a child should not create an account or make a purchase without that consent.',
+        text: 'We do not knowingly collect personal information from children in a manner that violates applicable law.',
+      },
+      {
+        text: 'Where parental or guardian consent is required, a child should not create an account, view personalized advertising or make a purchase without that consent.',
       },
       {
         text: 'A parent or guardian who believes a child provided personal information may contact us to request review and deletion.',
@@ -345,10 +390,10 @@ const SECTIONS: PolicySection[] = [
   },
   {
     id: 'changes',
-    title: '12. Changes and contact',
+    title: '13. Changes and contact',
     icon: 'mail-outline',
     summary:
-      'We may update this policy when the app, providers or legal requirements change.',
+      'We may update this policy when the app, SDKs, providers or legal requirements change.',
     items: [
       {
         text: 'The latest version will show a revised “Last updated” date. Material changes may also be communicated in the app or through another appropriate method.',
@@ -440,7 +485,9 @@ const PolicySectionCard = ({
 );
 
 const PrivacyPolicyScreen = ({ navigation }: { navigation?: Nav }) => {
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    collect: true,
+  });
 
   const toggleSection = (id: string) => {
     setOpenSections(previous => ({
@@ -511,10 +558,10 @@ const PrivacyPolicyScreen = ({ navigation }: { navigation?: Nav }) => {
 
               <Text style={styles.heroTitle}>Your privacy, explained simply.</Text>
               <Text style={styles.heroText}>
-                FlexiWalls collects only the information needed for login,
-                favorites, downloads, premium access, payments, security and
-                support. This page explains what happens to that information and
-                the controls available to you.
+                FlexiWalls processes information needed for login, wallpapers,
+                favorites, downloads, advertising, premium access, purchases,
+                security and support. This page explains how that information
+                is handled and the choices available to you.
               </Text>
             </View>
           </LinearGradient>
