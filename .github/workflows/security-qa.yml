@@ -26,3 +26,7 @@ jobs:
           node-version: '22'
       - name: Run non-destructive regression tests
         run: npm run test:security
+      - name: Install dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Type-check React Native application
+        run: npx tsc --noEmit
