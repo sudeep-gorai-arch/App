@@ -14,7 +14,7 @@ test('401 can invalidate only its own still-current token', () => {
 
 test('credential writes are serialized to prevent stale 401 race', () => {
   assert.match(storage, /credentialWrites\.then\(operation, operation\)/);
-  assert.match(storage, /return withCredentialLock\(/);
+  assert.match(storage, /withCredentialLock\(async/);
   assert.match(storage, /export const invalidateSessionForToken/);
 });
 
