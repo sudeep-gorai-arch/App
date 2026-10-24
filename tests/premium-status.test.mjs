@@ -1,0 +1,13 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { isCurrentPremium, hasRenewingSubscription } from '../src/utils/premiumStatus.ts';
+const future='2099-12-31T00:00:00.000Z', past='2020-01-01T00:00:00.000Z';
+test('paid, unexpired user is Premium',()=>assert.equal(isCurrentPremium({isPremium:true,premiumUntil:future}),true));
+test('expired Premium flag never shows Premium',()=>assert.equal(isCurrentPremium({isPremium:true,premiumUntil:past}),false));
+test('free flag never shows Premium',()=>assert.equal(isCurrentPremium({isPremium:false,premiumUntil:future}),false));
+test('unknown expiry cannot grant Premium',()=>assert.equal(isCurrentPremium({isPremium:true}),false));
+test('Google monthly is cancellable',()=>assert.equal(hasRenewingSubscription('MONTHLY','GOOGLE'),true));
+test('Google yearly is cancellable',()=>assert.equal(hasRenewingSubscription('YEARLY','GOOGLE'),true));
+test('Lifetime purchase is nonrenewing',()=>assert.equal(hasRenewingSubscription('LIFETIME','GOOGLE'),false));
+test('Razorpay one-time orders have no auto-renewal',()=>assert.equal(hasRenewingSubscription('MONTHLY','RAZORPAY'),false));
+test('Razorpay auto-renewing subscription is cancellable',()=>assert.equal(hasRenewingSubscription('MONTHLY','RAZORPAY','sub_abc'),true));
