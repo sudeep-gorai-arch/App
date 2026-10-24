@@ -46,6 +46,7 @@ import { colors } from '../../styles/colors';
 import { radius, SCREEN, spacing } from '../../utils/constants';
 
 import API from '../../services/api';
+import { PurchaseAttemptGate } from '../../utils/purchaseAttemptGate';
 import {
   getSubscriptionPlans,
   verifyGooglePlayPurchase,
@@ -1292,8 +1293,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
   const [loading, setLoading] = useState(false);
 
   // Synchronous ref blocks a second tap before React commits loading state.
-  const purchaseAttemptInFlight = useRef(false);
-  const verifyingPurchaseTokens = useRef(new Set<string>());
+  const purchaseGate = useRef(new PurchaseAttemptGate()).current;
 
   const [restoring, setRestoring] = useState(false);
 
@@ -1366,8 +1366,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
   const onPurchaseSuccess = useCallback(
     async (purchase: Purchase) => {
       const token = purchase.purchaseToken;
-      if (token && verifyingPurchaseTokens.current.has(token)) return;
-      if (token) verifyingPurchaseTokens.current.add(token);
+      if (token && !purchaseGate.beginVerification(token)) return;
       try {
         const purchasePlan =
           GOOGLE_PLAY_PLAN_BY_PRODUCT_ID[purchase.productId];
@@ -1391,8 +1390,8 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
         console.log('GOOGLE PLAY PURCHASE VERIFY ERROR', error);
         toast.error(getErrorMessage(error));
       } finally {
-        if (token) verifyingPurchaseTokens.current.delete(token);
-        purchaseAttemptInFlight.current = false;
+        if (token) purchaseGate.finishVerification(token);
+        purchaseGate.finishPurchase();
         setLoading(false);
       }
     },
@@ -1401,7 +1400,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
 
   const onPurchaseError = useCallback(
     (error: any) => {
-      purchaseAttemptInFlight.current = false;
+      purchaseGate.finishPurchase();
       setLoading(false);
 
       if (error?.code === ErrorCode.UserCancelled) {
@@ -1608,7 +1607,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
   });
 
   const handleContinue = async () => {
-    if (!selectedPlanData || loading || restoring || purchaseAttemptInFlight.current) {
+    if (!selectedPlanData || loading || restoring || purchaseGate.isPurchaseInFlight()) {
       return;
     }
 
@@ -1647,7 +1646,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
     }
 
     try {
-      purchaseAttemptInFlight.current = true;
+      if (!purchaseGate.beginPurchase()) return;
       setLoading(true);
 
       const accountId = await Crypto.digestStringAsync(
@@ -1708,7 +1707,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
         type: 'in-app',
       });
     } catch (error) {
-      purchaseAttemptInFlight.current = false;
+      purchaseGate.finishPurchase();
       setLoading(false);
       console.log('GOOGLE PLAY PURCHASE OPEN ERROR', error);
       toast.error(getErrorMessage(error));
