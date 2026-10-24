@@ -1,4 +1,4 @@
-import { isCurrentPremium, type PremiumRecord } from './premiumStatus';
+import type { PremiumRecord } from './premiumStatus';
 
 export type BillingChoice = 'MONTHLY' | 'YEARLY' | 'LIFETIME';
 export type PurchaseDecision =
@@ -15,7 +15,9 @@ export const decidePlayPurchase = (
   selectedPlan: BillingChoice,
   now = Date.now(),
 ): PurchaseDecision => {
-  if (!status || !isCurrentPremium(status, now)) return { kind: 'allow' };
+  const until = status?.premiumUntil ?? status?.activeSubscription?.endDate;
+  const isPremium = Boolean(status?.isPremium && until && Date.parse(until) > now);
+  if (!isPremium) return { kind: 'allow' };
 
   const activePlan = String(
     status.activeSubscription?.plan ?? status.currentPlan ?? '',
