@@ -26,6 +26,7 @@ import { shouldKeepCachedSession } from '../utils/sessionRecovery';
 
 import { googleLogin, logoutUser, getProfile } from '../services/authService';
 import { getSubscriptionStatus } from '../services/subscriptionService';
+import type { SubscriptionStatus } from '../services/subscriptionService';
 import { isCurrentPremium } from '../utils/premiumStatus';
 
 import type { User, Role } from '../services/types';
@@ -43,6 +44,7 @@ type AuthContextType = {
   logout: () => Promise<void>;
 
   refreshProfile: () => Promise<void>;
+  applyVerifiedPurchase: (status: SubscriptionStatus, expectedUserId: string) => Promise<void>;
 
   setUser: React.Dispatch<React.SetStateAction<User | null>>;
   setToken: React.Dispatch<React.SetStateAction<string | null>>;
@@ -258,6 +260,49 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
+
+  // Trust only an entitlement that the authenticated backend has verified
+  // against Google Play. Apply it immediately, including cached state and ads.
+  const applyVerifiedPurchase = useCallback(async (
+    status: SubscriptionStatus,
+    expectedUserId: string,
+  ): Promise<void> => {
+    if (!isCurrentPremium(status)) {
+      throw new Error('Google Play has not confirmed an active Premium entitlement.');
+    }
+
+    // A pre-purchase refresh might have fetched the old Free status.
+    // Let it settle first so it cannot overwrite this verified purchase.
+    if (profileRefreshInFlight.current) {
+      await profileRefreshInFlight.current.catch(() => undefined);
+    }
+
+    const { token: currentToken, user: savedUser } = await getStoredSession();
+    if (!currentToken || !savedUser) {
+      throw new Error('Sign in again before restoring your Google Play purchase.');
+    }
+
+    const previousUser = JSON.parse(savedUser) as User;
+    if (String(previousUser.id) !== String(expectedUserId)) {
+      throw new Error('Your FlexiWalls account changed during purchase verification.');
+    }
+
+    const updatedUser: User = {
+      ...previousUser,
+      isPremium: true,
+      premiumUntil: status.premiumUntil ?? status.activeSubscription?.endDate ?? null,
+    };
+
+    const saved = await persistProfileForToken(currentToken, updatedUser, () => {
+      setUser(updatedUser);
+      AdController.setPremiumUser(true);
+    });
+
+    if (!saved) {
+      throw new Error('The login session changed during purchase verification. Sign in again.');
+    }
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -270,6 +315,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         signInGoogle,
         logout,
         refreshProfile,
+        applyVerifiedPurchase,
 
         setUser,
         setToken,
