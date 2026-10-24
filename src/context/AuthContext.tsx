@@ -3,17 +3,25 @@ import React, {
   useContext,
   useEffect,
   useState,
+  useRef,
+  useCallback,
   ReactNode,
 } from 'react';
 
-import * as SecureStore from 'expo-secure-store';
+import {
+  getStoredSession,
+  getStoredToken,
+  persistSession,
+  clearStoredSession,
+  persistProfileForToken,
+  subscribeToSessionInvalidation,
+} from '../services/authSessionStorage';
 
 import {
   GoogleSignin,
   statusCodes,
 } from '@react-native-google-signin/google-signin';
 
-import API from '../services/api';
 import { shouldKeepCachedSession } from '../utils/sessionRecovery';
 
 import { googleLogin, logoutUser, getProfile } from '../services/authService';
@@ -51,6 +59,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const [authLoading, setAuthLoading] = useState(false);
 
+  // Deduplicate concurrent profile updates triggered by login, focus and resume.
+  const profileRefreshInFlight = useRef<Promise<void> | null>(null);
+
+  useEffect(() => subscribeToSessionInvalidation(() => {
+    setToken(null);
+    setUser(null);
+    AdController.setPremiumUser(false);
+  }), []);
+
   useEffect(() => {
     GoogleSignin.configure({
       webClientId:
@@ -64,9 +81,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const restoreSession = async () => {
     try {
-      const savedToken = await SecureStore.getItemAsync('token');
-
-      const savedUser = await SecureStore.getItemAsync('user');
+      const { token: savedToken, user: savedUser } = await getStoredSession();
 
       if (!savedToken || !savedUser) {
         // Guest User -> Ads Enabled
@@ -79,7 +94,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Retain the last authenticated profile during temporary network loss.
       // Every server-side privileged request still validates the session.
       const cachedProfile = JSON.parse(savedUser) as User;
-      API.defaults.headers.common.Authorization = `Bearer ${savedToken}`;
       setToken(savedToken);
       setUser(cachedProfile);
       AdController.setPremiumUser(Boolean(cachedProfile.isPremium));
@@ -94,11 +108,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.log('RESTORE SESSION ERROR', error);
 
-      delete API.defaults.headers.common.Authorization;
-
-      await SecureStore.deleteItemAsync('token');
-
-      await SecureStore.deleteItemAsync('user');
+      await clearStoredSession();
 
       setToken(null);
 
@@ -113,11 +123,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     profile: User,
   ) => {
-    await SecureStore.setItemAsync('token', jwt);
-
-    await SecureStore.setItemAsync('user', JSON.stringify(profile));
-
-    API.defaults.headers.common.Authorization = `Bearer ${jwt}`;
+    await persistSession(jwt, profile);
 
     setToken(jwt);
 
@@ -207,11 +213,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await GoogleSignin.signOut();
     } catch {}
 
-    await SecureStore.deleteItemAsync('token');
-
-    await SecureStore.deleteItemAsync('user');
-
-    delete API.defaults.headers.common.Authorization;
+    await clearStoredSession();
 
     setToken(null);
 
@@ -221,12 +223,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     AdController.setPremiumUser(false);
   };
 
-  const refreshProfile = async () => {
-    try {
-      setLoading(true);
+  const refreshProfile = useCallback(async (): Promise<void> => {
+    // Background refreshes must not toggle the initial app loading state.
+    // Otherwise Profile unmounts its content and its focus effect can retrigger.
+    if (profileRefreshInFlight.current) {
+      return profileRefreshInFlight.current;
+    }
 
-      // Sync verified Google Play entitlement before displaying Free/Pro badges.
-      // Failure of status sync should not erase a valid session or cached profile.
+    const request = (async () => {
+      const sessionToken = await getStoredToken();
+      if (!sessionToken) return;
+      // A transient subscription status error must not discard a valid profile.
       const status = await getSubscriptionStatus().catch(() => null);
       const response = await getProfile();
       const updatedUser = {
@@ -235,13 +242,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           response.data.premiumUntil && Date.parse(response.data.premiumUntil) > Date.now()),
         premiumUntil: status ? status.premiumUntil ?? null : response.data.premiumUntil,
       };
-      setUser(updatedUser);
-      AdController.setPremiumUser(updatedUser.isPremium);
-      await SecureStore.setItemAsync('user', JSON.stringify(updatedUser));
+      await persistProfileForToken(sessionToken, updatedUser, () => {
+        setUser(updatedUser);
+        AdController.setPremiumUser(updatedUser.isPremium);
+      });
+    })();
+
+    profileRefreshInFlight.current = request;
+    try {
+      await request;
     } finally {
-      setLoading(false);
+      if (profileRefreshInFlight.current === request) {
+        profileRefreshInFlight.current = null;
+      }
     }
-  };
+  }, []);
 
   return (
     <AuthContext.Provider
