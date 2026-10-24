@@ -41,6 +41,7 @@ import { useAuth } from "../../context/AuthContext";
 import { Wallpaper } from "../../services/types";
 import { appEvents } from "../../utils/appEvents";
 import { usePremiumWallpaperGuard } from "../../utils/premiumWallpaperAccess";
+import { isCurrentPremium } from '../../utils/premiumStatus';
 import {
   getVerifiedDeviceDownloads,
   validateDownloadedWallpaper,
@@ -493,7 +494,7 @@ const RecentDownloadsPreview = ({
 };
 
 export default function ProfileScreen({ navigation }: Props) {
-  const { user, loading, authLoading, signInGoogle, logout } = useAuth();
+  const { user, loading, authLoading, signInGoogle, logout, refreshProfile } = useAuth();
   const openPremium = usePremiumNavigation("Profile");
   const canOpenWallpaper = usePremiumWallpaperGuard("Profile");
 
@@ -509,7 +510,7 @@ export default function ProfileScreen({ navigation }: Props) {
   const blastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isGuest = !user;
-  const isPremiumUser = isPremiumActive(user);
+  const isPremiumUser = isCurrentPremium(user);
   const displayName = user?.username || "Guest User";
   const displayEmail = user?.email || "Sign in to sync your account";
   const planLabel = isPremiumUser ? "Premium" : "Free";
@@ -596,19 +597,21 @@ export default function ProfileScreen({ navigation }: Props) {
 
   useFocusEffect(
     useCallback(() => {
-      loadDownloads();
-    }, [loadDownloads]),
+      void loadDownloads();
+      if (user) void refreshProfile().catch(() => undefined);
+    }, [loadDownloads, refreshProfile, Boolean(user)]),
   );
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", state => {
       if (state === "active") {
-        loadDownloads();
+        void loadDownloads();
+        if (user) void refreshProfile().catch(() => undefined);
       }
     });
 
     return () => subscription.remove();
-  }, [loadDownloads]);
+  }, [loadDownloads, refreshProfile, Boolean(user)]);
 
   useEffect(() => {
     const unsubscribeDownloads = appEvents.on("downloadsChanged", payload => {
