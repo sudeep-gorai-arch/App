@@ -431,9 +431,11 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
     : 'Free';
 
   const expiryText = isPremium
-    ? daysLeft !== null && daysLeft > 0
-      ? `${daysLeft} day${daysLeft === 1 ? '' : 's'} left`
-      : 'Expired'
+    ? isLifetimePlan
+      ? 'Lifetime Premium — no auto-renewal'
+      : daysLeft !== null && daysLeft > 0
+        ? `${daysLeft} day${daysLeft === 1 ? '' : 's'} left`
+        : 'Expires today'
     : 'Upgrade anytime';
 
   const paymentCancellation = getCancellationFromPayment(latestPayment);
@@ -762,7 +764,7 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
 
                 <View style={styles.metaCol}>
                   <Text style={styles.metaLabel}>Valid Until</Text>
-                  <Text style={styles.metaValue}>{formatDate(premiumUntil)}</Text>
+                  <Text style={styles.metaValue}>{isLifetimePlan && isPremium ? 'Lifetime' : formatDate(premiumUntil)}</Text>
                 </View>
               </View>
             </LinearGradient>
@@ -786,7 +788,7 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
             <InfoRow
               icon="calendar-outline"
               title="Validity"
-              value={validityDays ? `${validityDays} days` : formatDate(premiumUntil)}
+              value={isLifetimePlan && isPremium ? 'Lifetime access' : validityDays ? `${validityDays} days` : formatDate(premiumUntil)}
               isLast
             />
           </Card>
@@ -831,7 +833,7 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
                 icon={isCancelScheduled ? 'time-outline' : 'close-circle-outline'}
                 title={
                   isCancelScheduled
-                    ? (isGooglePlaySubscription ? 'Manage Canceled Plan' : 'Cancellation Scheduled')
+                    ? (isGooglePlaySubscription ? 'Manage Auto-Renewal Off' : 'Cancellation Scheduled')
                     : (isGooglePlaySubscription ? 'Manage / Cancel in Google Play' : 'Cancel Subscription')
                 }
                 value={
