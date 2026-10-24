@@ -14,6 +14,7 @@ import {
 } from '@react-native-google-signin/google-signin';
 
 import API from '../services/api';
+import { shouldKeepCachedSession } from '../utils/sessionRecovery';
 
 import { googleLogin, logoutUser, getProfile } from '../services/authService';
 
@@ -73,11 +74,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
+      // Retain the last authenticated profile during temporary network loss.
+      // Every server-side privileged request still validates the session.
+      const cachedProfile = JSON.parse(savedUser) as User;
       API.defaults.headers.common.Authorization = `Bearer ${savedToken}`;
-
       setToken(savedToken);
+      setUser(cachedProfile);
+      AdController.setPremiumUser(Boolean(cachedProfile.isPremium));
 
-      await refreshProfile();
+      try {
+        await refreshProfile();
+      } catch (error) {
+        if (!shouldKeepCachedSession(error)) throw error;
+        // Timeout/offline/5xx: leave cached login intact and retry on the next refresh.
+        console.warn('Unable to refresh profile while offline; retaining cached session.');
+      }
     } catch (error) {
       console.log('RESTORE SESSION ERROR', error);
 
