@@ -499,21 +499,17 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
       setCanceling(true);
 
       if (isGooglePlaySubscription) {
-        const planKey = String(activeSubscription?.plan ?? status?.currentPlan ?? '').toUpperCase();
-        const skuAndroid =
-          planKey === 'YEARLY'
-            ? GOOGLE_PLAY_PRODUCT_IDS.YEARLY
-            : GOOGLE_PLAY_PRODUCT_IDS.MONTHLY;
-
-        try {
-          await deepLinkToSubscriptions({
-            skuAndroid,
-            packageNameAndroid: 'com.flexiwalls.app',
-          });
-        } catch {
-          await Linking.openURL('https://play.google.com/store/account/subscriptions');
+        if (!selectedCancelReason) {
+          toast.info('Select a cancellation reason first.');
+          return;
         }
-        toast.info('Complete cancellation in Google Play. Your Premium access continues until expiry.');
+        const updated = await cancelGooglePlaySubscription(selectedCancelReason);
+        setStatus(updated as SubscriptionStatus);
+        setCancelSheetVisible(false);
+        setCancelConfirmStep(false);
+        setSelectedCancelReason(null);
+        showSuccess('Auto-renewal cancelled. Premium remains active until the paid period ends.');
+        void refreshProfile().catch(() => undefined);
         return;
       }
 
@@ -539,26 +535,25 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
     showSuccess,
     status?.currentPlan,
     toast,
+    selectedCancelReason,
+    refreshProfile,
   ]);
 
   const onCancelSubscription = useCallback(() => {
     if (!canCancelSubscription || canceling || (isCancelScheduled && !isGooglePlaySubscription)) return;
 
+    if (isGooglePlaySubscription) {
+      setSelectedCancelReason(null);
+      setCancelConfirmStep(false);
+      setCancelSheetVisible(true);
+      return;
+    }
     Alert.alert(
-      isGooglePlaySubscription ? 'Manage Google Play Subscription' : 'Cancel Subscription',
-      isGooglePlaySubscription
-        ? 'Google Play handles cancellation and renewals. Cancelling stops future renewals; it does not automatically refund the current billing period. To ask about a refund, email support.flexiwalls@gmail.com. Open Google Play to manage this subscription.'
-        : `Your premium access will remain active until ${formatDate(premiumUntil)}. Do you want to cancel auto-renewal?`,
+      'Cancel Subscription',
+      `Your Premium access will remain active until ${formatDate(premiumUntil)}. Do you want to cancel auto-renewal?`,
       [
-        {
-          text: 'Keep Premium',
-          style: 'cancel',
-        },
-        {
-          text: isGooglePlaySubscription ? 'Open Google Play' : 'Cancel Subscription',
-          style: 'destructive',
-          onPress: confirmCancelSubscription,
-        },
+        { text: 'Keep Premium', style: 'cancel' },
+        { text: 'Cancel Subscription', style: 'destructive', onPress: confirmCancelSubscription },
       ],
     );
   }, [
@@ -856,8 +851,8 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
                 icon={isCancelScheduled ? 'time-outline' : 'close-circle-outline'}
                 title={
                   isCancelScheduled
-                    ? (isGooglePlaySubscription ? 'Manage Auto-Renewal Off' : 'Cancellation Scheduled')
-                    : (isGooglePlaySubscription ? 'Manage / Cancel in Google Play' : 'Cancel Subscription')
+                    ? 'Auto-Renewal Off'
+                    : 'Cancel Subscription'
                 }
                 value={
                   isCancelScheduled
@@ -906,6 +901,83 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
           </Card>
         </ScrollView>
       </SafeAreaView>
+      <Modal
+        visible={cancelSheetVisible}
+        transparent
+        statusBarTranslucent
+        animationType="fade"
+        onRequestClose={() => { if (!canceling) setCancelSheetVisible(false); }}
+      >
+        <View style={styles.cancelOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => { if (!canceling) setCancelSheetVisible(false); }}
+          />
+          <View style={styles.cancelSheet}>
+            <Text style={styles.cancelHeading}>
+              {cancelConfirmStep ? 'Confirm cancellation' : 'Why are you leaving Premium?'}
+            </Text>
+            {cancelConfirmStep ? (
+              <Text style={styles.cancelDescription}>
+                Cancel upcoming Google Play renewals? Premium access continues until {formatDate(premiumUntil)}.
+                Cancelling does not automatically refund the current paid period.
+              </Text>
+            ) : (
+              <>
+                <Text style={styles.cancelDescription}>
+                  Your answer is FlexiWalls feedback, not Google's official cancellation survey.
+                </Text>
+                {CANCELLATION_REASONS.map(reason => (
+                  <Pressable
+                    key={reason.value}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: selectedCancelReason === reason.value }}
+                    onPress={() => setSelectedCancelReason(reason.value)}
+                    style={[
+                      styles.cancelChoice,
+                      selectedCancelReason === reason.value && styles.cancelChoiceActive,
+                    ]}
+                  >
+                    <Ionicons
+                      name={selectedCancelReason === reason.value ? 'radio-button-on' : 'radio-button-off'}
+                      color={colors.accent}
+                      size={21}
+                    />
+                    <Text style={styles.cancelChoiceText}>{reason.label}</Text>
+                  </Pressable>
+                ))}
+              </>
+            )}
+            <View style={styles.cancelButtons}>
+              <Pressable
+                disabled={canceling}
+                style={styles.cancelSecondary}
+                onPress={() => {
+                  if (cancelConfirmStep) setCancelConfirmStep(false);
+                  else setCancelSheetVisible(false);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>{cancelConfirmStep ? 'Back' : 'Keep Premium'}</Text>
+              </Pressable>
+              <Pressable
+                disabled={canceling || (!cancelConfirmStep && !selectedCancelReason)}
+                style={[
+                  styles.cancelPrimary,
+                  (canceling || (!cancelConfirmStep && !selectedCancelReason)) && { opacity: 0.5 },
+                ]}
+                onPress={() => {
+                  if (cancelConfirmStep) void confirmCancelSubscription();
+                  else setCancelConfirmStep(true);
+                }}
+              >
+                {canceling
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={styles.cancelButtonText}>{cancelConfirmStep ? 'Stop Renewals' : 'Continue'}</Text>}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1003,6 +1075,63 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
+  cancelOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: spacing.lg,
+  },
+  cancelSheet: {
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(9,10,24,0.96)',
+    padding: spacing.lg,
+    shadowColor: '#000',
+    shadowOpacity: 0.44,
+    shadowRadius: 28,
+    elevation: 20,
+  },
+  cancelHeading: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 12,
+  },
+  cancelDescription: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 20,
+    marginBottom: 14,
+  },
+  cancelChoice: {
+    minHeight: 45,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  cancelChoiceActive: {
+    borderColor: colors.accent,
+    backgroundColor: 'rgba(168,85,247,0.20)',
+  },
+  cancelChoiceText: { color: colors.textPrimary, fontSize: 13, flex: 1 },
+  cancelButtons: { flexDirection: 'row', gap: 12, marginTop: 14 },
+  cancelSecondary: {
+    flex: 1, borderRadius: 14, minHeight: 48,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  cancelPrimary: {
+    flex: 1, borderRadius: 14, minHeight: 48,
+    backgroundColor: '#7C3AED',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  cancelButtonText: { color: '#fff', fontSize: 14, fontWeight: '800' },
   premiumSkeleton: {
     width: '90%',
     minHeight: 190,
