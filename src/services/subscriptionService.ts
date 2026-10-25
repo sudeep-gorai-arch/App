@@ -82,6 +82,7 @@ export interface VerifyGooglePlayPurchaseRequest {
 
 export interface VerifyPaymentResponse {
   isPremium: boolean;
+  renewalCancellationPending?: boolean;
   premiumUntil?: string | null;
   currentPlan: SubscriptionPlanCode;
   subscription?: SubscriptionRecord | null;
