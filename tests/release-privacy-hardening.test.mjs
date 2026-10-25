@@ -20,5 +20,5 @@ test('settings includes privacy choices, Store link, and account-deletion billin
   assert.match(settings, /Ad Privacy Choices/);
   assert.match(settings, /play\.google\.com\/store\/apps\/details\?id=com\.flexiwalls\.app/);
   assert.doesNotMatch(settings, /expo\.dev\/artifacts\/eas/);
-  assert.match(settings, /Deleting your FlexiWalls account does not cancel billing in Google Play/);
+  assert.match(settings, /Deleting your account does not cancel any Google Play subscription/);
 });

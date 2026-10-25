@@ -843,7 +843,7 @@ export default function SettingsScreen({ navigation }: any) {
           "Your account profile and login data",
           "Your favorites, likes and download history",
           "Your premium profile status stored in the app",
-          "Deleting your FlexiWalls account does not cancel billing in Google Play. Cancel any active subscription in Google Play separately.",
+          "Deleting your account does not cancel any Google Play subscription. Cancel it separately in Google Play before deleting your account.",
         ]}
         primaryLabel="Continue"
         secondaryLabel="Keep account"
