@@ -2076,7 +2076,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
               style={({ pressed }) => [
                 styles.ctaPressable,
                 {
-                  opacity: loading || restoring ? 0.72 : 1,
+                  opacity: planLocked(selectedPlan) ? 0.38 : loading || restoring ? 0.72 : 1,
                   transform: [
                     {
                       scale:
