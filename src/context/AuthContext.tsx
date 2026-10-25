@@ -28,6 +28,14 @@ import { googleLogin, logoutUser, getProfile } from '../services/authService';
 import { getSubscriptionStatus } from '../services/subscriptionService';
 import type { SubscriptionStatus } from '../services/subscriptionService';
 import { isCurrentPremium } from '../utils/premiumStatus';
+import { getAvailablePurchases } from 'expo-iap';
+import { verifyGooglePlayPurchase } from '../services/subscriptionService';
+import { selectRecoverablePlayPurchases } from '../utils/playPurchaseRecovery';
+import {
+  GOOGLE_PLAY_PACKAGE_NAME,
+  GOOGLE_PLAY_PLAN_BY_PRODUCT_ID,
+  GOOGLE_PLAY_PRODUCT_IDS,
+} from '../config/googlePlayBilling';
 
 import type { User, Role } from '../services/types';
 import AdController from '../ads/AdController';
@@ -44,6 +52,7 @@ type AuthContextType = {
   logout: () => Promise<void>;
 
   refreshProfile: () => Promise<void>;
+  syncGooglePlayPurchases: () => Promise<boolean>;
   applyVerifiedPurchase: (status: SubscriptionStatus, expectedUserId: string) => Promise<void>;
 
   setUser: React.Dispatch<React.SetStateAction<User | null>>;
@@ -63,6 +72,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Deduplicate concurrent profile updates triggered by login, focus and resume.
   const profileRefreshInFlight = useRef<Promise<void> | null>(null);
+  const playSyncInFlight = useRef<Promise<boolean> | null>(null);
 
   useEffect(() => subscribeToSessionInvalidation(() => {
     setToken(null);
@@ -303,6 +313,58 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
+  /**
+   * Explicit user refreshes must ask Google Play about purchases currently
+   * owned, not only fetch the backend's last saved Premium state. Never open a
+   * checkout; only the backend can verify and grant an entitlement.
+   */
+  const syncGooglePlayPurchases = useCallback(async (): Promise<boolean> => {
+    if (playSyncInFlight.current) return playSyncInFlight.current;
+
+    const request = (async () => {
+      const { token: expectedToken, user: savedUser } = await getStoredSession();
+      if (!expectedToken || !savedUser) return false;
+      const expectedUserId = String((JSON.parse(savedUser) as User).id);
+      const purchases = await getAvailablePurchases({ includeSuspendedAndroid: true });
+      const owned = selectRecoverablePlayPurchases(
+        purchases,
+        Object.values(GOOGLE_PLAY_PRODUCT_IDS),
+        GOOGLE_PLAY_PRODUCT_IDS.LIFETIME,
+      );
+
+      let verifiedAny = false;
+      let lastError: unknown = null;
+      for (const purchase of owned) {
+        if ((await getStoredToken()) !== expectedToken) return false;
+        try {
+          const status = await verifyGooglePlayPurchase({
+            plan: GOOGLE_PLAY_PLAN_BY_PRODUCT_ID[purchase.productId],
+            productId: purchase.productId,
+            purchaseToken: purchase.purchaseToken!,
+            packageName: GOOGLE_PLAY_PACKAGE_NAME,
+          });
+          if (!isCurrentPremium(status)) continue;
+          if ((await getStoredToken()) !== expectedToken) return false;
+          await applyVerifiedPurchase(status, expectedUserId);
+          verifiedAny = true;
+        } catch (error) {
+          // An old expired test item or an item for a different account must
+          // never be used to unlock Premium. Continue to other owned products.
+          lastError = error;
+        }
+      }
+      if (!verifiedAny && lastError) throw lastError;
+      return verifiedAny;
+    })();
+
+    playSyncInFlight.current = request;
+    try {
+      return await request;
+    } finally {
+      if (playSyncInFlight.current === request) playSyncInFlight.current = null;
+    }
+  }, [applyVerifiedPurchase]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -315,6 +377,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         signInGoogle,
         logout,
         refreshProfile,
+        syncGooglePlayPurchases,
         applyVerifiedPurchase,
 
         setUser,
