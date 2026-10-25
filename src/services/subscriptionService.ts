@@ -139,3 +139,20 @@ export const cancelSubscription = async (
 
   return unwrapApiData<SubscriptionStatus>(response);
 };
+/** These choices are FlexiWalls feedback, not a Google Play survey submission. */
+export type GooglePlayCancellationReason =
+  | 'CANCEL_SURVEY_REASON_NOT_ENOUGH_USAGE'
+  | 'CANCEL_SURVEY_REASON_TECHNICAL_ISSUES'
+  | 'CANCEL_SURVEY_REASON_COST_RELATED'
+  | 'CANCEL_SURVEY_REASON_FOUND_BETTER_APP'
+  | 'CANCEL_SURVEY_REASON_OTHERS';
+
+export const cancelGooglePlaySubscription = async (
+  reason: GooglePlayCancellationReason,
+): Promise<SubscriptionStatus> => {
+  const response = await API.post<ApiResponse<SubscriptionStatus>>(
+    '/subscriptions/google-play/cancel',
+    { reason },
+  );
+  return unwrapApiData<SubscriptionStatus>(response);
+};
