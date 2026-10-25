@@ -7,7 +7,7 @@ export type RecoverablePlayPurchase = {
   productId: string;
   purchaseToken?: string | null;
   purchaseState?: string | null;
-  isSuspendedAndroid?: boolean;
+  isSuspendedAndroid?: boolean | null;
 };
 
 export const selectRecoverablePlayPurchases = <T extends RecoverablePlayPurchase>(
