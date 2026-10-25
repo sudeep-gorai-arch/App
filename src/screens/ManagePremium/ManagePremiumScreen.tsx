@@ -10,7 +10,6 @@ import {
   Pressable,
   RefreshControl,
   AppState,
-  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -25,7 +24,6 @@ import { hasRenewingSubscription, isCurrentPremium } from '../../utils/premiumSt
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Ionicons } from '@expo/vector-icons';
-import { deepLinkToSubscriptions } from 'expo-iap';
 
 import MeshBackground from '../../components/MeshBackground';
 import Card from '../../components/Card';
@@ -34,7 +32,6 @@ import { RoundButton } from '../../components/Header';
 import { colors, gradients } from '../../styles/colors';
 
 import { spacing } from '../../utils/constants';
-import { GOOGLE_PLAY_PRODUCT_IDS } from '../../config/googlePlayBilling';
 
 import {
   getSubscriptionStatus,
