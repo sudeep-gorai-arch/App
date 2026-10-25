@@ -5,6 +5,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  RefreshControl,
   Pressable,
   Switch,
   Share,
@@ -18,6 +19,7 @@ import {
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
 
 import { Ionicons } from "@expo/vector-icons";
 
@@ -381,7 +383,8 @@ const WarningModal = ({
 };
 
 export default function SettingsScreen({ navigation }: any) {
-  const { user, signInGoogle, logout, authLoading } = useAuth();
+  const { user, signInGoogle, logout, authLoading, refreshProfile } = useAuth();
+  const [subscriptionRefreshing, setSubscriptionRefreshing] = useState(false);
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
@@ -424,6 +427,24 @@ export default function SettingsScreen({ navigation }: any) {
       isMounted = false;
     };
   }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user) void refreshProfile().catch(() => undefined);
+    }, [refreshProfile, Boolean(user)]),
+  );
+
+  const refreshSettings = React.useCallback(async () => {
+    if (!user || subscriptionRefreshing) return;
+    setSubscriptionRefreshing(true);
+    try {
+      await refreshProfile();
+    } catch {
+      Alert.alert('Refresh unavailable', 'Your account status could not be updated. Please try again when connected.');
+    } finally {
+      setSubscriptionRefreshing(false);
+    }
+  }, [user, refreshProfile, subscriptionRefreshing]);
 
   const avatarUrl = useMemo(() => {
     if (!user) return null;
@@ -620,6 +641,13 @@ export default function SettingsScreen({ navigation }: any) {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={subscriptionRefreshing}
+              onRefresh={() => { void refreshSettings(); }}
+              tintColor={colors.accent}
+            />
+          }
         >
           <View style={styles.header}>
             <Pressable style={styles.backButton} onPress={goBack}>
@@ -1154,7 +1182,7 @@ const styles = StyleSheet.create({
 
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,.64)",
+    backgroundColor: "rgba(0,0,0,.68)",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: spacing.xl,
@@ -1189,7 +1217,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,.13)",
-    backgroundColor: "rgba(8,8,10,.78)",
+    backgroundColor: "rgba(8,8,10,.94)",
     overflow: "hidden",
   },
 
