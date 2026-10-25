@@ -58,14 +58,15 @@ export default function App() {
 
         // Initialize AdMob
         try {
-          await initializeAds();
+          const adsAllowed = await initializeAds();
+          if (adsAllowed) {
+            InterstitialManager.load();
+            RewardedManager.load();
+          }
         } catch (e) {
           console.log(e);
         }
 
-        // Preload Ads
-        InterstitialManager.load();
-        RewardedManager.load();
       } catch (error) {
         console.log('App initialization error:', error);
       } finally {

@@ -24,6 +24,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 
 import { LinearGradient } from "expo-linear-gradient";
+import { AdsConsent } from "react-native-google-mobile-ads";
 
 import MeshBackground from "../../components/MeshBackground";
 
@@ -463,11 +464,19 @@ export default function SettingsScreen({ navigation }: any) {
     }
   };
 
+  const showAdPrivacyOptions = async () => {
+    try {
+      await AdsConsent.showPrivacyOptionsForm();
+    } catch {
+      Alert.alert("Ad privacy options", "Privacy options are currently unavailable. Please try again later.");
+    }
+  };
+
   const shareApp = async () => {
     try {
       await Share.share({
         message:
-          "Try FlexiWalls — premium wallpapers crafted for every screen. Use this link to download the app - https://expo.dev/artifacts/eas/n1SkjYi75dGYT-zY2Yge42C7hqdsqAiC58jKc0IlbDA.apk",
+          "Try FlexiWalls — premium wallpapers crafted for every screen. Use this link to download the app - https://play.google.com/store/apps/details?id=com.flexiwalls.app",
       });
     } catch (error) {
       console.log("SHARE ERROR", error);
@@ -745,6 +754,16 @@ export default function SettingsScreen({ navigation }: any) {
               value={wifiOnlyDownloads}
               onValueChange={handleWifiOnlyDownloadsToggle}
               disabled={preferencesLoading}
+            />
+          </Card>
+
+          <Text style={styles.sectionTitle}>AD PRIVACY</Text>
+          <Card style={styles.card} padding={0} strong>
+            <Row
+              icon="shield-checkmark-outline"
+              title="Ad Privacy Choices"
+              subtitle="Review available Google ad consent choices"
+              onPress={showAdPrivacyOptions}
             />
           </Card>
 
