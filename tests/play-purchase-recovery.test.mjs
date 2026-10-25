@@ -19,10 +19,13 @@ test('verified entitlement persists only to the expected logged-in user', () => 
 });
 
 test('owned Play purchases are recovered before opening a new billing sheet', () => {
-  const recovery = premium.indexOf('const alreadyRestored = await restoreOwnedPurchases()');
+  // A new purchase must check for missed ownership first. An explicit
+  // recurring switch instead supplies the old purchase token to Play.
+  const recovery = premium.indexOf("const alreadyRestored = decision.kind === 'allow'");
   const newPurchase = premium.indexOf('await requestPurchase({', recovery);
   assert.ok(recovery !== -1);
   assert.ok(newPurchase > recovery);
+  assert.match(premium, /purchaseToken: replacementToken/);
 });
 
 test('already owned purchase error invokes restore rather than another purchase', () => {
