@@ -533,7 +533,7 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
     Alert.alert(
       isGooglePlaySubscription ? 'Manage Google Play Subscription' : 'Cancel Subscription',
       isGooglePlaySubscription
-        ? 'Google Play handles auto-renewal and cancellation. Open Google Play to manage this subscription.'
+        ? 'Google Play handles cancellation and renewals. Cancelling stops future renewals; it does not automatically refund the current billing period. To ask about a refund, email support.flexiwalls@gmail.com. Open Google Play to manage this subscription.'
         : `Your premium access will remain active until ${formatDate(premiumUntil)}. Do you want to cancel auto-renewal?`,
       [
         {
