@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Animated,
   Easing,
   Image,
@@ -39,6 +40,8 @@ import {
   getSubscriptionStatus,
   getSubscriptionPlans,
   cancelSubscription,
+  cancelGooglePlaySubscription,
+  type GooglePlayCancellationReason,
   SubscriptionPlan,
 } from '../../services/subscriptionService';
 
@@ -130,6 +133,13 @@ type SubscriptionStatus = {
 const SUCCESS = '#34D399';
 const WARNING = '#FBBF24';
 const DANGER = '#FF5A6E';
+const CANCELLATION_REASONS: ReadonlyArray<{ value: GooglePlayCancellationReason; label: string }> = [
+  { value: 'CANCEL_SURVEY_REASON_NOT_ENOUGH_USAGE', label: 'I do not use Premium enough' },
+  { value: 'CANCEL_SURVEY_REASON_TECHNICAL_ISSUES', label: 'Technical issues' },
+  { value: 'CANCEL_SURVEY_REASON_COST_RELATED', label: 'It costs too much' },
+  { value: 'CANCEL_SURVEY_REASON_FOUND_BETTER_APP', label: 'I found a better app' },
+  { value: 'CANCEL_SURVEY_REASON_OTHERS', label: 'Other reasons' },
+];
 
 const unwrapData = <T,>(payload: any): T => {
   if (payload?.data?.data !== undefined) return payload.data.data as T;
@@ -272,6 +282,9 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
   const [refreshing, setRefreshing] = useState(false);
   const [canceling, setCanceling] = useState(false);
   const [plans, setPlans] = useState<PlanLike[]>([]);
+  const [cancelSheetVisible, setCancelSheetVisible] = useState(false);
+  const [selectedCancelReason, setSelectedCancelReason] = useState<GooglePlayCancellationReason | null>(null);
+  const [cancelConfirmStep, setCancelConfirmStep] = useState(false);
   const [status, setStatus] = useState<SubscriptionStatus | null>(null);
 
   useEffect(() => {
@@ -351,17 +364,18 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
       try {
         if (showLoader) setLoading(true);
 
-        const [planResponse, statusResponse] = await Promise.all([
-          getSubscriptionPlans(),
-          getSubscriptionStatus(),
-        ]);
-
-        const planData = unwrapData<PlanLike[]>(planResponse);
-        const statusData = unwrapData<SubscriptionStatus>(statusResponse);
-
-        setPlans(Array.isArray(planData) ? planData : []);
+        // Show the critical entitlement as soon as the backend verifies it.
+        // Plans and profile refresh are secondary and must not block this page.
+        const statusData = unwrapData<SubscriptionStatus>(await getSubscriptionStatus());
         setStatus(statusData ?? null);
-        await refreshProfile().catch(() => undefined);
+        setLoading(false);
+        void refreshProfile().catch(() => undefined);
+        void getSubscriptionPlans()
+          .then(planResponse => {
+            const planData = unwrapData<PlanLike[]>(planResponse);
+            setPlans(Array.isArray(planData) ? planData : []);
+          })
+          .catch(() => undefined);
       } catch (e) {
         console.log(e);
         toast.error('Unable to load premium details.');
@@ -560,8 +574,16 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
     return (
       <View style={[styles.root, styles.centered]}>
         <MeshBackground variant="profile" />
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={styles.loadingText}>Loading premium details...</Text>
+        <View style={styles.premiumSkeleton}>
+          <View style={[styles.skeletonBar, { width: '35%' }]} />
+          <View style={[styles.skeletonBar, { width: '82%', height: 28, marginTop: 20 }]} />
+          <View style={[styles.skeletonBar, { width: '55%', marginTop: 20 }]} />
+        </View>
+        <View style={[styles.premiumSkeleton, { minHeight: 110 }]}>
+          <View style={[styles.skeletonBar, { width: '65%' }]} />
+          <View style={[styles.skeletonBar, { width: '85%', marginTop: 20 }]} />
+        </View>
+        <Text style={styles.loadingText}>Checking your Premium status...</Text>
       </View>
     );
   }
@@ -981,6 +1003,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
+  premiumSkeleton: {
+    width: '90%',
+    minHeight: 190,
+    borderRadius: 22,
+    padding: 24,
+    marginBottom: 16,
+    backgroundColor: 'rgba(23,18,43,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  skeletonBar: {
+    height: 15,
+    borderRadius: 10,
+    backgroundColor: 'rgba(200,190,240,0.18)',
+  },
   loadingText: {
     color: colors.textSecondary,
     marginTop: 16,
