@@ -383,7 +383,7 @@ const WarningModal = ({
 };
 
 export default function SettingsScreen({ navigation }: any) {
-  const { user, signInGoogle, logout, authLoading, refreshProfile } = useAuth();
+  const { user, signInGoogle, logout, authLoading, refreshProfile, syncGooglePlayPurchases } = useAuth();
   const [subscriptionRefreshing, setSubscriptionRefreshing] = useState(false);
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -438,13 +438,14 @@ export default function SettingsScreen({ navigation }: any) {
     if (!user || subscriptionRefreshing) return;
     setSubscriptionRefreshing(true);
     try {
+      await syncGooglePlayPurchases().catch(() => false);
       await refreshProfile();
     } catch {
       Alert.alert('Refresh unavailable', 'Your account status could not be updated. Please try again when connected.');
     } finally {
       setSubscriptionRefreshing(false);
     }
-  }, [user, refreshProfile, subscriptionRefreshing]);
+  }, [user, refreshProfile, syncGooglePlayPurchases, subscriptionRefreshing]);
 
   const avatarUrl = useMemo(() => {
     if (!user) return null;

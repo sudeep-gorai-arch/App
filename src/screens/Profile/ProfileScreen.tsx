@@ -494,7 +494,7 @@ const RecentDownloadsPreview = ({
 };
 
 export default function ProfileScreen({ navigation }: Props) {
-  const { user, loading, authLoading, signInGoogle, logout, refreshProfile } = useAuth();
+  const { user, loading, authLoading, signInGoogle, logout, refreshProfile, syncGooglePlayPurchases } = useAuth();
   const openPremium = usePremiumNavigation("Profile");
   const canOpenWallpaper = usePremiumWallpaperGuard("Profile");
 
@@ -611,7 +611,7 @@ export default function ProfileScreen({ navigation }: Props) {
     });
 
     return () => subscription.remove();
-  }, [loadDownloads, refreshProfile, Boolean(user)]);
+  }, [loadDownloads, refreshProfile, syncGooglePlayPurchases, Boolean(user)]);
 
   useEffect(() => {
     const unsubscribeDownloads = appEvents.on("downloadsChanged", payload => {
@@ -642,7 +642,10 @@ export default function ProfileScreen({ navigation }: Props) {
     try {
       await Promise.allSettled([
         loadDownloads(),
-        user ? refreshProfile() : Promise.resolve(),
+        user ? (async () => {
+          await syncGooglePlayPurchases().catch(() => false);
+          await refreshProfile();
+        })() : Promise.resolve(),
       ]);
     } finally {
       setRefreshing(false);

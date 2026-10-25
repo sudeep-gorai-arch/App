@@ -270,7 +270,7 @@ const getCancellationFromPayment = (payment?: PaymentLike | null) => {
 
 const ManagePremiumScreen = ({ navigation }: Props) => {
   const toast = useToast();
-  const { refreshProfile } = useAuth();
+  const { refreshProfile, syncGooglePlayPurchases } = useAuth();
 
   const shineAnim = useRef(new Animated.Value(0)).current;
   const glitterAnim = useRef(new Animated.Value(0)).current;
@@ -363,6 +363,14 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
 
         // Show the critical entitlement as soon as the backend verifies it.
         // Plans and profile refresh are secondary and must not block this page.
+        // Ask Play for owned items before reading the authoritative backend
+        // status. This also repairs purchases missed while temporarily offline.
+        try {
+          await syncGooglePlayPurchases();
+        } catch {
+          // Store unavailable: retain the backend status path and permit retry.
+          console.warn('Google Play refresh unavailable; loading server subscription status.');
+        }
         const statusData = unwrapData<SubscriptionStatus>(await getSubscriptionStatus());
         setStatus(statusData ?? null);
         setLoading(false);
@@ -381,7 +389,7 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
         setRefreshing(false);
       }
     },
-    [toast, refreshProfile],
+    [toast, refreshProfile, syncGooglePlayPurchases],
   );
 
   useFocusEffect(useCallback(() => {
@@ -564,18 +572,61 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
 
   if (loading) {
     return (
-      <View style={[styles.root, styles.centered]}>
+      <View style={styles.root}>
         <MeshBackground variant="profile" />
-        <View style={styles.premiumSkeleton}>
-          <View style={[styles.skeletonBar, { width: '35%' }]} />
-          <View style={[styles.skeletonBar, { width: '82%', height: 28, marginTop: 20 }]} />
-          <View style={[styles.skeletonBar, { width: '55%', marginTop: 20 }]} />
-        </View>
-        <View style={[styles.premiumSkeleton, { minHeight: 110 }]}>
-          <View style={[styles.skeletonBar, { width: '65%' }]} />
-          <View style={[styles.skeletonBar, { width: '85%', marginTop: 20 }]} />
-        </View>
-        <Text style={styles.loadingText}>Checking your Premium status...</Text>
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
+          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.header}>
+              <RoundButton icon="chevron-back" onPress={() => navigation?.goBack?.()} />
+              <View style={styles.headerCenter}>
+                <Text style={styles.headerTitle}>Manage Premium</Text>
+                <Text style={styles.headerSub}>Checking your plan and payment details</Text>
+              </View>
+              <View style={styles.refreshButton}>
+                <Ionicons name="refresh" size={20} color={colors.textSecondary} />
+              </View>
+            </View>
+
+            <Card style={styles.heroCard} padding={spacing.lg} glowBorder strong>
+              <View style={styles.skeletonHeroHeading}>
+                <View style={styles.skeletonProIcon}>
+                  <Ionicons name="diamond-outline" size={30} color="rgba(200,190,240,0.38)" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={[styles.skeletonBar, { width: '48%', height: 12 }]} />
+                  <View style={[styles.skeletonBar, { width: '85%', height: 25, marginTop: 12 }]} />
+                  <View style={[styles.skeletonBar, { width: '62%', marginTop: 12 }]} />
+                </View>
+              </View>
+              <View style={styles.skeletonDivider} />
+              <View style={styles.skeletonHeroHeading}>
+                <View style={{ flex: 1 }}>
+                  <View style={[styles.skeletonBar, { width: '55%' }]} />
+                  <View style={[styles.skeletonBar, { width: '75%', marginTop: 12 }]} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={[styles.skeletonBar, { width: '62%' }]} />
+                  <View style={[styles.skeletonBar, { width: '80%', marginTop: 12 }]} />
+                </View>
+              </View>
+            </Card>
+            {['Plan Details', 'Latest Payment', 'Actions'].map((heading, index) => (
+              <Card key={heading} style={styles.block} padding={spacing.lg} strong>
+                <Text style={styles.sectionTitle}>{heading}</Text>
+                {(index === 2 ? [0, 1] : [0, 1, 2]).map(item => (
+                  <View key={item} style={styles.skeletonInfoRow}>
+                    <View style={styles.skeletonRowIcon} />
+                    <View style={[styles.skeletonBar, { width: '40%' }]} />
+                    <View style={[styles.skeletonBar, { width: '24%', marginLeft: 'auto' }]} />
+                  </View>
+                ))}
+              </Card>
+            ))}
+            <Text style={[styles.loadingText, { textAlign: 'center' }]}>
+              Syncing your subscription with Google Play...
+            </Text>
+          </ScrollView>
+        </SafeAreaView>
       </View>
     );
   }
@@ -1129,6 +1180,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   cancelButtonText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  skeletonHeroHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  skeletonProIcon: {
+    width: 78, height: 78, borderRadius: 39,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  skeletonDivider: {
+    height: 1, backgroundColor: 'rgba(255,255,255,0.08)',
+    marginVertical: spacing.lg,
+  },
+  skeletonInfoRow: {
+    minHeight: 62, flexDirection: 'row', alignItems: 'center',
+    gap: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  skeletonRowIcon: {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.09)',
+  },
   premiumSkeleton: {
     width: '90%',
     minHeight: 190,

@@ -25,7 +25,7 @@ test('Google Play cancellation uses in-app authenticated backend and cannot be o
 test('Settings and Profile refresh authenticated subscription status', () => {
   const profile=read('../src/screens/Profile/ProfileScreen.tsx');
   const settings=read('../src/screens/Settings/SettingsScreen.tsx');
-  assert.match(profile, /user \? refreshProfile\(\) : Promise\.resolve\(\)/);
+  assert.match(profile, /syncGooglePlayPurchases\(\)/);
   assert.match(settings, /useFocusEffect/);
   assert.match(settings, /refreshControl=/);
   assert.match(settings, /await refreshProfile\(\)/);
