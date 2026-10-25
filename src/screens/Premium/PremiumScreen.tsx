@@ -52,6 +52,7 @@ import { decidePlayPurchase } from '../../utils/playPurchasePolicy';
 import {
   getSubscriptionPlans,
   getSubscriptionStatus,
+  type SubscriptionStatus,
   verifyGooglePlayPurchase,
 } from '../../services/subscriptionService';
 import {
@@ -1071,10 +1072,14 @@ const BillingPlanCard = ({
   plan,
   selected,
   onPress,
+  disabled = false,
+  active = false,
 }: {
   plan: BillingPlan;
   selected: boolean;
   onPress: () => void;
+  disabled?: boolean;
+  active?: boolean;
 }) => {
   const selectionAnim = useRef(new Animated.Value(selected ? 1 : 0)).current;
   const shineAnim = useRef(new Animated.Value(0)).current;
@@ -1128,9 +1133,12 @@ const BillingPlanCard = ({
 
   return (
     <Pressable
+      disabled={disabled}
       onPress={onPress}
+      accessibilityState={{ disabled, selected: active || selected }}
       style={({ pressed }) => [
         styles.planPressable,
+        disabled && { opacity: 0.55 },
         {
           opacity: pressed ? 0.9 : 1,
           transform: [{ scale: pressed ? 0.985 : 1 }],
@@ -1256,7 +1264,11 @@ const BillingPlanCard = ({
                 ) : null}
               </Text>
 
-              {plan.badge ? (
+              {active ? (
+                <View style={[styles.planBadge, { backgroundColor: 'rgba(52,211,153,0.22)' }]}>
+                  <Text style={[styles.planBadgeText, { color: '#34D399' }]}>ACTIVE</Text>
+                </View>
+              ) : plan.badge ? (
                 <View
                   style={[
                     styles.planBadge,
@@ -1301,11 +1313,29 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
   const [restoring, setRestoring] = useState(false);
 
   const [refreshing, setRefreshing] = useState(false);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
 
   const [showcaseWallpapers, setShowcaseWallpapers] = useState<string[]>([]);
 
   const ctaPulseAnim = useRef(new Animated.Value(1)).current;
   const ctaShineAnim = useRef(new Animated.Value(0)).current;
+
+  const openManagePremium = useCallback(() => {
+    navigation?.navigate?.('ManagePremium', {
+      fromPremiumScreen: true,
+      returnTo: route?.params?.returnTo ?? 'Home',
+    });
+  }, [navigation, route?.params?.returnTo]);
+
+  const loadCurrentPremiumPlan = useCallback(async () => {
+    if (!auth.user?.id || !auth.token) {
+      setSubscriptionStatus(null);
+      return null;
+    }
+    const status = await getSubscriptionStatus();
+    setSubscriptionStatus(status);
+    return status;
+  }, [auth.user?.id, auth.token]);
 
   const navigateAfterPurchase = useCallback(() => {
     const returnTo = route?.params?.returnTo ?? 'Home';
@@ -1529,9 +1559,20 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
     plan => plan.id === selectedPlan,
   );
 
+  const activePlan = subscriptionStatus && subscriptionStatus.isPremium &&
+    (!subscriptionStatus.premiumUntil ||
+      Date.parse(subscriptionStatus.premiumUntil) > Date.now())
+    ? String(subscriptionStatus.activeSubscription?.plan ?? subscriptionStatus.currentPlan).toUpperCase()
+    : null;
+  const lifetimeActive = activePlan === 'LIFETIME';
+  const selectedPlanActive = activePlan === PLAN_MAP[selectedPlan];
+  const planLocked = (id: BillingPlanId) =>
+    lifetimeActive || activePlan === PLAN_MAP[id];
+
   useEffect(() => {
     loadPlans();
     loadShowcaseWallpapers();
+    void loadCurrentPremiumPlan().catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -1642,6 +1683,20 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
     setRefreshing(true);
 
     try {
+      if (auth.user?.id && auth.token) {
+        // Never initiate checkout while repairing a payment interrupted by
+        // a slow backend or lost connectivity.
+        try {
+          await auth.syncGooglePlayPurchases();
+        } catch {
+          // Fall back to the stored server state when Play is unavailable.
+        }
+        const status = await loadCurrentPremiumPlan();
+        if (status?.isPremium && status.premiumUntil &&
+            Date.parse(status.premiumUntil) > Date.now()) {
+          openManagePremium();
+        }
+      }
       await Promise.allSettled([loadPlans(), loadShowcaseWallpapers()]);
     } finally {
       setRefreshing(false);
@@ -1668,14 +1723,20 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
   };
 
   const ctaGradient = PLAN_CTA_GRADIENTS[selectedPlan];
-  const ctaLabel = PLAN_CTA_LABELS[selectedPlan];
+  const ctaLabel = lifetimeActive
+    ? 'Lifetime Premium Active'
+    : selectedPlanActive
+      ? 'Current Plan Active'
+      : activePlan && selectedPlan !== 'lifetime'
+        ? 'Switch Premium Plan'
+        : PLAN_CTA_LABELS[selectedPlan];
   const ctaShineTranslateX = ctaShineAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [-SCREEN.width, SCREEN.width],
   });
 
   const handleContinue = async (confirmedLifetimeOverlap = false) => {
-    if (!selectedPlanData || loading || restoring || purchaseGate.isPurchaseInFlight()) {
+    if (!selectedPlanData || loading || restoring || planLocked(selectedPlan) || purchaseGate.isPurchaseInFlight()) {
       return;
     }
 
@@ -1720,6 +1781,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
       // Check the server entitlement before launching the native billing sheet.
       // The old flow could purchase another subscription over an existing one.
       const currentStatus = await getSubscriptionStatus();
+      setSubscriptionStatus(currentStatus);
       const decision = decidePlayPurchase(currentStatus, purchasePlan);
       if (decision.kind === 'blocked') {
         purchaseGate.finishPurchase();
@@ -1740,9 +1802,10 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
         return;
       }
 
-      // The backend can only sync tokens it has previously recorded.
-      // First reconcile any purchases still owned by Google Play.
-      const alreadyRestored = await restoreOwnedPurchases();
+      // Reconcile previously interrupted purchases before offering checkout.
+      // For a deliberate replacement, an existing subscription is expected.
+      const alreadyRestored = decision.kind !== 'replace'
+        && (await restoreOwnedPurchases());
       if (alreadyRestored) {
         purchaseGate.finishPurchase();
         setLoading(false);
@@ -1757,6 +1820,21 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
       );
 
       if (isSubscription) {
+        let replacementToken: string | undefined;
+        if (decision.kind === 'replace') {
+          const owned = await getAvailablePurchases({ includeSuspendedAndroid: true });
+          const previousProductId = GOOGLE_PLAY_PRODUCT_IDS[decision.previousPlan];
+          const originalPurchase = owned.find(p =>
+            p.productId === previousProductId &&
+            p.purchaseToken &&
+            p.purchaseState !== 'pending' &&
+            !(p as any).isSuspendedAndroid,
+          );
+          if (!originalPurchase?.purchaseToken) {
+            throw new Error('Google Play did not return the current subscription token. Refresh or restore your subscription before changing plans.');
+          }
+          replacementToken = originalPurchase.purchaseToken;
+        }
         const rawOffers = (
           storeProduct?.subscriptionOffers ??
           storeProduct?.subscriptionOfferDetailsAndroid ??
@@ -1791,6 +1869,12 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
               skus: [productId],
               obfuscatedAccountId: accountId,
               subscriptionOffers: offers,
+              // Google Play replaces the old recurring subscription rather
+              // than opening a second independently renewing plan.
+              ...(replacementToken ? {
+                purchaseToken: replacementToken,
+                replacementMode: 1, // WITH_TIME_PRORATION
+              } : {}),
             },
           },
           type: 'subs',
@@ -1972,6 +2056,8 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
                   key={plan.id}
                   plan={plan}
                   selected={selectedPlan === plan.id}
+                  active={activePlan === PLAN_MAP[plan.id]}
+                  disabled={planLocked(plan.id)}
                   onPress={() => setSelectedPlan(plan.id)}
                 />
               ))}
@@ -1985,7 +2071,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
             ]}
           >
             <Pressable
-              disabled={loading || restoring}
+              disabled={loading || restoring || planLocked(selectedPlan)}
               onPress={() => { void handleContinue(); }}
               style={({ pressed }) => [
                 styles.ctaPressable,
