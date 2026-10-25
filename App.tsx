@@ -15,6 +15,7 @@ import AppNavigator from './src/navigation/AppNavigator';
 import { AuthProvider } from './src/context/AuthContext';
 
 import ToastProvider from './src/components/ui/toast/ToastProvider';
+import PlayPurchaseRecovery from './src/components/PlayPurchaseRecovery';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -83,6 +84,7 @@ export default function App() {
     <SafeAreaProvider>
       <AuthProvider>
         <ToastProvider>
+          <PlayPurchaseRecovery />
           <AppNavigator />
         </ToastProvider>
       </AuthProvider>
