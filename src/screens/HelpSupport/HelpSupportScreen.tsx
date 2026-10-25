@@ -139,6 +139,18 @@ const FAQ_ITEMS: FaqItem[] = [
       'Currently, FlexiWalls focuses on downloading wallpapers to your gallery. Direct Apply Wallpaper support can be added through native Android functionality in a future update.',
   },
   {
+    id: 'cancel-subscription',
+    question: 'How do I cancel my Premium subscription?',
+    answer:
+      'Open Settings > Manage Google Play Subscriptions, or open Google Play > Payments & subscriptions > Subscriptions. Cancellation prevents future renewals; Premium normally remains available until the end of the paid period. Cancelling does not automatically refund the current billing period.',
+  },
+  {
+    id: 'refund-request',
+    question: 'Can I request a refund for Premium?',
+    answer:
+      'FlexiWalls does not offer an in-app refund button. For a refund inquiry, use Email Support or write to support.flexiwalls@gmail.com with your Google Play order ID and purchase date. Requests are reviewed under our policies and applicable law. Google Play may separately process eligible refund requests.',
+  },
+  {
     id: 'payment-issue',
     question: 'What if my premium payment is successful but access is not unlocked?',
     answer:
