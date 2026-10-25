@@ -39,6 +39,7 @@ export type RootStackParamList = {
   ManagePremium:
     | {
         returnTo?: PremiumReturnRoute;
+        fromPremiumScreen?: boolean;
       }
     | undefined;
 
