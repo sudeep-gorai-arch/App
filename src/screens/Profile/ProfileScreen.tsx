@@ -639,9 +639,15 @@ export default function ProfileScreen({ navigation }: Props) {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadDownloads();
-    setRefreshing(false);
-  }, [loadDownloads]);
+    try {
+      await Promise.allSettled([
+        loadDownloads(),
+        user ? refreshProfile() : Promise.resolve(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadDownloads, refreshProfile, Boolean(user)]);
 
   const startEasterEggAnimation = useCallback(() => {
     if (easterEggActive) {
