@@ -1500,7 +1500,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
           .then(restored => {
             if (restored) {
               toast.success('Your existing Google Play purchase has been restored.');
-              navigateAfterPurchase();
+              openManagePremium();
             } else {
               toast.info('No owned FlexiWalls purchase was returned by Google Play.');
             }
@@ -1804,13 +1804,13 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
 
       // Reconcile previously interrupted purchases before offering checkout.
       // For a deliberate replacement, an existing subscription is expected.
-      const alreadyRestored = decision.kind !== 'replace'
+      const alreadyRestored = decision.kind === 'allow'
         && (await restoreOwnedPurchases());
       if (alreadyRestored) {
         purchaseGate.finishPurchase();
         setLoading(false);
         toast.success('Your existing Premium purchase has been restored.');
-        navigateAfterPurchase();
+        openManagePremium();
         return;
       }
 
@@ -1934,7 +1934,7 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
       }
 
       toast.success('Your Google Play purchase has been restored.');
-      navigateAfterPurchase();
+      openManagePremium();
     } catch (error) {
       console.log('GOOGLE PLAY RESTORE ERROR', error);
       toast.error(getErrorMessage(error));
