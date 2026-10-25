@@ -1392,6 +1392,12 @@ const PremiumScreen = ({ navigation, route }: PremiumScreenProps) => {
       // Do not show a success message until the backend confirms Pro.
       // The backend verified this purchase against the Play Developer API.
       await auth.applyVerifiedPurchase(verifiedStatus, String(auth.user?.id ?? ''));
+      if (verifiedStatus.renewalCancellationPending) {
+        toast.info(
+          'Lifetime is active, but a previous subscription renewal could not be confirmed as cancelled. Check Google Play subscriptions to avoid another charge.',
+          { duration: 12000 },
+        );
+      }
 
       return true;
     },
