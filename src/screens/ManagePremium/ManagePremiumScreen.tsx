@@ -53,6 +53,7 @@ type Nav = {
 
 type Props = {
   navigation?: Nav;
+  route?: { params?: { fromPremiumScreen?: boolean; returnTo?: string } };
 };
 
 type PlanLike = SubscriptionPlan & {
@@ -268,7 +269,22 @@ const getCancellationFromPayment = (payment?: PaymentLike | null) => {
   };
 };
 
-const ManagePremiumScreen = ({ navigation }: Props) => {
+const ManagePremiumScreen = ({ navigation, route }: Props) => {
+  const handleBack = () => {
+    if (route?.params?.fromPremiumScreen) {
+      // A restored purchase from Premium should return to Premium, never
+      // jump to the Profile tab. The explicit marker survives navigation.
+      if (navigation?.goBack) {
+        navigation.goBack();
+      } else {
+        navigation?.navigate?.('Premium', { returnTo: route.params.returnTo });
+      }
+      return;
+    }
+    if (navigation?.goBack) navigation.goBack();
+    else navigation?.navigate?.('MainTabs', { screen: route?.params?.returnTo ?? 'Profile' });
+  };
+
   const toast = useToast();
   const { refreshProfile, syncGooglePlayPurchases } = useAuth();
 
@@ -577,7 +593,7 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
         <SafeAreaView style={styles.safeArea} edges={['top']}>
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             <View style={styles.header}>
-              <RoundButton icon="chevron-back" onPress={() => navigation?.goBack?.()} />
+              <RoundButton icon="chevron-back" onPress={handleBack} />
               <View style={styles.headerCenter}>
                 <Text style={styles.headerTitle}>Manage Premium</Text>
                 <Text style={styles.headerSub}>Checking your plan and payment details</Text>
@@ -650,7 +666,7 @@ const ManagePremiumScreen = ({ navigation }: Props) => {
           <View style={styles.header}>
             <RoundButton
               icon="chevron-back"
-              onPress={() => navigation?.goBack?.()}
+              onPress={handleBack}
             />
 
             <View style={styles.headerCenter}>

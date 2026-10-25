@@ -11,8 +11,8 @@ const premium=(plan,until=future)=>({
 test('Free user can buy monthly',()=>assert.equal(decidePlayPurchase({isPremium:false},'MONTHLY',now).kind,'allow'));
 test('Expired user can subscribe',()=>assert.equal(decidePlayPurchase(premium('MONTHLY',past),'YEARLY',now).kind,'allow'));
 test('Current monthly user cannot buy second monthly subscription',()=>assert.equal(decidePlayPurchase(premium('MONTHLY'),'MONTHLY',now).kind,'blocked'));
-test('Current monthly user cannot stack yearly subscription',()=>assert.equal(decidePlayPurchase(premium('MONTHLY'),'YEARLY',now).kind,'blocked'));
-test('Current yearly user cannot stack monthly subscription',()=>assert.equal(decidePlayPurchase(premium('YEARLY'),'MONTHLY',now).kind,'blocked'));
+test('Current monthly user switches yearly with Play replacement',()=>assert.deepEqual(decidePlayPurchase(premium('MONTHLY'),'YEARLY',now),{kind:'replace',previousPlan:'MONTHLY',reason:'Google Play will replace the existing recurring plan and show any applicable credit or charge before confirmation.'}));
+test('Current yearly user switches monthly with Play replacement',()=>assert.equal(decidePlayPurchase(premium('YEARLY'),'MONTHLY',now).kind,'replace'));
 test('Lifetime user cannot buy again',()=>assert.equal(decidePlayPurchase(premium('LIFETIME'),'LIFETIME',now).kind,'blocked'));
 test('Lifetime user cannot subscribe to recurring plan',()=>assert.equal(decidePlayPurchase(premium('LIFETIME'),'MONTHLY',now).kind,'blocked'));
 test('Upgrading from recurring to Lifetime requires explicit warning',()=>assert.equal(decidePlayPurchase(premium('YEARLY'),'LIFETIME',now).kind,'confirm-lifetime'));
