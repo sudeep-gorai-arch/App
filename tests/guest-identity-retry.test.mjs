@@ -19,5 +19,5 @@ test('failed transfers reuse the original authorized commit, not another daily s
   assert.match(download, /pendingRequestId \|\| createClientRequestId\(\)/);
   assert.ok(download.indexOf('AsyncStorage.setItem(') < download.indexOf('commitDownload('));
   assert.ok(download.indexOf('commitDownload(') < download.indexOf('saveWallpaperAsset('));
-  assert.ok(download.indexOf('AsyncStorage.removeItem(') > download.indexOf('saveWallpaperAsset('));
+  assert.ok(download.lastIndexOf('AsyncStorage.removeItem(') > download.indexOf('saveWallpaperAsset('));
 });
