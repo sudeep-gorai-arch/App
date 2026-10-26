@@ -8,6 +8,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.provider.Settings
 import android.os.Build
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -64,6 +65,27 @@ class AndroidWallpaperModule(
 
   override fun getName(): String {
     return "AndroidWallpaperModule"
+  }
+
+  // App-signing-key + user + device scoped, survives ordinary app reinstalls.
+  // Hash before sending; do not expose the raw Android ID in API requests.
+  @ReactMethod
+  fun getStableGuestId(promise: Promise) {
+    try {
+      val androidId = Settings.Secure.getString(
+        reactContext.contentResolver, Settings.Secure.ANDROID_ID
+      ) ?: throw IllegalStateException("Android ID is unavailable")
+      val digest = MessageDigest.getInstance("SHA-256")
+        .digest(("com.flexiwalls.app:guest-v1:" + androidId).toByteArray(Charsets.UTF_8))
+      val bytes = digest.copyOfRange(0, 16)
+      bytes[6] = ((bytes[6].toInt() and 0x0f) or 0x50).toByte()
+      bytes[8] = ((bytes[8].toInt() and 0x3f) or 0x80).toByte()
+      val hex = bytes.joinToString("") { "%02x".format(it.toInt() and 0xff) }
+      val uuid = "${hex.substring(0,8)}-${hex.substring(8,12)}-${hex.substring(12,16)}-${hex.substring(16,20)}-${hex.substring(20,32)}"
+      promise.resolve(uuid)
+    } catch (error: Exception) {
+      promise.reject("GUEST_ID_UNAVAILABLE", "Cannot resolve stable Android guest ID", error)
+    }
   }
 
   @ReactMethod
