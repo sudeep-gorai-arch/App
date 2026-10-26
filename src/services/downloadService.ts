@@ -1,3 +1,4 @@
+import { NativeModules, Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 
@@ -51,17 +52,22 @@ export const createClientRequestId = () => {
 };
 
 export const getGuestId = async (): Promise<string> => {
-  try {
-    const existing = await SecureStore.getItemAsync(GUEST_ID_KEY);
-    if (existing) return existing;
-
-    const guestId = createClientRequestId();
-    await SecureStore.setItemAsync(GUEST_ID_KEY, guestId);
-    return guestId;
-  } catch (error) {
-    console.log('GUEST ID ERROR', error);
-    return createClientRequestId();
+  // Native Android ID remains stable across ordinary app-data clears and
+  // reinstalls (same device, user and app-signing key). The native method
+  // hashes it to a UUID; the raw identifier is never sent to the server.
+  if (Platform.OS === 'android') {
+    const stableId = await NativeModules.AndroidWallpaperModule?.getStableGuestId?.();
+    if (typeof stableId !== 'string' || !/^[a-f0-9-]{36}$/i.test(stableId)) {
+      throw new Error('Stable guest identity is unavailable on this device.');
+    }
+    return stableId;
   }
+  // Retain the previous identifier for other platforms.
+  const existing = await SecureStore.getItemAsync(GUEST_ID_KEY);
+  if (existing) return existing;
+  const guestId = createClientRequestId();
+  await SecureStore.setItemAsync(GUEST_ID_KEY, guestId);
+  return guestId;
 };
 
 export const ensureDownloadAllowed = async () => {
