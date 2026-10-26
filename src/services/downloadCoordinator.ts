@@ -154,21 +154,33 @@ export const downloadWallpaperToDevice = async (input: {
       return { type: 'already-downloaded', record: existingAfterPreflight };
     }
 
-    const sourceUrl = getResponseUrl(preflight, input.sourceUrl);
+    // A quota is reserved atomically on the backend before the unrestricted
+    // media URL is returned. Preflight never exposes a full media URL.
+    const clientRequestId = createClientRequestId();
+    const committed = await commitDownload(
+      wallpaperId,
+      clientRequestId,
+      input.ownerType,
+    );
+    const sourceUrl = getResponseUrl(committed, '');
     if (!sourceUrl) {
       throw new Error('This wallpaper has no downloadable media.');
     }
 
-    const clientRequestId = createClientRequestId();
+    // NOTE: a failed transfer can still consume the reserved quota. This is
+    // intentional fail-closed behavior while direct media URLs are public.
     const savedAsset = await saveWallpaperAsset({
       wallpaperId,
       sourceUrl,
       mediaKind: input.mediaKind,
-      extension: input.extension || preflight?.extension || null,
+      extension: input.extension || committed?.extension || preflight?.extension || null,
     });
     const now = new Date().toISOString();
-
-    const pendingRecord: DeviceDownloadRecord = {
+    const committedWallpaper = mergeWallpaperResponse(
+      { ...input.wallpaper, ...preflight },
+      committed,
+    );
+    const record: DeviceDownloadRecord = {
       wallpaperId,
       assetId: savedAsset.assetId,
       localUri: savedAsset.localUri,
@@ -179,10 +191,9 @@ export const downloadWallpaperToDevice = async (input: {
       downloadedAt: now,
       ownerType: input.ownerType,
       clientRequestId,
-      syncStatus: 'pending',
+      syncStatus: 'committed',
       wallpaper: {
-        ...input.wallpaper,
-        ...preflight,
+        ...committedWallpaper,
         id: wallpaperId,
         wallpaperId,
         localUri: savedAsset.localUri,
@@ -191,57 +202,20 @@ export const downloadWallpaperToDevice = async (input: {
         mediaAssetId: savedAsset.assetId,
         downloadedAt: now,
       },
-      serverDownloadCount: null,
-      dailyDownloadCount: null,
-      dailyDownloadLimit: null,
+      serverDownloadCount: getServerDownloadCount(committed),
+      dailyDownloadCount: getDailyCount(committed),
+      dailyDownloadLimit: getDailyLimit(committed),
       updatedAt: now,
     };
 
-    // Persist immediately after the physical save. If local registration fails,
-    // remove the physical asset so Downloads/Profile never drift from Gallery.
-    // If the network response is lost later, the same request ID is retried.
     try {
-      await upsertDeviceDownload(pendingRecord);
+      await upsertDeviceDownload(record);
     } catch (error) {
       await deleteDeviceAsset(savedAsset.assetId);
       throw error;
     }
 
-    try {
-      const committed = await commitDownload(
-        wallpaperId,
-        clientRequestId,
-        input.ownerType,
-      );
-      const committedWallpaper = mergeWallpaperResponse(
-        pendingRecord.wallpaper,
-        committed,
-      );
-      const committedRecord = await markDeviceDownloadCommitted(wallpaperId, {
-        wallpaper: committedWallpaper,
-        serverDownloadCount: getServerDownloadCount(committed),
-        dailyDownloadCount: getDailyCount(committed),
-        dailyDownloadLimit: getDailyLimit(committed),
-      });
-
-      return {
-        type: 'downloaded',
-        record: committedRecord || {
-          ...pendingRecord,
-          syncStatus: 'committed',
-          wallpaper: committedWallpaper,
-        },
-        response: committed,
-      };
-    } catch (error) {
-      if (isNetworkError(error)) {
-        return { type: 'saved-pending-sync', record: pendingRecord };
-      }
-
-      await deleteDeviceAsset(savedAsset.assetId);
-      await removeDeviceDownloadRecords([wallpaperId]);
-      throw error;
-    }
+    return { type: 'downloaded', record, response: committed };
   } finally {
     activeWallpaperDownloads.delete(wallpaperId);
   }
