@@ -169,11 +169,21 @@ export const downloadWallpaperToDevice = async (input: {
     const clientRequestId = pendingRequestId || createClientRequestId();
     // Persist before authorizing. Survives app restart or a failed transfer.
     await AsyncStorage.setItem(pendingKey(input.ownerType, wallpaperId), clientRequestId);
-    const committed = await commitDownload(
-      wallpaperId,
-      clientRequestId,
-      input.ownerType,
-    );
+    let committed: DownloadAccessResponse;
+    try {
+      committed = await commitDownload(wallpaperId, clientRequestId, input.ownerType);
+    } catch (error: any) {
+      // This wallpaper may have a pending retry created by a different
+      // signed-in account. Never keep replaying another owner's request ID.
+      if (pendingRequestId && error?.response?.status === 409) {
+        await AsyncStorage.removeItem(pendingKey(input.ownerType, wallpaperId));
+        const freshRequestId = createClientRequestId();
+        await AsyncStorage.setItem(pendingKey(input.ownerType, wallpaperId), freshRequestId);
+        committed = await commitDownload(wallpaperId, freshRequestId, input.ownerType);
+      } else {
+        throw error;
+      }
+    }
     const sourceUrl = getResponseUrl(committed, '');
     if (!sourceUrl) {
       throw new Error('This wallpaper has no downloadable media.');
