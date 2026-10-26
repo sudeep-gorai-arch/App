@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { AxiosError } from 'axios';
 
 import {
@@ -26,6 +27,13 @@ import {
 } from './deviceMediaService';
 
 const activeWallpaperDownloads = new Set<string>();
+const pendingKey = (ownerType: DownloadOwnerType, wallpaperId: string) =>
+  `@flexiwalls:download-retry:v1:${ownerType}:${wallpaperId}`;
+
+const getPendingRequestId = async (ownerType: DownloadOwnerType, wallpaperId: string) => {
+  const stored = await AsyncStorage.getItem(pendingKey(ownerType, wallpaperId));
+  return stored && /^[a-f0-9-]{36}$/i.test(stored) ? stored : null;
+};
 
 export type DownloadCoordinatorResult =
   | {
@@ -145,7 +153,9 @@ export const downloadWallpaperToDevice = async (input: {
       return { type: 'permission-required' };
     }
 
-    const preflight = await preflightDownload(wallpaperId, input.ownerType);
+    // A previously charged request can be retried without consuming a new slot.
+    const pendingRequestId = await getPendingRequestId(input.ownerType, wallpaperId);
+    const preflight = pendingRequestId ? null : await preflightDownload(wallpaperId, input.ownerType);
 
     // Close the race where another tap/download completed while permission or
     // preflight was in progress.
@@ -156,12 +166,24 @@ export const downloadWallpaperToDevice = async (input: {
 
     // A quota is reserved atomically on the backend before the unrestricted
     // media URL is returned. Preflight never exposes a full media URL.
-    const clientRequestId = createClientRequestId();
-    const committed = await commitDownload(
-      wallpaperId,
-      clientRequestId,
-      input.ownerType,
-    );
+    const clientRequestId = pendingRequestId || createClientRequestId();
+    // Persist before authorizing. Survives app restart or a failed transfer.
+    await AsyncStorage.setItem(pendingKey(input.ownerType, wallpaperId), clientRequestId);
+    let committed: DownloadAccessResponse;
+    try {
+      committed = await commitDownload(wallpaperId, clientRequestId, input.ownerType);
+    } catch (error: any) {
+      // This wallpaper may have a pending retry created by a different
+      // signed-in account. Never keep replaying another owner's request ID.
+      if (pendingRequestId && error?.response?.status === 409) {
+        await AsyncStorage.removeItem(pendingKey(input.ownerType, wallpaperId));
+        const freshRequestId = createClientRequestId();
+        await AsyncStorage.setItem(pendingKey(input.ownerType, wallpaperId), freshRequestId);
+        committed = await commitDownload(wallpaperId, freshRequestId, input.ownerType);
+      } else {
+        throw error;
+      }
+    }
     const sourceUrl = getResponseUrl(committed, '');
     if (!sourceUrl) {
       throw new Error('This wallpaper has no downloadable media.');
@@ -215,6 +237,7 @@ export const downloadWallpaperToDevice = async (input: {
       throw error;
     }
 
+    await AsyncStorage.removeItem(pendingKey(input.ownerType, wallpaperId));
     return { type: 'downloaded', record, response: committed };
   } finally {
     activeWallpaperDownloads.delete(wallpaperId);
