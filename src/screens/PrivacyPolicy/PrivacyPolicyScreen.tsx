@@ -487,9 +487,7 @@ const PolicySectionCard = ({
 );
 
 const PrivacyPolicyScreen = ({ navigation }: { navigation?: Nav }) => {
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    collect: true,
-  });
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
 
   const toggleSection = (id: string) => {
     setOpenSections(previous => ({
