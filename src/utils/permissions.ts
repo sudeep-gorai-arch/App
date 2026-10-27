@@ -1,5 +1,4 @@
+import { ensureDeviceMediaPermission } from '../services/deviceMediaService';
 
-import * as MediaLibrary from 'expo-media-library';
-
-export const requestGalleryPermission=()=> 
- MediaLibrary.requestPermissionsAsync();
+// Use the same app-owned-download permission flow as the download coordinator.
+export const requestGalleryPermission = () => ensureDeviceMediaPermission('image');
