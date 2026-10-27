@@ -169,11 +169,11 @@ const SECTIONS: PolicySection[] = [
       },
       {
         label: 'Photos and media:',
-        text: 'Photo and media access is used to save wallpapers, locate app-created downloads and delete wallpapers you select. FlexiWalls does not intentionally upload or scan unrelated photos or videos from your personal library.',
+        text: 'On Android 10 and later, FlexiWalls saves and manages its own wallpaper downloads without requesting access to your photo or video library. Android 9 and earlier require shared-storage permission to save and manage downloads. FlexiWalls does not scan or upload unrelated personal photos or videos.',
       },
       {
         label: 'Media location metadata:',
-        text: 'The Android build may include media-location access through the media-library integration. FlexiWalls does not use photo location metadata for advertising, user profiling or upload to our servers.',
+        text: 'The updated Android app does not request media-location access. FlexiWalls does not read or upload photo location metadata.',
       },
       {
         label: 'Set wallpaper:',
