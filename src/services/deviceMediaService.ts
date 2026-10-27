@@ -1,4 +1,4 @@
-import { Alert, Linking } from 'react-native';
+import { Alert, Linking, NativeModules, PermissionsAndroid, Platform } from 'react-native';
 import {
   Album,
   Asset,
@@ -18,6 +18,24 @@ import {
 } from './deviceDownloadRepository';
 
 const ALBUM_NAME = 'FlexiWalls';
+const usesScopedMedia = () =>
+  Platform.OS === 'android' && Number(Platform.Version) >= 29;
+
+type AndroidDownloadMedia = {
+  saveDownloadedWallpaper(uri: string, isVideo: boolean): Promise<string>;
+  downloadedWallpaperExists(uri: string): Promise<boolean>;
+  deleteDownloadedWallpaper(uri: string): Promise<boolean>;
+};
+
+const androidDownloadMedia = (): AndroidDownloadMedia => {
+  const bridge = NativeModules.AndroidWallpaperModule as AndroidDownloadMedia | undefined;
+  if (!bridge?.saveDownloadedWallpaper ||
+      !bridge.downloadedWallpaperExists ||
+      !bridge.deleteDownloadedWallpaper) {
+    throw new Error('Install the updated Android build to manage downloads.');
+  }
+  return bridge;
+};
 
 export type SavedDeviceAsset = {
   assetId: string;
@@ -41,15 +59,34 @@ const hasMediaAccess = (permission: any) =>
 export const ensureDeviceMediaPermission = async (
   mediaKind: DeviceMediaKind,
 ): Promise<boolean> => {
-  const granularPermissions = permissionFor(mediaKind);
-  const current = await getPermissionsAsync(false, granularPermissions);
+  // Android 10+ can manage its own MediaStore downloads without library access.
+  if (usesScopedMedia()) {
+    androidDownloadMedia();
+    return true;
+  }
 
-  if (hasMediaAccess(current)) return true;
-
-  if (current.canAskAgain) {
-    const requested = await requestPermissionsAsync(false, granularPermissions);
-    if (hasMediaAccess(requested)) return true;
-    if (requested.canAskAgain) return false;
+  if (Platform.OS === 'android') {
+    // Shared-storage permissions are needed only on Android 9 and earlier.
+    const permissions = [
+      PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+      PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+    ];
+    const result = await PermissionsAndroid.requestMultiple(permissions);
+    if (permissions.every(permission => result[permission] === PermissionsAndroid.RESULTS.GRANTED)) {
+      return true;
+    }
+    if (!permissions.some(permission => result[permission] === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN)) {
+      return false;
+    }
+  } else {
+    const granularPermissions = permissionFor(mediaKind);
+    const current = await getPermissionsAsync(false, granularPermissions);
+    if (hasMediaAccess(current)) return true;
+    if (current.canAskAgain) {
+      const requested = await requestPermissionsAsync(false, granularPermissions);
+      if (hasMediaAccess(requested)) return true;
+      if (requested.canAskAgain) return false;
+    }
   }
 
   Alert.alert(
@@ -139,8 +176,9 @@ export const saveWallpaperAsset = async (input: {
   const downloadedUri = String(downloaded.uri || target.uri);
 
   try {
-    const asset = await createAsset(downloadedUri);
-    const assetId = String(asset.id || '').trim();
+    const assetId = usesScopedMedia()
+      ? String(await androidDownloadMedia().saveDownloadedWallpaper(downloadedUri, input.mediaKind === 'video')).trim()
+      : String((await createAsset(downloadedUri)).id || '').trim();
 
     if (!assetId) {
       throw new Error('Media Library did not return an asset ID.');
@@ -169,10 +207,18 @@ export const deviceAssetExists = async (assetId: string) => {
   if (!assetId) return false;
 
   try {
+    if (usesScopedMedia()) {
+      return await androidDownloadMedia().downloadedWallpaperExists(assetId);
+    }
     const asset = new Asset(assetId);
     await asset.getInfo();
     return true;
-  } catch {
+  } catch (error) {
+    // A denied/unavailable provider must not erase an otherwise valid download record.
+    if (usesScopedMedia()) {
+      console.log('CHECK DEVICE ASSET DEFERRED', assetId, error);
+      return true;
+    }
     return false;
   }
 };
@@ -181,6 +227,9 @@ export const deleteDeviceAsset = async (assetId: string) => {
   if (!assetId) return true;
 
   try {
+    if (usesScopedMedia()) {
+      return await androidDownloadMedia().deleteDownloadedWallpaper(assetId);
+    }
     const asset = new Asset(assetId);
     await asset.delete();
     return true;
