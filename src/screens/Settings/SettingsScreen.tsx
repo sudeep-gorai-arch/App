@@ -388,7 +388,7 @@ export default function SettingsScreen({ navigation }: any) {
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
-  const [wifiOnlyDownloads, setWifiOnlyDownloads] = useState(true);
+  const [wifiOnlyDownloads, setWifiOnlyDownloads] = useState(false);
 
   const [preferencesLoading, setPreferencesLoading] = useState(true);
 
