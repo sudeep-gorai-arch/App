@@ -43,7 +43,7 @@ type QuickFact = {
   text: string;
 };
 
-const LAST_UPDATED = 'July 27, 2026';
+const LAST_UPDATED = 'October 27, 2026';
 const SUPPORT_EMAIL = 'support.flexiwalls@gmail.com';
 
 const HERO_GRADIENT = ['#8B5CF6', '#EC4899', '#3B82F6'] as const;
@@ -301,7 +301,7 @@ const SECTIONS: PolicySection[] = [
       },
       {
         label: 'Purchase records:',
-        text: 'Transaction and entitlement records may be retained for accounting, tax, refunds, disputes, chargebacks, fraud prevention and compliance for as long as required or reasonably necessary.',
+        text: 'Transaction and entitlement records may be retained for accounting, tax, refunds, disputes, chargebacks, fraud prevention and compliance. Following account deletion, limited residual records are retained for up to 15 days, unless a longer period is required by law.',
       },
     ],
   },
@@ -312,6 +312,8 @@ const SECTIONS: PolicySection[] = [
     summary:
       'You can delete your account in the app or request deletion by email.',
     items: [
+      { text: "We process emailed deletion requests within 3 days of receipt. Account ownership must be verified before personal data is deleted." },
+      { text: "After account deletion, limited residual records are retained for up to 15 days and then deleted. Records that must be kept longer to meet a legal obligation are retained only for the legally required period." },
       {
         text: 'To delete your account in the app, open Settings and select “Delete Account and Data.” This sends a deletion request to the FlexiWalls service.',
       },
