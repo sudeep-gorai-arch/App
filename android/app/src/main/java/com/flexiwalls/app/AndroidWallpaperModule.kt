@@ -89,6 +89,39 @@ class AndroidWallpaperModule(
   }
 
   @ReactMethod
+  fun saveDownloadedWallpaper(sourceUri: String, isVideo: Boolean, promise: Promise) {
+    Thread {
+      try {
+        promise.resolve(WallpaperMediaStore(reactContext).save(sourceUri, isVideo))
+      } catch (error: Exception) {
+        promise.reject("SAVE_WALLPAPER_FAILED", error.message, error)
+      }
+    }.start()
+  }
+
+  @ReactMethod
+  fun downloadedWallpaperExists(assetUri: String, promise: Promise) {
+    Thread {
+      try {
+        promise.resolve(WallpaperMediaStore(reactContext).exists(assetUri))
+      } catch (error: Exception) {
+        promise.reject("CHECK_WALLPAPER_FAILED", error.message, error)
+      }
+    }.start()
+  }
+
+  @ReactMethod
+  fun deleteDownloadedWallpaper(assetUri: String, promise: Promise) {
+    Thread {
+      try {
+        promise.resolve(WallpaperMediaStore(reactContext).delete(assetUri))
+      } catch (error: Exception) {
+        promise.reject("DELETE_WALLPAPER_FAILED", error.message, error)
+      }
+    }.start()
+  }
+
+  @ReactMethod
   fun applyWallpaper(
     imageUrl: String,
     target: String,
