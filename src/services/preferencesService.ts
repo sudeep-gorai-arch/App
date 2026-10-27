@@ -61,7 +61,7 @@ export const preferencesService = {
     const value = await AsyncStorage.getItem(KEYS.wifiOnlyDownloads);
 
     if (value === null) {
-      return true;
+      return false;
     }
 
     return value === "true";
