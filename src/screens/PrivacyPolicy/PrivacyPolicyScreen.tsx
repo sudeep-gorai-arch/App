@@ -115,7 +115,7 @@ const SECTIONS: PolicySection[] = [
       },
       {
         label: 'Guest activity:',
-        text: 'For guest downloads, the app creates a random guest identifier and sends it with wallpaper download events so we can apply guest limits, prevent duplicate processing and reduce abuse.',
+        text: 'For guest downloads on Android, the app derives a pseudonymous guest identifier from an Android system identifier and sends it with wallpaper download events to apply guest limits, prevent duplicate processing and reduce abuse. The raw Android identifier is not sent to our server. The derived identifier may remain stable across app-data clearing and reinstallations on the same device, Android user and app-signing key. Other platforms may store a randomly generated guest identifier.',
       },
       {
         label: 'Session and technical information:',
