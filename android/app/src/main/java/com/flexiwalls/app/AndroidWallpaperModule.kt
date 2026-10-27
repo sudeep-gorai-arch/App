@@ -24,6 +24,7 @@ import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import java.util.concurrent.Executors
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -63,6 +64,13 @@ class AndroidWallpaperModule(
     private val VIDEO_CACHE_LOCK = Any()
   }
 
+  private val mediaExecutor = Executors.newFixedThreadPool(2)
+
+  override fun invalidate() {
+    mediaExecutor.shutdown()
+    super.invalidate()
+  }
+
   override fun getName(): String {
     return "AndroidWallpaperModule"
   }
@@ -90,35 +98,35 @@ class AndroidWallpaperModule(
 
   @ReactMethod
   fun saveDownloadedWallpaper(sourceUri: String, isVideo: Boolean, promise: Promise) {
-    Thread {
+    mediaExecutor.execute {
       try {
         promise.resolve(WallpaperMediaStore(reactContext).save(sourceUri, isVideo))
       } catch (error: Exception) {
         promise.reject("SAVE_WALLPAPER_FAILED", error.message, error)
       }
-    }.start()
+    }
   }
 
   @ReactMethod
   fun downloadedWallpaperExists(assetUri: String, promise: Promise) {
-    Thread {
+    mediaExecutor.execute {
       try {
         promise.resolve(WallpaperMediaStore(reactContext).exists(assetUri))
       } catch (error: Exception) {
         promise.reject("CHECK_WALLPAPER_FAILED", error.message, error)
       }
-    }.start()
+    }
   }
 
   @ReactMethod
   fun deleteDownloadedWallpaper(assetUri: String, promise: Promise) {
-    Thread {
+    mediaExecutor.execute {
       try {
         promise.resolve(WallpaperMediaStore(reactContext).delete(assetUri))
       } catch (error: Exception) {
         promise.reject("DELETE_WALLPAPER_FAILED", error.message, error)
       }
-    }.start()
+    }
   }
 
   @ReactMethod
