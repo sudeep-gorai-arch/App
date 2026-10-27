@@ -8,7 +8,6 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.webkit.MimeTypeMap
 import java.io.File
-import java.io.FileNotFoundException
 
 /**
  * Only saves app-created downloads and accesses individual recorded MediaStore URIs.
@@ -74,13 +73,9 @@ internal class WallpaperMediaStore(private val context: Context) {
     // Permission/provider errors propagate. The JS layer retains uncertain records.
     val cursor = context.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns._ID), null, null, null)
       ?: throw IllegalStateException("Media provider unavailable")
-    cursor.use { if (!it.moveToFirst()) return false }
-    return try {
-      context.contentResolver.openFileDescriptor(uri, "r")?.use { true }
-        ?: throw IllegalStateException("Media provider unavailable")
-    } catch (_: FileNotFoundException) {
-      false
-    }
+    // Use the MediaStore record as the source of truth. Opening the underlying
+    // file can report FileNotFoundException for temporary access failures too.
+    return cursor.use { it.moveToFirst() }
   }
 
   fun delete(value: String): Boolean {
