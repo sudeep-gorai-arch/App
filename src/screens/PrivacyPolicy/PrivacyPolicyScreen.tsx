@@ -43,7 +43,7 @@ type QuickFact = {
   text: string;
 };
 
-const LAST_UPDATED = 'July 27, 2026';
+const LAST_UPDATED = 'October 27, 2026';
 const SUPPORT_EMAIL = 'support.flexiwalls@gmail.com';
 
 const HERO_GRADIENT = ['#8B5CF6', '#EC4899', '#3B82F6'] as const;
@@ -115,7 +115,7 @@ const SECTIONS: PolicySection[] = [
       },
       {
         label: 'Guest activity:',
-        text: 'For guest downloads, the app creates a random guest identifier and sends it with wallpaper download events so we can apply guest limits, prevent duplicate processing and reduce abuse.',
+        text: 'For guest downloads on Android, the app derives a pseudonymous guest identifier from an Android system identifier and sends it with wallpaper download events to apply guest limits, prevent duplicate processing and reduce abuse. The raw Android identifier is not sent to our server. The derived identifier may remain stable across app-data clearing and reinstallations on the same device, Android user and app-signing key. Other platforms may store a randomly generated guest identifier.',
       },
       {
         label: 'Session and technical information:',
@@ -169,11 +169,11 @@ const SECTIONS: PolicySection[] = [
       },
       {
         label: 'Photos and media:',
-        text: 'Photo and media access is used to save wallpapers, locate app-created downloads and delete wallpapers you select. FlexiWalls does not intentionally upload or scan unrelated photos or videos from your personal library.',
+        text: 'On Android 10 and later, FlexiWalls saves and manages its own wallpaper downloads without requesting access to your photo or video library. Android 9 and earlier require shared-storage permission to save and manage downloads. FlexiWalls does not scan or upload unrelated personal photos or videos.',
       },
       {
         label: 'Media location metadata:',
-        text: 'The Android build may include media-location access through the media-library integration. FlexiWalls does not use photo location metadata for advertising, user profiling or upload to our servers.',
+        text: 'The updated Android app does not request media-location access. FlexiWalls does not read or upload photo location metadata.',
       },
       {
         label: 'Set wallpaper:',
@@ -301,7 +301,7 @@ const SECTIONS: PolicySection[] = [
       },
       {
         label: 'Purchase records:',
-        text: 'Transaction and entitlement records may be retained for accounting, tax, refunds, disputes, chargebacks, fraud prevention and compliance for as long as required or reasonably necessary.',
+        text: 'Transaction and entitlement records may be retained for accounting, tax, refunds, disputes, chargebacks, fraud prevention and compliance. Following account deletion, limited residual records are retained for up to 15 days, unless a longer period is required by law.',
       },
     ],
   },
@@ -312,6 +312,8 @@ const SECTIONS: PolicySection[] = [
     summary:
       'You can delete your account in the app or request deletion by email.',
     items: [
+      { text: "We process emailed deletion requests within 3 days of receipt. Account ownership must be verified before personal data is deleted." },
+      { text: "After account deletion, limited residual records are retained for up to 15 days and then deleted. Records that must be kept longer to meet a legal obligation are retained only for the legally required period." },
       {
         text: 'To delete your account in the app, open Settings and select “Delete Account and Data.” This sends a deletion request to the FlexiWalls service.',
       },
@@ -485,9 +487,7 @@ const PolicySectionCard = ({
 );
 
 const PrivacyPolicyScreen = ({ navigation }: { navigation?: Nav }) => {
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    collect: true,
-  });
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
 
   const toggleSection = (id: string) => {
     setOpenSections(previous => ({
